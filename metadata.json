@@ -1,0 +1,6 @@
+{
+  "name": "Ramdiri Library Portal",
+  "description": "The official Digital Library Management System for PM SHRI Ramdiri +2 High School, Begusarai, Bihar, India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
