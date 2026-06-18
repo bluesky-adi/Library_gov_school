@@ -15,14 +15,31 @@ export interface Book {
   totalCopies: number;
   availableCopies: number;
   coverImage?: string; // Opt Google Books / cover or placeholder
+  
+  // Custom workbook fields preserved from the official library register
+  accessionNumber?: string;
+  yearOfPublication?: string;
+  placeOfPublication?: string;
+  editor?: string;
+  edition?: string;
+  volume?: string;
+  pages?: string;
+  price?: string;
+  callNumber?: string;
+  bookNumber?: string;
+  source?: string;
+  remarks?: string;
+  ddcCategory?: string;
 }
 
 export interface Student {
+  studentId: string; // Generated: Class-Section-RollNumber (e.g. "10-A-15")
   name: string;
   rollNumber: number;
   dob: string; // YYYY-MM-DD
   class: string; // e.g. "10", "11", "9"
   section: string; // e.g. "A", "B", "C"
+  pin?: string;
 }
 
 export interface BorrowRequest {
@@ -32,7 +49,8 @@ export interface BorrowRequest {
   bookId: string;
   bookName: string;
   requestDate: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+  comment?: string;
 }
 
 export interface BookIssueLog {
@@ -44,9 +62,19 @@ export interface BookIssueLog {
   bookId: string;
   bookName: string;
   issueDate: string;
-  dueDate: string; // due date tracker (issueDate + 14 days)
+  issueTime?: string;
+  dueDate: string; // due date tracker
   returnDate?: string; // If returned, has date
+  returnTime?: string;
   status: 'Issued' | 'Returned';
+}
+
+export interface LibraryAuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: 'Book Issued' | 'Book Returned' | 'Student Added' | 'Student Edited' | 'Student Deleted' | 'Book Added' | 'Book Edited' | 'Book Deleted' | 'Request Cancelled';
+  details: string;
 }
 
 export interface AppState {
@@ -54,6 +82,7 @@ export interface AppState {
   students: Student[];
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
+  auditLogs?: LibraryAuditLog[];
   currentRole: UserRole | null;
   loggedInStudent?: Student;
 }

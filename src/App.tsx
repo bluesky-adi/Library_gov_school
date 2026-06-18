@@ -9,7 +9,7 @@ import PublicHome from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
 import PRD_Architecture from './components/PRD_Architecture';
 import { translations } from './localization';
-import { Book, Student, BorrowRequest, BookIssueLog, UserRole } from './types';
+import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
 import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark } from 'lucide-react';
 
@@ -19,10 +19,10 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>([]);
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [issueLogs, setIssueLogs] = useState<BookIssueLog[]>([]);
+  const [auditLogs, setAuditLogs] = useState<LibraryAuditLog[]>([]);
 
   // --- Dynamic Layout Configuration States ---
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
-  const [highContrast, setHighContrast] = useState<boolean>(false);
   const [fontSizeLarge, setFontSizeLarge] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'home' | 'portal' | 'docs'>('home');
 
@@ -31,20 +31,34 @@ export default function App() {
   const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
   const [loggedInName, setLoggedInName] = useState<string>('');
 
+  // --- Progressive Excel Upload Progress States ---
+  const [importProgress, setImportProgress] = useState<{
+    status: 'idle' | 'uploading';
+    processed: number;
+    total: number;
+    type: 'books' | 'students';
+  }>({ status: 'idle', processed: 0, total: 0, type: 'books' });
+
   const t = translations[currentLang];
 
   // Refresh all system metrics and records from servers safely
   const refreshData = async () => {
-    try {
-      // Books is public
-      const resBooks = await fetch('/api/books');
-      if (resBooks.ok) {
-        const dataBooks = await resBooks.json();
-        setBooks(dataBooks);
+    const handleSafeFetch = async (url: string, init?: RequestInit) => {
+      try {
+        const res = await fetch(url, init);
+        if (res.ok) {
+          return await res.json();
+        } else {
+          console.warn(`Server responded with safe-fetch warning for ${url}: status ${res.status}`);
+        }
+      } catch (err: any) {
+        console.warn(`Database sync offline transition for ${url}: ${err?.message || err}`);
       }
-    } catch (err) {
-      console.error("Failed to load public catalogs:", err);
-    }
+      return null;
+    };
+
+    const dataBooks = await handleSafeFetch('/api/books');
+    if (dataBooks) setBooks(dataBooks);
 
     const token = localStorage.getItem("ramdiri_library_token");
     if (!token) return;
@@ -56,26 +70,28 @@ export default function App() {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       if (payload.role === 'Librarian') {
-        const [resStudents, resRequests, resLogs] = await Promise.all([
-          fetch('/api/students', { headers }),
-          fetch('/api/requests', { headers }),
-          fetch('/api/issue-logs', { headers })
+        const [studentsData, requestsData, logsData, auditData] = await Promise.all([
+          handleSafeFetch('/api/students', { headers }),
+          handleSafeFetch('/api/requests', { headers }),
+          handleSafeFetch('/api/issue-logs', { headers }),
+          handleSafeFetch('/api/audit-logs', { headers })
         ]);
 
-        if (resStudents.ok) setStudents(await resStudents.json());
-        if (resRequests.ok) setRequests(await resRequests.json());
-        if (resLogs.ok) setIssueLogs(await resLogs.json());
+        if (studentsData) setStudents(studentsData);
+        if (requestsData) setRequests(requestsData);
+        if (logsData) setIssueLogs(logsData);
+        if (auditData) setAuditLogs(auditData);
       } else if (payload.role === 'Student') {
-        const [resRequests, resLogs] = await Promise.all([
-          fetch('/api/requests', { headers }),
-          fetch('/api/issue-logs', { headers })
+        const [requestsData, logsData] = await Promise.all([
+          handleSafeFetch('/api/requests', { headers }),
+          handleSafeFetch('/api/issue-logs', { headers })
         ]);
 
-        if (resRequests.ok) setRequests(await resRequests.json());
-        if (resLogs.ok) setIssueLogs(await resLogs.json());
+        if (requestsData) setRequests(requestsData);
+        if (logsData) setIssueLogs(logsData);
       }
-    } catch (e) {
-      console.error("Failed to sync secure database logs:", e);
+    } catch (e: any) {
+      console.warn("Secure metadata log synchronization gracefully deferred:", e?.message || e);
     }
   };
 
@@ -118,7 +134,7 @@ export default function App() {
           } else {
             if (payload.role === 'Librarian') {
               setLoggedInRole('Librarian');
-              setLoggedInName("S. K. Roy (Chief Librarian)");
+              setLoggedInName(payload.name || "S. K. Roy (Chief Librarian)");
             } else if (payload.role === 'Student') {
               setLoggedInRole('Student');
               setLoggedInName(payload.name || "Scholar Reader");
@@ -162,7 +178,15 @@ export default function App() {
     } else if (role === 'Librarian') {
       setLoggedInRole('Librarian');
       setLoggedInStudent(null);
-      setLoggedInName("S. K. Roy (Chief Librarian)");
+      const token = localStorage.getItem("ramdiri_library_token");
+      let dName = "S. K. Roy (Chief Librarian)";
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          dName = payload.name || dName;
+        } catch (e) {}
+      }
+      setLoggedInName(dName);
       setActiveTab('portal');
     }
     refreshData();
@@ -258,46 +282,346 @@ export default function App() {
     }
   };
 
+  // 3b. Delete Selected Books Bulk
+  const handleDeleteBooksBulk = async (ids: string[]) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/books/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ bookIds: ids })
+      });
+      if (resp.ok) {
+        await refreshData();
+      } else {
+        const err = await resp.json();
+        alert(`Bulk Deletion Failed: ${err.error}`);
+      }
+    } catch (err) {
+      alert("Network fault during bulk deletion.");
+    }
+  };
+
+  // 3c. Clear Books Inventory Completely
+  const handleClearBooksInventory = async () => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/books/clear-inventory', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+      } else {
+        const err = await resp.json();
+        alert(`Failed to clear books catalog: ${err.error}`);
+      }
+    } catch (err) {
+      alert("Network fault while trying to clear books catalog.");
+    }
+  };
+
   // 4. Excel Bulk Import Books
   const handleImportBooksExcel = async (imported: Book[]) => {
     const token = localStorage.getItem("ramdiri_library_token");
+    const chunkSize = 150;
+    const total = imported.length;
+    
+    setImportProgress({
+      status: 'uploading',
+      processed: 0,
+      total,
+      type: 'books'
+    });
+
+    let totalSaved = 0;
+    let totalSkipped = 0;
+
     try {
-      for (const book of imported) {
-        await fetch('/api/books', {
+      for (let i = 0; i < total; i += chunkSize) {
+        const chunk = imported.slice(i, i + chunkSize);
+        const resp = await fetch('/api/books/bulk', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(book)
+          body: JSON.stringify({ books: chunk })
         });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || "Chunk upload failed.");
+        }
+        const data = await resp.json();
+        totalSaved += data.count || 0;
+        totalSkipped += data.skippedCount || 0;
+
+        setImportProgress(prev => ({
+          ...prev,
+          processed: Math.min(i + chunk.length, total)
+        }));
+        // Artificial split microtask deferral to keep the browser render loop fluid & responsive
+        await new Promise(resolve => setTimeout(resolve, 60));
       }
       await refreshData();
-    } catch (err) {
-      console.error("Bulk books import triggered error:", err);
+      if (totalSkipped > 0) {
+        alert(`Registry synchronization completed:\n- ${totalSaved} new books imported successfully.\n- ${totalSkipped} duplicate books (having pre-existing Accession/ID) were skipped.`);
+      } else {
+        alert(`Synchronized all ${totalSaved} book records with library inventory files successfully!`);
+      }
+    } catch (err: any) {
+      console.error("Progressive bulk books import triggered error:", err);
+      alert(`Import paused: ${err.message || "Network fault"}`);
+    } finally {
+      setImportProgress({ status: 'idle', processed: 0, total: 0, type: 'books' });
     }
   };
 
   // 5. Excel Bulk Import Students
   const handleImportStudentsExcel = async (imported: Student[]) => {
     const token = localStorage.getItem("ramdiri_library_token");
+    const chunkSize = 150;
+    const total = imported.length;
+
+    setImportProgress({
+      status: 'uploading',
+      processed: 0,
+      total,
+      type: 'students'
+    });
+
+    let totalSaved = 0;
+    let totalSkipped = 0;
+
     try {
-      const resp = await fetch('/api/students/bulk', {
+      for (let i = 0; i < total; i += chunkSize) {
+        const chunk = imported.slice(i, i + chunkSize);
+        const resp = await fetch('/api/students/bulk', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ students: chunk })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || "Chunk student upload failed.");
+        }
+        const data = await resp.json();
+        totalSaved += data.count || 0;
+        totalSkipped += data.skippedCount || 0;
+
+        setImportProgress(prev => ({
+          ...prev,
+          processed: Math.min(i + chunk.length, total)
+        }));
+        await new Promise(resolve => setTimeout(resolve, 60));
+      }
+      await refreshData();
+      if (totalSkipped > 0) {
+        alert(`Student enrollment import finished:\n- ${totalSaved} students enrolled/registered.\n- ${totalSkipped} duplicate student records (same Class, Section, and Roll) were skipped.`);
+      } else {
+        alert(`Enrolled all ${totalSaved} students in the school library login list successfully!`);
+      }
+    } catch (err: any) {
+      console.error("Progressive student import triggered error:", err);
+      alert(`Student import paused: ${err.message || "Network fault"}`);
+    } finally {
+      setImportProgress({ status: 'idle', processed: 0, total: 0, type: 'students' });
+    }
+  };
+
+  // 5.1 Manual Add Student
+  const handleAddStudent = async (student: Student): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/students', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ students: imported })
+        body: JSON.stringify(student)
       });
       if (resp.ok) {
         await refreshData();
+        return true;
       } else {
         const err = await resp.json();
-        alert(`Bulk Import Failure: ${err.error}`);
+        alert(`Failed to Add Student: ${err.error}`);
+        return false;
       }
     } catch (err) {
-      console.error("Bulk student import triggered error:", err);
+      console.error("Add student triggered error:", err);
+      alert("Network fault during student creation.");
+      return false;
+    }
+  };
+
+  // 5.2 Manual Edit Student
+  const handleEditStudent = async (student: Student): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/students/${student.studentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(student)
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to Edit Student: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Edit student triggered error:", err);
+      alert("Network fault during student editing.");
+      return false;
+    }
+  };
+
+  // 5.3 Manual Delete Student
+  const handleDeleteStudent = async (studentId: string): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/students/${studentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to Delete Student: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Delete student triggered error:", err);
+      alert("Network fault during student deletion.");
+      return false;
+    }
+  };
+
+  // 5.4 Manual Bulk Delete Students
+  const handleDeleteStudentsBulk = async (studentIds: string[]): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/students/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ studentIds })
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to Delete Selected Students: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Bulk delete students triggered error:", err);
+      alert("Network fault during bulk student deletion.");
+      return false;
+    }
+  };
+
+  // 5.5 Manual Clear Students Registry Completely
+  const handleClearStudentsRegistry = async (): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/students/clear-registry', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to clear students registry: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Clear student registry triggered error:", err);
+      alert("Network fault during student registry clearing.");
+      return false;
+    }
+  };
+
+  // 5.6 Backup Database - downloads full database backup file
+  const handleBackupDatabase = async () => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/database/backup', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ramdiri_library_backup_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        const err = await resp.json();
+        alert(`Failed to export database backup: ${err.error}`);
+      }
+    } catch (err) {
+      console.error("Backup triggered error:", err);
+      alert("Network fault during automatic database export.");
+    }
+  };
+
+  // 5.7 Restore Database - restores full database from upload payload
+  const handleRestoreDatabase = async (payload: any): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/database/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to restore database backup: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Restore triggered error:", err);
+      alert("Network fault during database restore import.");
+      return false;
     }
   };
 
@@ -325,14 +649,16 @@ export default function App() {
   };
 
   // 7. Approve a pending Borrow request
-  const handleApproveRequest = async (id: string) => {
+  const handleApproveRequest = async (id: string, dueDate?: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch(`/api/requests/${id}/approve`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ dueDate })
       });
       if (resp.ok) {
         await refreshData();
@@ -363,6 +689,30 @@ export default function App() {
     }
   };
 
+  // 8.5 Cancel a pending checkout request (Student)
+  const handleCancelRequest = async (id: string) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/requests/${id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Cancellation failed: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Cancel request failed:", err);
+      return false;
+    }
+  };
+
   // 9. Process physical Check-In / Book Returns
   const handleReturnBook = async (logId: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
@@ -381,6 +731,38 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Bulk issue books direct-desk action
+  const handleBulkIssue = async (payload: {
+    rollNumber: string;
+    class: string;
+    section: string;
+    studentName: string;
+    bookIds: string[];
+    dueDate: string;
+  }) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/issue-logs/bulk-issue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        await refreshData();
+        return { success: true };
+      } else {
+        const err = await resp.json();
+        return { success: false, error: err.error || "Execution failed on server." };
+      }
+    } catch (err: any) {
+      console.error(err);
+      return { success: false, error: err?.message || "Fault in network synchronization." };
     }
   };
 
@@ -415,15 +797,30 @@ export default function App() {
 
   return (
     <div 
-      className={`min-h-screen flex flex-col md:flex-row transition-all ${
-        highContrast 
-          ? 'bg-slate-950 text-white selection:bg-yellow-400 selection:text-slate-950 font-sans' 
-          : 'bg-[#f4f7f5] text-slate-800 font-sans'
-      } ${
+      className={`min-h-screen flex flex-col md:flex-row transition-all bg-[#f4f7f5] text-slate-800 font-sans ${
         fontSizeLarge ? 'text-lg' : 'text-sm'
       }`}
       id="root-viewport-container"
     >
+      {fontSizeLarge && (
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Sizing Scale Overrides for Librarians aged 45+ */
+          body, html, div, p, span, td, th, input, select, button, a {
+            font-size: 104% !important;
+          }
+          h1, h2, h3, h4 {
+            font-size: 118% !important;
+            font-weight: 900 !important;
+          }
+          span.text-xs, p.text-xs, td.text-xs, th.text-xs, button.text-xs, input.text-xs {
+            font-size: 12.5px !important;
+          }
+          span.text-\\[10px\\], span.text-\\[9px\\] {
+            font-size: 11.5px !important;
+            letter-spacing: 0.05em !important;
+          }
+        `}} />
+      )}
       
       {/* 1. LEFT NAVIGATION SIDEBAR (Desktop viewports) */}
       <aside className="w-64 bg-slate-900 text-slate-100 shrink-0 hidden md:flex flex-col shadow-xl border-r border-slate-800" id="school-sidebar-layout">
@@ -450,8 +847,7 @@ export default function App() {
 
           {[
             { id: 'home', label: t.navHome, icon: Home },
-            { id: 'portal', label: t.navPortal, icon: BookOpen },
-            { id: 'docs', label: currentLang === 'EN' ? "User Manual" : "उपयोगकर्ता नियमावली", icon: HelpCircle }
+            { id: 'portal', label: t.navPortal, icon: BookOpen }
           ].map(item => {
             const IconComponent = item.icon;
             const isActive = activeTab === item.id;
@@ -538,8 +934,6 @@ export default function App() {
           loggedInName={loggedInName || undefined}
           currentLang={currentLang}
           onLangChange={setCurrentLang}
-          highContrast={highContrast}
-          onContrastToggle={() => setHighContrast(!highContrast)}
           fontSizeLarge={fontSizeLarge}
           onFontSizeToggle={() => setFontSizeLarge(!fontSizeLarge)}
           isLoggedIn={loggedInRole !== 'Guest'}
@@ -552,8 +946,7 @@ export default function App() {
           <div className="flex items-center justify-around gap-1.5">
             {[
               { id: 'home', label: t.navHome, icon: Home },
-              { id: 'portal', label: t.navPortal, icon: BookOpen },
-              { id: 'docs', label: currentLang === 'EN' ? "Manual" : "नियमावली", icon: HelpCircle }
+              { id: 'portal', label: t.navPortal, icon: BookOpen }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -602,22 +995,33 @@ export default function App() {
                 students={students}
                 requests={requests}
                 issueLogs={issueLogs}
+                auditLogs={auditLogs}
+                onRefreshData={refreshData}
                 onAddBook={handleAddBook}
                 onEditBook={handleEditBook}
                 onDeleteBook={handleDeleteBook}
+                onDeleteBooksBulk={handleDeleteBooksBulk}
+                onClearInventory={handleClearBooksInventory}
                 onApproveRequest={handleApproveRequest}
                 onRejectRequest={handleRejectRequest}
+                onCancelRequest={handleCancelRequest}
                 onReturnBook={handleReturnBook}
                 onImportBooksExcel={handleImportBooksExcel}
                 onImportStudentsExcel={handleImportStudentsExcel}
+                onAddStudent={handleAddStudent}
+                onEditStudent={handleEditStudent}
+                onDeleteStudent={handleDeleteStudent}
+                onDeleteStudentsBulk={handleDeleteStudentsBulk}
+                onClearStudentsRegistry={handleClearStudentsRegistry}
+                onBackupDatabase={handleBackupDatabase}
+                onRestoreDatabase={handleRestoreDatabase}
                 onAddRequest={handleAddRequest}
                 onTriggerLoginClick={handleTriggerLoginClick}
                 onResetDatabase={handleResetDatabase}
+                loggedInName={loggedInName}
+                onUpdateLoggedInName={setLoggedInName}
+                onBulkIssue={handleBulkIssue}
               />
-            )}
-
-            {activeTab === 'docs' && (
-              <PRD_Architecture />
             )}
 
           </div>
@@ -636,6 +1040,43 @@ export default function App() {
         </footer>
 
       </div>
+
+      {/* NON-BLOCKING PROGRESS OVERLAY MODAL */}
+      {importProgress.status === 'uploading' && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-6 z-100 animate-fade-in select-none">
+          <div className="bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-850 rounded-xl p-6 shadow-2xl max-w-sm w-full space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-indigo-950 dark:text-indigo-400 tracking-wider">
+                Syncing {importProgress.type === 'books' ? 'Books' : 'Students List'}...
+              </span>
+              <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">
+                {Math.round((importProgress.processed / importProgress.total) * 100)}%
+              </span>
+            </div>
+            
+            {/* Progress bar scale representation */}
+            <div className="w-full h-3 bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
+              <div 
+                className="h-full bg-indigo-700 dark:bg-indigo-500 transition-all duration-150"
+                style={{ width: `${(importProgress.processed / importProgress.total) * 100}%` }}
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-xs text-slate-550 dark:text-slate-400">
+              <span className="font-bold">
+                Uploaded {importProgress.processed.toLocaleString()} of {importProgress.total.toLocaleString()} total entries
+              </span>
+              <span className="animate-pulse text-indigo-750 dark:text-indigo-400 font-bold">
+                Writing...
+              </span>
+            </div>
+
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal text-center">
+              Processing rows in safety-throttled chunks to prevent catalog browser freezes. Please keep this session open.
+            </p>
+          </div>
+        </div>
+      )}
 
     </div>
   );

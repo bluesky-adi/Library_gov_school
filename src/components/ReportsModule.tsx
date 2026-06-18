@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Printer, FileText, Download, CheckCircle, Clock } from 'lucide-react';
 import { Book, Student, BorrowRequest, BookIssueLog } from '../types';
 
@@ -23,6 +23,37 @@ export default function ReportsModule({
   currentLang
 }: ReportsModuleProps) {
   const [activeReport, setActiveReport] = useState<'inventory' | 'loans' | 'students'>('inventory');
+
+  // Dynamic Category Serial Numbering Map for shelf tracking
+  const categorySerialsMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const groups: { [cat: string]: Book[] } = {};
+    for (const b of books) {
+      const cat = b.category || "General";
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(b);
+    }
+    for (const cat of Object.keys(groups)) {
+      groups[cat].sort((a, b) => {
+        const idA = a.accessionNumber || a.bookId;
+        const idB = b.accessionNumber || b.bookId;
+        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+      });
+      groups[cat].forEach((b, idx) => {
+        map.set(b.bookId, idx + 1);
+      });
+    }
+    return map;
+  }, [books]);
+
+  const sortedBooks = useMemo(() => {
+    return [...books].sort((a, b) => {
+      const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
+      const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
+      if (idA !== idB) return idA - idB;
+      return a.bookId.localeCompare(b.bookId, undefined, { numeric: true });
+    });
+  }, [books]);
 
   const t = {
     EN: {
@@ -61,7 +92,7 @@ export default function ReportsModule({
     
     if (activeReport === 'inventory') {
       csvContent += "Book ID,Title,Author,Publisher,Category,Total Copies,Available Copies\n";
-      books.forEach(b => {
+      sortedBooks.forEach(b => {
         csvContent += `"${b.bookId}","${b.bookName}","${b.author}","${b.publisher}","${b.category}",${b.totalCopies},${b.availableCopies}\n`;
       });
     } else if (activeReport === 'loans') {
@@ -187,17 +218,18 @@ export default function ReportsModule({
         </div>
 
         <div className="p-4 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 font-extrabold text-xs flex justify-between select-none">
-          <span className="uppercase text-slate-700 dark:text-slate-200">{activeReport === 'inventory' ? t.optInventory : activeReport === 'loans' ? t.optIssued : t.optStudent}</span>
+          <span className="uppercase text-slate-705 dark:text-slate-200 font-bold">{activeReport === 'inventory' ? t.optInventory : activeReport === 'loans' ? t.optIssued : t.optStudent}</span>
           <span className="font-mono text-[11px] text-slate-500 italic">Record Count: {activeReport === 'inventory' ? books.length : activeReport === 'loans' ? issueLogs.length : students.length} items</span>
         </div>
 
         <div className="overflow-x-auto">
           
           {activeReport === 'inventory' && (
-            <table className="w-full text-left text-xs min-w-405">
+            <table className="w-full text-left text-xs min-w-[900px]">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 hover:text-slate-900 font-bold border-b border-slate-200 dark:border-slate-800 select-none">
+                <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 hover:text-slate-950 font-extrabold border-b border-slate-200 dark:border-slate-800 select-none">
                   <th className="p-3">Reference ID</th>
+                  <th className="p-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Shelf Sr #</th>
                   <th className="p-3">Book Title</th>
                   <th className="p-3">Author</th>
                   <th className="p-3">Publisher</th>
@@ -207,13 +239,14 @@ export default function ReportsModule({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
-                {books.map(b => (
+                {sortedBooks.map(b => (
                   <tr key={b.bookId} className="hover:bg-slate-50/50">
                     <td className="p-3 font-mono font-bold text-emerald-800">{b.bookId}</td>
+                    <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">#{categorySerialsMap.get(b.bookId) || 1}</td>
                     <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{b.bookName}</td>
-                    <td className="p-3 text-slate-700 dark:text-slate-300">{b.author}</td>
+                    <td className="p-3 text-slate-705 dark:text-slate-300">{b.author}</td>
                     <td className="p-3 text-slate-500">{b.publisher}</td>
-                    <td className="p-3 font-semibold text-sky-850 dark:text-sky-400">{b.category}</td>
+                    <td className="p-3 font-semibold text-sky-850 dark:text-sky-450">{b.category}</td>
                     <td className="p-3 text-center font-mono font-semibold">{b.totalCopies}</td>
                     <td className="p-3 text-center font-mono font-bold text-emerald-700">{b.availableCopies}</td>
                   </tr>
@@ -223,10 +256,11 @@ export default function ReportsModule({
           )}
 
           {activeReport === 'loans' && (
-            <table className="w-full text-left text-xs min-w-405">
+            <table className="w-full text-left text-xs min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800 select-none">
                   <th className="p-3">Loan Log ID</th>
+                  <th className="p-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Shelf Sr #</th>
                   <th className="p-3">Book Checked-Out</th>
                   <th className="p-3">Student Name</th>
                   <th className="p-3 text-center">Roll Number</th>
@@ -236,29 +270,34 @@ export default function ReportsModule({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
-                {issueLogs.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/50">
-                    <td className="p-3 font-mono font-bold text-slate-500">{l.id}</td>
-                    <td className="p-3 font-bold text-slate-900 dark:text-slate-105">{l.bookName}</td>
-                    <td className="p-3 font-semibold text-slate-800 dark:text-slate-300">{l.studentName}</td>
-                    <td className="p-3 text-center font-mono font-bold text-teal-800">Roll #{l.rollNumber}</td>
-                    <td className="p-3 font-mono">{l.issueDate}</td>
-                    <td className="p-3 text-center font-mono text-slate-500">{l.returnDate || "-"}</td>
-                    <td className="p-3 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-black inline-flex items-center gap-1 leading-none ${
-                        l.status === 'Issued'
-                          ? 'bg-orange-100 text-orange-950 border border-orange-200 animate-pulse'
-                          : 'bg-emerald-100 text-emerald-950'
-                      }`}>
-                        {l.status === 'Issued' ? <Clock className="w-2.5 h-2.5 shrink-0" /> : <CheckCircle className="w-2.5 h-2.5 shrink-0" />}
-                        <span>{l.status === 'Issued' ? (currentLang === 'EN' ? "Outstanding" : "सक्रिय लोन") : (currentLang === 'EN' ? "Completed" : "जमा हो चुकी")}</span>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {issueLogs.map(l => {
+                  const bookObj = books.find(b => b.bookId === l.bookId || b.bookName === l.bookName);
+                  const shelfSr = bookObj ? (categorySerialsMap.get(bookObj.bookId) || 1) : 1;
+                  return (
+                    <tr key={l.id} className="hover:bg-slate-50/50">
+                      <td className="p-3 font-mono font-bold text-slate-500">{l.id}</td>
+                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">#{shelfSr}</td>
+                      <td className="p-3 font-bold text-slate-905 dark:text-slate-105">{l.bookName}</td>
+                      <td className="p-3 font-semibold text-slate-808 dark:text-slate-305">{l.studentName}</td>
+                      <td className="p-3 text-center font-mono font-bold text-teal-800">Roll #{l.rollNumber}</td>
+                      <td className="p-3 font-mono">{l.issueDate}</td>
+                      <td className="p-3 text-center font-mono text-slate-500">{l.returnDate || "-"}</td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-black inline-flex items-center gap-1 leading-none ${
+                          l.status === 'Issued'
+                            ? 'bg-orange-100 text-orange-950 border border-orange-200 animate-pulse'
+                            : 'bg-emerald-100 text-emerald-950'
+                        }`}>
+                          {l.status === 'Issued' ? <Clock className="w-2.5 h-2.5 shrink-0" /> : <CheckCircle className="w-2.5 h-2.5 shrink-0" />}
+                          <span>{l.status === 'Issued' ? (currentLang === 'EN' ? "Outstanding" : "सक्रिय लोन") : (currentLang === 'EN' ? "Completed" : "जमा हो चुकी")}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {issueLogs.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-450 italic">
+                    <td colSpan={8} className="p-8 text-center text-slate-450 italic">
                       {currentLang === 'EN' ? "No lending transactions logged yet." : "अभी तक कोई सक्रिय लोन लेनदेन दर्ज नहीं किया गया है।"}
                     </td>
                   </tr>
@@ -281,7 +320,7 @@ export default function ReportsModule({
                   <tr key={s.rollNumber} className="hover:bg-slate-50/50">
                     <td className="p-3 font-mono font-bold text-emerald-800">Roll Index #{s.rollNumber}</td>
                     <td className="p-3 font-bold text-slate-905 dark:text-slate-105">{s.name}</td>
-                    <td className="p-3 text-right font-mono text-slate-500">{s.dob}</td>
+                    <td className="p-3 text-right font-mono text-slate-505">{s.dob}</td>
                   </tr>
                 ))}
               </tbody>

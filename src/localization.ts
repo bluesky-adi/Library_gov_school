@@ -78,9 +78,9 @@ export const translations = {
     // Admin & Librarian Actions
     excelUpload: "Excel Bulk Import",
     addBook: "Add Book Manually",
-    studentDatabase: "Student Matrix",
-    printableReports: "Reports & Audits",
-    systemSettings: "System Configuration"
+    studentDatabase: "Students",
+    printableReports: "Reports",
+    systemSettings: "Settings"
   },
   HI: {
     schoolName: "पीएम श्री रामदीरी +2 उच्च विद्यालय",

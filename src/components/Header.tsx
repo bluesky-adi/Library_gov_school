@@ -13,8 +13,6 @@ interface HeaderProps {
   loggedInName?: string;
   currentLang: 'EN' | 'HI';
   onLangChange: (lang: 'EN' | 'HI') => void;
-  highContrast: boolean;
-  onContrastToggle: () => void;
   fontSizeLarge: boolean;
   onFontSizeToggle: () => void;
   isLoggedIn: boolean;
@@ -27,8 +25,6 @@ export default function Header({
   loggedInName,
   currentLang,
   onLangChange,
-  highContrast,
-  onContrastToggle,
   fontSizeLarge,
   onFontSizeToggle,
   isLoggedIn,
@@ -138,18 +134,6 @@ export default function Header({
                 </div>
               )}
             </div>
-
-            {/* Contrast adjust */}
-            <button
-              onClick={onContrastToggle}
-              className={`p-1.5 rounded border text-[11px] font-bold flex items-center gap-1 transition-all ${
-                highContrast ? 'bg-[#ff9800] border-amber-600 text-slate-950' : 'border-slate-200 bg-slate-50/40 text-slate-650'
-              }`}
-              title="Toggle Accessibility Contrast"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Contrast</span>
-            </button>
 
             {/* Sizing adjust */}
             <button

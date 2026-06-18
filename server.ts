@@ -19,7 +19,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Persistent JSON storage path for Librarian account credentials
 const CONFIG_PATH = path.join(process.cwd(), 'librarian_v2_credentials.json');
@@ -28,6 +29,7 @@ const CONFIG_PATH = path.join(process.cwd(), 'librarian_v2_credentials.json');
 if (!fs.existsSync(CONFIG_PATH)) {
   const initialConfig = {
     username: "ramdiri_admin_roy",
+    name: "S. K. Roy (Chief Librarian)",
     passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
   };
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(initialConfig, null, 2));
@@ -35,10 +37,15 @@ if (!fs.existsSync(CONFIG_PATH)) {
 
 function getLibrarianConfig() {
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    if (!config.name) {
+      config.name = "S. K. Roy (Chief Librarian)";
+    }
+    return config;
   } catch (err) {
     return {
       username: "ramdiri_admin_roy",
+      name: "S. K. Roy (Chief Librarian)",
       passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
     };
   }
@@ -74,6 +81,17 @@ function toStandardDate(str: string): string {
   return `${year}-${pad(month)}-${pad(day)}`; // Align to ISO YYYY-MM-DD
 }
 
+function getFormattedTime(): string {
+  const now = new Date();
+  let hours = now.getHours();
+  const minutes = now.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  const minutesStr = minutes.toString().padStart(2, '0');
+  return `${hours}:${minutesStr} ${ampm}`;
+}
+
 // Security Middlewares
 function authenticateToken(req: any, res: any, next: any) {
   const authHeader = req.headers.authorization;
@@ -96,6 +114,31 @@ function requireLibrarian(req: any, res: any, next: any) {
   }
   next();
 }
+
+async function addAuditLog(req: any, action: 'Book Issued' | 'Book Returned' | 'Student Added' | 'Student Edited' | 'Student Deleted' | 'Book Added' | 'Book Edited' | 'Book Deleted' | 'Request Cancelled', details: string) {
+  const username = req.user?.name || req.user?.username || "Chief Librarian";
+  const log = {
+    id: `AUDIT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    timestamp: new Date().toISOString(),
+    user: username,
+    action,
+    details
+  };
+  try {
+    await dbService.saveAuditLog(log as any);
+  } catch (err) {
+    console.error("Failed to write to permanent audit logging file", err);
+  }
+}
+
+app.get('/api/audit-logs', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const logs = await dbService.getAuditLogs();
+    res.json(logs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ---- SYSTEM INFRASTRUCTURE HEALTH ----
 app.get('/api/health', (req, res) => {
@@ -122,7 +165,7 @@ app.get('/api/database/status', (req, res) => {
 
 // ---- AUTH ENGINES ----
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password, rollNumber, dob, role } = req.body;
+  const { username, password, rollNumber, dob, role, classValue, sectionValue } = req.body;
 
   if (role === 'Librarian') {
     const activeConfig = getLibrarianConfig();
@@ -131,7 +174,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (isCorrectUser && isCorrectPass) {
       const token = jwt.sign(
-        { role: 'Librarian', username: activeConfig.username, name: "S. K. Roy (Chief Librarian)" },
+        { role: 'Librarian', username: activeConfig.username, name: activeConfig.name || "S. K. Roy (Chief Librarian)" },
         JWT_SECRET,
         { expiresIn: '1d' }
       );
@@ -142,8 +185,8 @@ app.post('/api/auth/login', async (req, res) => {
       });
     } else {
       return res.status(401).json({ 
-         success: false, 
-         error: "Access Denied: Incorrect Librarian Username or Password." 
+        success: false, 
+        error: "Access Denied: Incorrect Librarian Username or Password." 
       });
     }
   } else {
@@ -163,11 +206,22 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const inputDobStandard = toStandardDate(dob);
+    const inputClass = classValue ? classValue.toString().trim() : '';
+    const inputSection = sectionValue ? sectionValue.toString().trim().toUpperCase() : '';
+
+    if (!inputClass || !inputSection) {
+      return res.status(400).json({
+        success: false,
+        error: "Student login requires Class and Section specification for ID uniqueness."
+      });
+    }
 
     const studentsList = await dbService.getStudents();
-    const matched = studentsList.find(
-      (s: Student) => s.rollNumber === roll && toStandardDate(s.dob) === inputDobStandard
-    );
+    const matched = studentsList.find((s: Student) => {
+      const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
+      const searchId = `${inputClass}-${inputSection}-${roll}`;
+      return sId === searchId && toStandardDate(s.dob) === inputDobStandard;
+    });
 
     if (matched) {
       const token = jwt.sign(
@@ -205,30 +259,56 @@ app.get('/api/auth/verify', (req, res) => {
 });
 
 app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, (req, res) => {
-  const { oldPassword, newUsername, newPassword } = req.body;
+  const { oldPassword, newName, newUsername, newPassword } = req.body;
 
-  if (!oldPassword || !newUsername || !newPassword) {
-    return res.status(400).json({ success: false, error: 'All fields are required: Old Password, New Username, New Password' });
+  if (!oldPassword) {
+    return res.status(400).json({ success: false, error: 'Current credentials authorization password is required to save changes.' });
   }
 
   const activeConfig = getLibrarianConfig();
   const isPassCorrect = bcrypt.compareSync(oldPassword, activeConfig.passwordHash);
 
   if (!isPassCorrect) {
-    return res.status(401).json({ success: false, error: 'Incorrect current password credential' });
+    return res.status(401).json({ success: false, error: 'Incorrect current validation password' });
   }
 
-  if (newPassword.trim().length < 6) {
-    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters in length' });
+  // Update Display Name if provided
+  const updatedName = newName && newName.trim() ? newName.trim() : activeConfig.name;
+  
+  // Update Username if provided
+  const updatedUsername = newUsername && newUsername.trim() ? newUsername.toLowerCase().trim() : activeConfig.username;
+
+  // Update Password hash if provided
+  let updatedPasswordHash = activeConfig.passwordHash;
+  if (newPassword && newPassword.trim()) {
+    if (newPassword.trim().length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters in length' });
+    }
+    updatedPasswordHash = bcrypt.hashSync(newPassword.trim(), 10);
   }
 
   const updatedConfig = {
-    username: newUsername.toLowerCase().trim(),
-    passwordHash: bcrypt.hashSync(newPassword, 10)
+    username: updatedUsername,
+    name: updatedName,
+    passwordHash: updatedPasswordHash
   };
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
-  res.json({ success: true, message: 'Chief Librarian access credentials updated successfully' });
+
+  // Generate a brand new JWT token so that user transitions smoothly
+  const newToken = jwt.sign(
+    { role: 'Librarian', username: updatedUsername, name: updatedName },
+    JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+
+  res.json({
+    success: true,
+    message: 'Chief Librarian access credentials and profile updated successfully',
+    token: newToken,
+    name: updatedName,
+    username: updatedUsername
+  });
 });
 
 
@@ -245,15 +325,40 @@ app.get('/api/books', async (req, res) => {
 app.post('/api/books', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const newBook = await dbService.saveBook(req.body);
+    await addAuditLog(req, 'Book Added', `Added book '${newBook.bookName}' (ID: ${newBook.bookId}, Accession: ${newBook.accessionNumber || newBook.bookId})`);
     res.status(201).json(newBook);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
+app.post('/api/books/bulk', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const records = req.body.books;
+    if (!Array.isArray(records)) {
+      return res.status(400).json({ error: "Invalid books bulk upload payload. Expected a list of books." });
+    }
+    const { saved, skippedCount } = await dbService.saveBooksBulk(records);
+    await addAuditLog(req, 'Book Added', `Bulk imported ${saved.length} books into catalog register. Skipped ${skippedCount} duplicate Accession items.`);
+    res.json({ success: true, count: saved.length, skippedCount, records: saved });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/database/stats', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const stats = await dbService.getDbStats();
+    res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/books/:id', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const updatedBook = await dbService.saveBook({ ...req.body, bookId: req.params.id });
+    await addAuditLog(req, 'Book Edited', `Edited specifications for book '${updatedBook.bookName}' (ID: ${updatedBook.bookId})`);
     res.json(updatedBook);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -263,7 +368,32 @@ app.put('/api/books/:id', authenticateToken, requireLibrarian, async (req, res) 
 app.delete('/api/books/:id', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const success = await dbService.deleteBook(req.params.id);
+    await addAuditLog(req, 'Book Deleted', `Deleted book record ID ${req.params.id} from library inventory.`);
     res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/books/bulk-delete', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { bookIds } = req.body;
+    if (!Array.isArray(bookIds)) {
+      return res.status(400).json({ error: "Invalid body. Expected 'bookIds' list." });
+    }
+    const count = await dbService.deleteBooksBulk(bookIds);
+    await addAuditLog(req, 'Book Deleted', `Bulk deleted ${count} books from inventory index.`);
+    res.json({ success: true, count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/books/clear-inventory', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const count = await dbService.clearBooksInventory();
+    await addAuditLog(req, 'Book Deleted', `Completely purged the entire school books inventory (${count} items deleted).`);
+    res.json({ success: true, count });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -282,10 +412,31 @@ app.get('/api/students', authenticateToken, requireLibrarian, async (req, res) =
 
 app.post('/api/students', authenticateToken, requireLibrarian, async (req, res) => {
   try {
-    const newStudent = await dbService.saveStudent(req.body);
+    const newStudent = await dbService.saveStudent(req.body, false);
+    await addAuditLog(req, 'Student Added', `Enrolled new student '${newStudent.name}' (Class: ${newStudent.class}, Sec: ${newStudent.section}, Roll: ${newStudent.rollNumber})`);
     res.status(201).json(newStudent);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.put('/api/students/:studentId', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const updatedStudent = await dbService.saveStudent(req.body, true);
+    await addAuditLog(req, 'Student Edited', `Edited student record for '${updatedStudent.name}' (ID: ${updatedStudent.studentId})`);
+    res.json(updatedStudent);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/students/:studentId', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const success = await dbService.deleteStudent(req.params.studentId);
+    await addAuditLog(req, 'Student Deleted', `Expelled/Deleted student record ID ${req.params.studentId} from school library registers.`);
+    res.json({ success });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -295,8 +446,9 @@ app.post('/api/students/bulk', authenticateToken, requireLibrarian, async (req, 
     if (!Array.isArray(records)) {
       return res.status(400).json({ error: "Invalid student bulk upload content." });
     }
-    const saved = await dbService.saveStudentsBulk(records);
-    res.json({ success: true, count: saved.length, records: saved });
+    const { saved, skippedCount } = await dbService.saveStudentsBulk(records);
+    await addAuditLog(req, 'Student Added', `Bulk imported list of ${saved.length} students from enrollment Excel sheet. Skipped ${skippedCount} duplicate student rolls.`);
+    res.json({ success: true, count: saved.length, skippedCount, records: saved });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -398,9 +550,13 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
 
     // Create Issue log
     const issueDateStr = new Date().toISOString().split('T')[0];
-    const due = new Date();
-    due.setDate(due.getDate() + 14); // 2 weeks duration
-    const dueDateStr = due.toISOString().split('T')[0];
+    const customDueDate = req.body.dueDate;
+    let dueDateStr = customDueDate;
+    if (!dueDateStr) {
+      const due = new Date();
+      due.setDate(due.getDate() + 14); // 2 weeks fallback duration
+      dueDateStr = due.toISOString().split('T')[0];
+    }
 
     const issueLog: BookIssueLog = {
       id: `LOG-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
@@ -411,11 +567,13 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
       bookId: borrowReq.bookId,
       bookName: borrowReq.bookName,
       issueDate: issueDateStr,
+      issueTime: getFormattedTime(),
       dueDate: dueDateStr,
       status: 'Issued'
     };
 
     const savedLog = await dbService.saveIssueLog(issueLog);
+    await addAuditLog(req, 'Book Issued', `Issued book '${borrowReq.bookName}' (ID: ${borrowReq.bookId}) to student ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`);
     res.json({ success: true, log: savedLog });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -429,6 +587,113 @@ app.post('/api/requests/:id/reject', authenticateToken, requireLibrarian, async 
       return res.status(404).json({ error: "Borrow request code not discovered." });
     }
     res.json({ success: true, request: reqStatus });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/requests/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const requests = await dbService.getBorrowRequests();
+    const borrowReq = requests.find(r => r.id === requestId);
+    if (!borrowReq) {
+      return res.status(404).json({ error: "Borrow request code not discovered." });
+    }
+    const reqUser = (req as any).user;
+    if (reqUser?.role === 'Student' && reqUser.rollNumber !== borrowReq.rollNumber) {
+      return res.status(403).json({ error: "Request cancel shield: You cannot cancel another student's request." });
+    }
+    if (borrowReq.status !== 'Pending') {
+      return res.status(400).json({ error: "Only outstanding pending requests can be cancelled." });
+    }
+    const updated = await dbService.updateBorrowRequestStatus(requestId, 'Cancelled');
+    await addAuditLog(req, 'Request Cancelled', `Student ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber}) cancelled borrow request for book ID '${borrowReq.bookId}'`);
+    res.json({ success: true, request: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { rollNumber, class: studClass, section, studentName, bookIds, dueDate } = req.body;
+    
+    if (!rollNumber || !studClass || !section || !studentName || !bookIds || !Array.isArray(bookIds) || bookIds.length === 0) {
+      return res.status(400).json({ error: "Missing required multi-book issue information." });
+    }
+
+    const books = await dbService.getBooks();
+    const students = await dbService.getStudents();
+    const matchedStudent = students.find(s => s.rollNumber === parseInt(rollNumber) && s.class === String(studClass) && s.section === String(section));
+
+    if (!matchedStudent) {
+      return res.status(400).json({ error: "Student not found in school records." });
+    }
+
+    // First validate draft books checking and copy levels
+    for (const bId of bookIds) {
+      const bk = books.find(b => b.bookId === bId);
+      if (!bk) {
+        return res.status(404).json({ error: `Book (ID: ${bId}) not found in database.` });
+      }
+      if (bk.availableCopies <= 0) {
+        return res.status(400).json({ error: `Book '${bk.bookName}' (ID: ${bId}) has zero available copies on physical shelf.` });
+      }
+    }
+
+    const issueDateStr = new Date().toISOString().split('T')[0];
+    let dueDateStr = dueDate;
+    if (!dueDateStr) {
+      const due = new Date();
+      due.setDate(due.getDate() + 14);
+      dueDateStr = due.toISOString().split('T')[0];
+    }
+
+    const savedLogs: BookIssueLog[] = [];
+
+    for (const bId of bookIds) {
+      const bk = books.find(b => b.bookId === bId)!;
+
+      // 1. Create approved borrow request track record
+      const borrowReq: BorrowRequest = {
+        id: `RQ-DIR-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
+        studentName: matchedStudent.name,
+        rollNumber: matchedStudent.rollNumber,
+        bookId: bk.bookId,
+        bookName: bk.bookName,
+        requestDate: issueDateStr,
+        status: 'Approved'
+      };
+      await dbService.saveBorrowRequest(borrowReq);
+
+      // 2. Reduce shelf copying inventory count
+      bk.availableCopies -= 1;
+      await dbService.saveBook(bk);
+
+      // 3. Create issue checkout ledger
+      const issueLog: BookIssueLog = {
+        id: `LOG-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
+        studentName: matchedStudent.name,
+        rollNumber: matchedStudent.rollNumber,
+        class: matchedStudent.class,
+        section: matchedStudent.section,
+        bookId: bk.bookId,
+        bookName: bk.bookName,
+        issueDate: issueDateStr,
+        issueTime: getFormattedTime(),
+        dueDate: dueDateStr,
+        status: 'Issued'
+      };
+      
+      const saved = await dbService.saveIssueLog(issueLog);
+      savedLogs.push(saved);
+
+      // 4. Register to audit tracking
+      await addAuditLog(req, 'Book Issued', `Direct Desk Issue check: '${bk.bookName}' (ID: ${bk.bookId}) physical checkout given to ${matchedStudent.name} (Roll: ${matchedStudent.rollNumber}, SEC ${matchedStudent.class}-${matchedStudent.section})`);
+    }
+
+    res.status(201).json({ success: true, count: savedLogs.length, logs: savedLogs });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -467,6 +732,7 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
     // Mark as Returned
     log.status = 'Returned';
     log.returnDate = new Date().toISOString().split('T')[0];
+    log.returnTime = getFormattedTime();
     await dbService.saveIssueLog(log);
 
     // Replenish copies count
@@ -477,6 +743,7 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
       await dbService.saveBook(book);
     }
 
+    await addAuditLog(req, 'Book Returned', `Returned book '${log.bookName}' (ID: ${log.bookId}) from student ${log.studentName} (Roll: ${log.rollNumber})`);
     res.json({ success: true, log });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -687,11 +954,64 @@ app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req,
   }
 });
 
+// Bulk student delete endpoint
+app.post('/api/students/bulk-delete', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { studentIds } = req.body;
+    if (!Array.isArray(studentIds)) {
+      return res.status(400).json({ error: "Invalid studentIds list format." });
+    }
+    const count = await dbService.deleteStudentsBulk(studentIds);
+    await addAuditLog(req, 'Student Deleted', `Bulk deleted a selection of ${count} students from school registries.`);
+    res.json({ success: true, count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear entire student registry endpoint
+app.post('/api/students/clear-registry', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const count = await dbService.clearStudentsRegistry();
+    await addAuditLog(req, 'Student Deleted', `Wiped entire registered students enrollment database completely (${count} student entries purged).`);
+    res.json({ success: true, count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET database backup endpoint (Librarian only)
+app.get('/api/database/backup', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const backupData = await dbService.backupFullDatabase();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=ramdiri_library_backup_${Date.now()}.json`);
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST database restore endpoint (Librarian only)
+app.post('/api/database/restore', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const payload = req.body;
+    await dbService.restoreFullDatabase(payload);
+    res.json({ success: true, message: "Database state completely restored successfully." });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Compile Vite assets or configure production fallback route
 async function initServer() {
-  // Connect database on boot
-  await connectDatabase();
+  // Connect database on boot as a background task to establish connection without blocking listen()
+  connectDatabase().then(() => {
+    console.log("Database connection routine completed.");
+  }).catch(err => {
+    console.error("Database connection failed in background:", err);
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     console.log("Loading Vite Dev Middlewares on Port 3000...");

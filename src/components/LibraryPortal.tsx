@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { translations } from '../localization';
-import { UserRole, Book, Student, BorrowRequest, BookIssueLog } from '../types';
+import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from '../types';
 import StudentModule from './StudentModule';
 import LibrarianModule from './LibrarianModule';
 import { Shield, Key, AlertTriangle, BookOpen } from 'lucide-react';
@@ -18,17 +18,39 @@ interface LibraryPortalProps {
   students: Student[];
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
+  auditLogs?: LibraryAuditLog[];
+  onRefreshData?: () => void;
   onAddBook: (book: Book) => void;
   onEditBook: (book: Book) => void;
   onDeleteBook: (bookId: string) => void;
-  onApproveRequest: (id: string) => void;
+  onDeleteBooksBulk: (bookIds: string[]) => void;
+  onClearInventory: () => void;
+  onApproveRequest: (id: string, dueDate?: string) => void;
   onRejectRequest: (id: string) => void;
+  onCancelRequest: (id: string) => Promise<boolean>;
   onReturnBook: (logId: string) => void;
   onImportBooksExcel: (imported: Book[]) => void;
   onImportStudentsExcel: (imported: Student[]) => void;
+  onAddStudent: (student: Student) => Promise<boolean>;
+  onEditStudent: (student: Student) => Promise<boolean>;
+  onDeleteStudent: (studentId: string) => Promise<boolean>;
+  onDeleteStudentsBulk?: (studentIds: string[]) => Promise<boolean>;
+  onClearStudentsRegistry?: () => Promise<boolean>;
+  onBackupDatabase?: () => Promise<void>;
+  onRestoreDatabase?: (payload: any) => Promise<boolean>;
   onAddRequest: (req: BorrowRequest) => void;
   onTriggerLoginClick: () => void;
   onResetDatabase: () => void;
+  loggedInName?: string;
+  onUpdateLoggedInName?: (newName: string) => void;
+  onBulkIssue?: (payload: {
+    rollNumber: string;
+    class: string;
+    section: string;
+    studentName: string;
+    bookIds: string[];
+    dueDate: string;
+  }) => Promise<{ success: boolean; error?: string }>;
 }
 
 export default function LibraryPortal({
@@ -39,17 +61,32 @@ export default function LibraryPortal({
   students,
   requests,
   issueLogs,
+  auditLogs,
+  onRefreshData,
   onAddBook,
   onEditBook,
   onDeleteBook,
+  onDeleteBooksBulk,
+  onClearInventory,
   onApproveRequest,
   onRejectRequest,
+  onCancelRequest,
   onReturnBook,
   onImportBooksExcel,
   onImportStudentsExcel,
+  onAddStudent,
+  onEditStudent,
+  onDeleteStudent,
+  onDeleteStudentsBulk,
+  onClearStudentsRegistry,
+  onBackupDatabase,
+  onRestoreDatabase,
   onAddRequest,
   onTriggerLoginClick,
-  onResetDatabase
+  onResetDatabase,
+  loggedInName,
+  onUpdateLoggedInName,
+  onBulkIssue
 }: LibraryPortalProps) {
   const t = translations[currentLang];
 
@@ -63,7 +100,7 @@ export default function LibraryPortal({
           <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
             {currentLang === 'EN' ? "Authentication Required" : "प्रवेश अनुज्ञा अपेक्षित"}
           </h2>
-          <p className="text-xs text-slate-500 leading-normal">
+          <p className="text-xs text-slate-550 leading-normal">
             {currentLang === 'EN' 
               ? "You must log in to the system either as a Student (Roll + DOB) or Librarian to view personalized account records."
               : "व्यक्तिगत खाते के विवरण देखने के लिए आपको छात्र (रॉल + जन्म तिथि) या पुस्तकालयाध्यक्ष के रूप में लॉगिन करना होगा।"}
@@ -89,6 +126,7 @@ export default function LibraryPortal({
           books={books}
           requests={requests}
           onAddRequest={onAddRequest}
+          onCancelRequest={onCancelRequest}
           currentLang={currentLang}
           loggedInStudent={loggedInStudent}
           issueLogs={issueLogs}
@@ -99,16 +137,31 @@ export default function LibraryPortal({
           students={students}
           requests={requests}
           issueLogs={issueLogs}
+          auditLogs={auditLogs || []}
+          onRefreshInputLogs={onRefreshData}
           onAddBook={onAddBook}
           onEditBook={onEditBook}
           onDeleteBook={onDeleteBook}
+          onDeleteBooksBulk={onDeleteBooksBulk}
+          onClearInventory={onClearInventory}
           onApproveRequest={onApproveRequest}
           onRejectRequest={onRejectRequest}
+          onCancelRequest={onCancelRequest}
           onReturnBook={onReturnBook}
           onImportBooksExcel={onImportBooksExcel}
           onImportStudentsExcel={onImportStudentsExcel}
+          onAddStudent={onAddStudent}
+          onEditStudent={onEditStudent}
+          onDeleteStudent={onDeleteStudent}
+          onDeleteStudentsBulk={onDeleteStudentsBulk}
+          onClearStudentsRegistry={onClearStudentsRegistry}
+          onBackupDatabase={onBackupDatabase}
+          onRestoreDatabase={onRestoreDatabase}
           onAddRequest={onAddRequest}
+          onBulkIssue={onBulkIssue}
           currentLang={currentLang}
+          loggedInName={loggedInName}
+          onUpdateLoggedInName={onUpdateLoggedInName}
         />
       ) : (
         <div className="p-6 text-center bg-red-50 border border-red-200 rounded-xl space-y-2">
