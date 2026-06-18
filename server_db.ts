@@ -9,9 +9,16 @@ import path from 'path';
 import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from './src/types';
 
 // Fallback Folder Paths
-const LOCAL_DB_DIR = path.join(process.cwd(), 'data', 'db');
-if (!fs.existsSync(LOCAL_DB_DIR)) {
-  fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
+const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+const BUNDLED_DB_DIR = path.join(process.cwd(), 'data', 'db');
+const LOCAL_DB_DIR = isServerless ? path.join('/tmp', 'data', 'db') : BUNDLED_DB_DIR;
+
+try {
+  if (!fs.existsSync(LOCAL_DB_DIR)) {
+    fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.error("Warning: Failed to create database directory:", e);
 }
 
 const BOOKS_FILE = path.join(LOCAL_DB_DIR, 'books.json');
@@ -19,6 +26,33 @@ const STUDENTS_FILE = path.join(LOCAL_DB_DIR, 'students.json');
 const REQUESTS_FILE = path.join(LOCAL_DB_DIR, 'requests.json');
 const ISSUE_LOGS_FILE = path.join(LOCAL_DB_DIR, 'issue_logs.json');
 const AUDIT_LOGS_FILE = path.join(LOCAL_DB_DIR, 'audit_logs.json');
+
+// Copy bundled databases to writable /tmp directory if running in a serverless environment
+function ensureWritableDatabaseFiles() {
+  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json'];
+  for (const filename of filesToCopy) {
+    const destPath = path.join(LOCAL_DB_DIR, filename);
+    const srcPath = path.join(BUNDLED_DB_DIR, filename);
+    
+    if (!fs.existsSync(destPath)) {
+      try {
+        if (fs.existsSync(srcPath)) {
+          const content = fs.readFileSync(srcPath, 'utf8');
+          fs.writeFileSync(destPath, content);
+          console.log(`Successfully bootstrapped ${filename} in dynamic writable space.`);
+        } else {
+          fs.writeFileSync(destPath, JSON.stringify([], null, 2));
+        }
+      } catch (err) {
+        console.error(`Error bootstrapping backup file ${filename}:`, err);
+      }
+    }
+  }
+}
+
+if (isServerless) {
+  ensureWritableDatabaseFiles();
+}
 
 // Baseline Seeding Data to populate standard records immediately (Emptied for production readiness)
 const initialBooksSeed: Book[] = [];
@@ -34,21 +68,45 @@ function addFortnight(dateStr: string): string {
   return d.toISOString().split('T')[0];
 }
 
-// Ensure local files exist and are initialized to empty arrays (completely clearing old mock data)
-if (!fs.existsSync(BOOKS_FILE) || fs.readFileSync(BOOKS_FILE, 'utf8').trim() === '' || fs.readFileSync(BOOKS_FILE, 'utf8').includes('B001')) {
-  fs.writeFileSync(BOOKS_FILE, JSON.stringify([], null, 2));
+// Ensure local files exist and are initialized to empty arrays (safely wrapped in try/catch to prevent read-only crashes)
+try {
+  if (!fs.existsSync(BOOKS_FILE) || fs.readFileSync(BOOKS_FILE, 'utf8').trim() === '' || fs.readFileSync(BOOKS_FILE, 'utf8').includes('B001')) {
+    fs.writeFileSync(BOOKS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Books):", e);
 }
-if (!fs.existsSync(STUDENTS_FILE) || fs.readFileSync(STUDENTS_FILE, 'utf8').trim() === '' || fs.readFileSync(STUDENTS_FILE, 'utf8').includes('Aashish')) {
-  fs.writeFileSync(STUDENTS_FILE, JSON.stringify([], null, 2));
+
+try {
+  if (!fs.existsSync(STUDENTS_FILE) || fs.readFileSync(STUDENTS_FILE, 'utf8').trim() === '' || fs.readFileSync(STUDENTS_FILE, 'utf8').includes('Aashish')) {
+    fs.writeFileSync(STUDENTS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Students):", e);
 }
-if (!fs.existsSync(REQUESTS_FILE) || fs.readFileSync(REQUESTS_FILE, 'utf8').trim() === '' || fs.readFileSync(REQUESTS_FILE, 'utf8').includes('RQ001')) {
-  fs.writeFileSync(REQUESTS_FILE, JSON.stringify([], null, 2));
+
+try {
+  if (!fs.existsSync(REQUESTS_FILE) || fs.readFileSync(REQUESTS_FILE, 'utf8').trim() === '' || fs.readFileSync(REQUESTS_FILE, 'utf8').includes('RQ001')) {
+    fs.writeFileSync(REQUESTS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Requests):", e);
 }
-if (!fs.existsSync(ISSUE_LOGS_FILE) || fs.readFileSync(ISSUE_LOGS_FILE, 'utf8').trim() === '' || fs.readFileSync(ISSUE_LOGS_FILE, 'utf8').includes('LOG001')) {
-  fs.writeFileSync(ISSUE_LOGS_FILE, JSON.stringify([], null, 2));
+
+try {
+  if (!fs.existsSync(ISSUE_LOGS_FILE) || fs.readFileSync(ISSUE_LOGS_FILE, 'utf8').trim() === '' || fs.readFileSync(ISSUE_LOGS_FILE, 'utf8').includes('LOG001')) {
+    fs.writeFileSync(ISSUE_LOGS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Issue Logs):", e);
 }
-if (!fs.existsSync(AUDIT_LOGS_FILE) || fs.readFileSync(AUDIT_LOGS_FILE, 'utf8').trim() === '') {
-  fs.writeFileSync(AUDIT_LOGS_FILE, JSON.stringify([], null, 2));
+
+try {
+  if (!fs.existsSync(AUDIT_LOGS_FILE) || fs.readFileSync(AUDIT_LOGS_FILE, 'utf8').trim() === '') {
+    fs.writeFileSync(AUDIT_LOGS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Audit Logs):", e);
 }
 
 // Unified MongoDB / Mongoose Configurations
@@ -147,6 +205,14 @@ const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model(
 export async function connectDatabase() {
   const uri = process.env.MONGODB_URI;
   const isProduction = process.env.NODE_ENV === "production";
+  
+  // Safe secure diagnostic print
+  console.log("------------------ VERCEL RUNTIME DIAGNOSTICS ------------------");
+  console.log(`[DIAGNOSTIC] MONGODB_URI: ${uri ? `DEFINED (Length: ${uri.length}, Prefix: ${uri.substring(0, 10)}...)` : 'NOT DEFINED'}`);
+  console.log(`[DIAGNOSTIC] JWT_SECRET: ${process.env.JWT_SECRET ? `DEFINED (Length: ${process.env.JWT_SECRET.length})` : 'NOT DEFINED (Using default key fallback)'}`);
+  console.log(`[DIAGNOSTIC] Node Env: ${process.env.NODE_ENV}`);
+  console.log(`[DIAGNOSTIC] Vercel Env: ${process.env.VERCEL === '1' ? 'TRUE' : 'FALSE'}`);
+  console.log("----------------------------------------------------------------");
 
   if (!uri || uri.trim() === "" || uri.includes("placeholder") || uri.includes("YOUR_")) {
     const errorMsg = "No MONGODB_URI found in environment configuration.";

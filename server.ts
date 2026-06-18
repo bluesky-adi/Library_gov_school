@@ -166,81 +166,93 @@ app.get('/api/database/status', (req, res) => {
 // ---- AUTH ENGINES ----
 app.post('/api/auth/login', async (req, res) => {
   const { username, password, rollNumber, dob, role, classValue, sectionValue } = req.body;
+  console.log(`[API ROUTE] POST /api/auth/login started for role: ${role}. Params:`, { role, username, rollNumber, dob, classValue, sectionValue });
 
-  if (role === 'Librarian') {
-    const activeConfig = getLibrarianConfig();
-    const isCorrectUser = username?.toLowerCase().trim() === activeConfig.username.toLowerCase().trim();
-    const isCorrectPass = password && bcrypt.compareSync(password, activeConfig.passwordHash);
+  try {
+    if (role === 'Librarian') {
+      const activeConfig = getLibrarianConfig();
+      const isCorrectUser = username?.toLowerCase().trim() === activeConfig.username.toLowerCase().trim();
+      const isCorrectPass = password && bcrypt.compareSync(password, activeConfig.passwordHash);
 
-    if (isCorrectUser && isCorrectPass) {
-      const token = jwt.sign(
-        { role: 'Librarian', username: activeConfig.username, name: activeConfig.name || "S. K. Roy (Chief Librarian)" },
-        JWT_SECRET,
-        { expiresIn: '1d' }
-      );
-      return res.json({
-        success: true,
-        token,
-        role: 'Librarian'
-      });
+      if (isCorrectUser && isCorrectPass) {
+        const token = jwt.sign(
+          { role: 'Librarian', username: activeConfig.username, name: activeConfig.name || "S. K. Roy (Chief Librarian)" },
+          JWT_SECRET,
+          { expiresIn: '1d' }
+        );
+        console.log(`[API ROUTE] Librarian login SUCCESSFUL for user: ${username}`);
+        return res.json({
+          success: true,
+          token,
+          role: 'Librarian'
+        });
+      } else {
+        console.warn(`[API ROUTE] Librarian login FAILED. Correct User Match: ${isCorrectUser}, Password Match: ${!!isCorrectPass}`);
+        return res.status(401).json({ 
+          success: false, 
+          error: "Access Denied: Incorrect Librarian Username or Password." 
+        });
+      }
     } else {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Access Denied: Incorrect Librarian Username or Password." 
-      });
-    }
-  } else {
-    // Student authentication
-    const roll = parseInt(rollNumber);
-    if (!rollNumber || isNaN(roll)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Please enter a valid positive Roll Number." 
-      });
-    }
-    if (!dob) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Please select / specify your Date of Birth." 
-      });
-    }
+      // Student authentication
+      const roll = parseInt(rollNumber);
+      if (!rollNumber || isNaN(roll)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Please enter a valid positive Roll Number." 
+        });
+      }
+      if (!dob) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Please select / specify your Date of Birth." 
+        });
+      }
 
-    const inputDobStandard = toStandardDate(dob);
-    const inputClass = classValue ? classValue.toString().trim() : '';
-    const inputSection = sectionValue ? sectionValue.toString().trim().toUpperCase() : '';
+      const inputDobStandard = toStandardDate(dob);
+      const inputClass = classValue ? classValue.toString().trim() : '';
+      const inputSection = sectionValue ? sectionValue.toString().trim().toUpperCase() : '';
 
-    if (!inputClass || !inputSection) {
-      return res.status(400).json({
-        success: false,
-        error: "Student login requires Class and Section specification for ID uniqueness."
+      if (!inputClass || !inputSection) {
+        return res.status(400).json({
+          success: false,
+          error: "Student login requires Class and Section specification for ID uniqueness."
+        });
+      }
+
+      console.log(`[API ROUTE] Fetching students list for Student validation...`);
+      const studentsList = await dbService.getStudents();
+      console.log(`[API ROUTE] Loaded ${studentsList.length} total students. Matching against Class: ${inputClass}, Section: ${inputSection}, Roll: ${roll}, DOB: ${inputDobStandard}`);
+      const matched = studentsList.find((s: Student) => {
+        const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
+        const searchId = `${inputClass}-${inputSection}-${roll}`;
+        return sId === searchId && toStandardDate(s.dob) === inputDobStandard;
       });
+
+      if (matched) {
+        const token = jwt.sign(
+          { role: 'Student', rollNumber: roll, name: matched.name },
+          JWT_SECRET,
+          { expiresIn: '1d' }
+        );
+        console.log(`[API ROUTE] Student login SUCCESSFUL for student: ${matched.name}`);
+        return res.json({
+          success: true,
+          token,
+          role: 'Student',
+          student: matched
+        });
+      } else {
+        console.warn(`[API ROUTE] Student login FAILED. No matching record in ${studentsList.length} students.`);
+        return res.status(401).json({ 
+          success: false, 
+          error: "Authentication Failed: Roll Number and DOB do not match school records." 
+        });
+      }
     }
-
-    const studentsList = await dbService.getStudents();
-    const matched = studentsList.find((s: Student) => {
-      const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
-      const searchId = `${inputClass}-${inputSection}-${roll}`;
-      return sId === searchId && toStandardDate(s.dob) === inputDobStandard;
-    });
-
-    if (matched) {
-      const token = jwt.sign(
-        { role: 'Student', rollNumber: roll, name: matched.name },
-        JWT_SECRET,
-        { expiresIn: '1d' }
-      );
-      return res.json({
-        success: true,
-        token,
-        role: 'Student',
-        student: matched
-      });
-    } else {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Authentication Failed: Roll Number and DOB do not match school records." 
-      });
-    }
+  } catch (error: any) {
+    console.error(`[API ROUTE ERROR] POST /api/auth/login crash encountered:`, error);
+    return res.status(500).json({ success: false, error: error.message, stack: error.stack });
   }
 });
 
@@ -314,11 +326,14 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, (r
 
 // ---- BOOKS REST API ENDPOINTS ----
 app.get('/api/books', async (req, res) => {
+  console.log(`[API ROUTE] GET /api/books requested. Mongo Link Status: ${dbService.getMongoConnectionState()}`);
   try {
     const books = await dbService.getBooks();
+    console.log(`[API ROUTE] GET /api/books loaded ${books.length} book records successfully.`);
     res.json(books);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(`[API ROUTE ERROR] GET /api/books exception encountered:`, error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
