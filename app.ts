@@ -195,7 +195,7 @@ app.post('/api/auth/login', async (req, res) => {
           role: 'Librarian'
         });
       } else {
-        console.warn(`[API ROUTE] Librarian login FAILED. Correct User Match: ${isCorrectUser}, Password Match: ${!!isCorrectPass}`);
+        console.log(`[API ROUTE] Librarian login attempt did not match credentials.`);
         return res.status(401).json({ 
           success: false, 
           error: "Access Denied: Incorrect Librarian Username or Password." 
