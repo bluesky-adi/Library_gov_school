@@ -1034,6 +1034,18 @@ async function initServer() {
   });
 }
 
-initServer().catch(err => {
-  console.error("Critical server startup fault:", err);
-});
+// Export the Express app for serverless or testing environments
+export default app;
+
+if (process.env.VERCEL !== '1') {
+  initServer().catch(err => {
+    console.error("Critical server startup fault:", err);
+  });
+} else {
+  // On Vercel serverless platform, connect to MongoDB automatically during function initialization
+  connectDatabase().then(() => {
+    console.log("Database connection routine completed on Vercel.");
+  }).catch(err => {
+    console.error("Database connection failed on Vercel:", err);
+  });
+}
