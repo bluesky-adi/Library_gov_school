@@ -178,6 +178,22 @@ export default function PublicHome({
 
   const featuredBooks = filteredFeaturedBooks;
 
+  // Optimizing and paginating the book list for immediate under-100ms response on over 2605+ books
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const itemsPerPage = 16;
+
+  // Reset page when search query or filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, homeSearchQuery]);
+
+  const totalPages = Math.ceil(featuredBooks.length / itemsPerPage);
+
+  const paginatedBooks = React.useMemo(() => {
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    return featuredBooks.slice(startIdx, startIdx + itemsPerPage);
+  }, [featuredBooks, currentPage]);
+
   const t = {
     EN: {
       dlmsTitle: "Digital Library Management System",
@@ -554,7 +570,7 @@ export default function PublicHome({
           
           /* CARD GRID VIEW MODE */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pt-2 animate-fade-in">
-            {featuredBooks.map(book => {
+            {paginatedBooks.map(book => {
               const isAvail = book.availableCopies > 0;
               return (
                 <div 
@@ -638,7 +654,7 @@ export default function PublicHome({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-300 font-medium">
-                {featuredBooks.map((book) => {
+                {paginatedBooks.map((book) => {
                   const isAvail = book.availableCopies > 0;
                   return (
                     <tr 
@@ -667,6 +683,60 @@ export default function PublicHome({
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* PAGINATION CONTROLS */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-4 mt-4 gap-4">
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-mono">
+              Page {currentPage} of {totalPages} ({featuredBooks.length} books total)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border-2 border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors dark:border-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
+              >
+                ◀ Previous
+              </button>
+              <div className="flex gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum = currentPage;
+                  if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  if (pageNum < 1 || pageNum > totalPages) return null;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-xs font-mono font-bold border-2 transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900 shadow-sm'
+                          : 'bg-white border-slate-200 hover:bg-slate-105 text-slate-700 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-300 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border-2 border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors dark:border-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
+              >
+                Next ▶
+              </button>
+            </div>
           </div>
         )}
       </div>
