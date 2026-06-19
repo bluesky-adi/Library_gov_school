@@ -202,9 +202,26 @@ const MongoBorrowRequest = (mongoose.models.BorrowRequest || mongoose.model('Bor
 const MongoBookIssueLog = (mongoose.models.BookIssueLog || mongoose.model('BookIssueLog', BookIssueLogSchema)) as any;
 const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model('LibraryAuditLog', LibraryAuditLogSchema)) as any;
 
+let cachedConnection: Promise<any> | null = null;
+
 export async function connectDatabase() {
   const uri = process.env.MONGODB_URI;
   const isProduction = process.env.NODE_ENV === "production";
+
+  if ((mongoose.connection.readyState as number) === 1) {
+    isConnectedToMongo = true;
+    return;
+  }
+
+  if (cachedConnection) {
+    try {
+      await cachedConnection;
+      isConnectedToMongo = (mongoose.connection.readyState as number) === 1;
+      return;
+    } catch (e) {
+      cachedConnection = null;
+    }
+  }
   
   // Safe secure diagnostic print
   console.log("------------------ VERCEL RUNTIME DIAGNOSTICS ------------------");
@@ -226,18 +243,22 @@ export async function connectDatabase() {
 
   try {
     // Add a connection error listener so dynamic errors don't trigger unhandled exceptions
-    mongoose.connection.on('error', (err) => {
-      // Sanitize the logged message so standard SSL/TLS IP restriction alerts do not flag the platform's log diagnostic scanners.
-      console.log("Database connection status note: Remote cloud database link is currently inactive or IP restricted. Using high-reliability local file storage.");
-      isConnectedToMongo = false;
-      if (isProduction) {
-        console.error("CRITICAL PRODUCTION DEPLOYMENT FAILURE: Lost connection to MongoDB database cluster in production mode.");
-      }
-    });
+    if (mongoose.connection.listenerCount('error') === 0) {
+      mongoose.connection.on('error', (err) => {
+        // Sanitize the logged message so standard SSL/TLS IP restriction alerts do not flag the platform's log diagnostic scanners.
+        console.log("Database connection status note: Remote cloud database link is currently inactive or IP restricted. Using high-reliability local file storage.");
+        isConnectedToMongo = false;
+        if (isProduction) {
+          console.error("CRITICAL PRODUCTION DEPLOYMENT FAILURE: Lost connection to MongoDB database cluster in production mode.");
+        }
+      });
+    }
 
-    await mongoose.connect(uri, {
+    cachedConnection = mongoose.connect(uri, {
       serverSelectionTimeoutMS: 5000,
     });
+
+    await cachedConnection;
     console.log("Successfully connected to MongoDB Atlas Cloud instances.");
     isConnectedToMongo = true;
 
@@ -254,6 +275,7 @@ export async function connectDatabase() {
   } catch (error: any) {
     console.log("Database connection status note: Remote database is offline or IP is not whitelisted. Falling back cleanly to local JSON storage registry.");
     isConnectedToMongo = false;
+    cachedConnection = null;
     try {
       await mongoose.disconnect();
     } catch (e) {

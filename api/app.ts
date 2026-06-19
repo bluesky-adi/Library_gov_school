@@ -20,6 +20,16 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Ensure active MongoDB connection for every request to eliminate serverless cold-start race conditions.
+app.use(async (req, res, next) => {
+  try {
+    await connectDatabase();
+  } catch (err: any) {
+    console.warn("Database middleware connection alert:", err.message);
+  }
+  next();
+});
+
 // Persistent JSON storage path for Librarian account credentials (Vercel-safe)
 const isVercel = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 const CONFIG_PATH = isVercel
