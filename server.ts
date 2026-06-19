@@ -6,8 +6,8 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { connectDatabase } from './server_db';
-import app from './app';
+import { connectDatabase } from './api/server_db';
+import app from './api/app';
 
 const PORT = 3000;
 

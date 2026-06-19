@@ -11,7 +11,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { connectDatabase, dbService } from './server_db.js';
-import { Book, Student, BorrowRequest, BookIssueLog } from './src/types.js';
+import { Book, Student, BorrowRequest, BookIssueLog } from '../src/types.js';
 
 dotenv.config();
 
