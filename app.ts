@@ -10,8 +10,8 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import { connectDatabase, dbService } from './server_db';
-import { Book, Student, BorrowRequest, BookIssueLog } from './src/types';
+import { connectDatabase, dbService } from './server_db.js';
+import { Book, Student, BorrowRequest, BookIssueLog } from './src/types.js';
 
 dotenv.config();
 

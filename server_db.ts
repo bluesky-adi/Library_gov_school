@@ -6,7 +6,7 @@
 import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
-import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from './src/types';
+import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from './src/types.js';
 
 // Fallback Folder Paths
 const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
