@@ -27,6 +27,8 @@ const CONFIG_PATH = isVercel
   : path.join(process.cwd(), 'librarian_v2_credentials.json');
 
 // Initialize secure credentials
+let memoryLibrarianConfig: any = null;
+
 try {
   if (!fs.existsSync(CONFIG_PATH)) {
     const initialConfig = {
@@ -35,28 +37,35 @@ try {
       passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
     };
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(initialConfig, null, 2));
+    memoryLibrarianConfig = initialConfig;
   }
 } catch (err) {
   console.error("Warning: Failed to create or write librarian_v2_credentials.json:", err);
 }
 
 function getLibrarianConfig() {
+  if (memoryLibrarianConfig) {
+    return memoryLibrarianConfig;
+  }
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
       if (!config.name) {
         config.name = "S. K. Roy (Chief Librarian)";
       }
+      memoryLibrarianConfig = config;
       return config;
     }
   } catch (err) {
     console.warn("Failed to read librarian credentials file, using fallback:", err);
   }
-  return {
+  const fallback = {
     username: "ramdiri_admin_roy",
     name: "S. K. Roy (Chief Librarian)",
     passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
   };
+  memoryLibrarianConfig = fallback;
+  return fallback;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "ramdiri_super_secret_jwt_key_2026";
@@ -315,6 +324,7 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, (r
 
   try {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
+    memoryLibrarianConfig = updatedConfig;
   } catch (e) {
     console.error("Warning: Failed to write librarian_v2_credentials.json update:", e);
   }
