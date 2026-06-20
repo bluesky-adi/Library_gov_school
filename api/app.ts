@@ -53,7 +53,43 @@ try {
   console.error("Warning: Failed to create or write librarian_v2_credentials.json:", err);
 }
 
-function getLibrarianConfig() {
+async function getLibrarianConfig(): Promise<any> {
+  const fallback = {
+    username: "ramdiri_admin_roy",
+    name: "S. K. Roy (Chief Librarian)",
+    passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
+  };
+
+  try {
+    await connectDatabase();
+    if (dbService.getMongoConnectionState()) {
+      const dbConfig = await dbService.getLibrarianConfigDb();
+      if (dbConfig) {
+        memoryLibrarianConfig = dbConfig;
+        return dbConfig;
+      } else {
+        // Safe bootstrapping if not found in db yet
+        let diskConfig: any = null;
+        if (fs.existsSync(CONFIG_PATH)) {
+          try {
+            diskConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+          } catch (e) {
+            console.warn("Failed to parse disk config:", e);
+          }
+        }
+        const activeConfig = diskConfig || fallback;
+        if (!activeConfig.name) {
+          activeConfig.name = "S. K. Roy (Chief Librarian)";
+        }
+        await dbService.saveLibrarianConfigDb(activeConfig);
+        memoryLibrarianConfig = activeConfig;
+        return activeConfig;
+      }
+    }
+  } catch (err: any) {
+    console.warn("getLibrarianConfig DB retrieval alert, using disk/static fallback:", err.message);
+  }
+
   if (memoryLibrarianConfig) {
     return memoryLibrarianConfig;
   }
@@ -69,11 +105,6 @@ function getLibrarianConfig() {
   } catch (err) {
     console.warn("Failed to read librarian credentials file, using fallback:", err);
   }
-  const fallback = {
-    username: "ramdiri_admin_roy",
-    name: "S. K. Roy (Chief Librarian)",
-    passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
-  };
   memoryLibrarianConfig = fallback;
   return fallback;
 }
@@ -197,7 +228,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     if (role === 'Librarian') {
-      const activeConfig = getLibrarianConfig();
+      const activeConfig = await getLibrarianConfig();
       const isCorrectUser = username?.toLowerCase().trim() === activeConfig.username.toLowerCase().trim();
       const isCorrectPass = password && bcrypt.compareSync(password, activeConfig.passwordHash);
 
@@ -297,14 +328,14 @@ app.get('/api/auth/verify', (req, res) => {
   }
 });
 
-app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, (req, res) => {
+app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, async (req, res) => {
   const { oldPassword, newName, newUsername, newPassword } = req.body;
 
   if (!oldPassword) {
     return res.status(400).json({ success: false, error: 'Current credentials authorization password is required to save changes.' });
   }
 
-  const activeConfig = getLibrarianConfig();
+  const activeConfig = await getLibrarianConfig();
   const isPassCorrect = bcrypt.compareSync(oldPassword, activeConfig.passwordHash);
 
   if (!isPassCorrect) {
@@ -335,8 +366,10 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, (r
   try {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
     memoryLibrarianConfig = updatedConfig;
-  } catch (e) {
-    console.error("Warning: Failed to write librarian_v2_credentials.json update:", e);
+    await dbService.saveLibrarianConfigDb(updatedConfig);
+    console.log("Successfully persisted updated librarian credentials to MongoDB Atlas Cloud.");
+  } catch (e: any) {
+    console.error("Warning: Failed to write librarian_v2_credentials.json update:", e.message);
   }
 
   // Generate a brand new JWT token so that user transitions smoothly

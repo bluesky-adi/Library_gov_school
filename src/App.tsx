@@ -100,6 +100,40 @@ export default function App() {
     refreshData();
   }, [loggedInRole]);
 
+  // Automated background retry to resolve cold-start race conditions seamlessly
+  useEffect(() => {
+    if (books.length > 0) return;
+
+    let retryCount = 0;
+    const maxRetries = 6;
+    
+    const interval = setInterval(async () => {
+      retryCount++;
+      console.log(`[DLMS AUTO-RECOVERY] Attempting catalog synchronization, try #${retryCount}...`);
+      
+      try {
+        const res = await fetch('/api/books');
+        if (res.ok) {
+          const freshBooks = await res.json();
+          if (freshBooks && freshBooks.length > 0) {
+            setBooks(freshBooks);
+            console.log(`[DLMS AUTO-RECOVERY] Successfully resolved race condition on attempt #${retryCount}. ${freshBooks.length} books loaded.`);
+            clearInterval(interval);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[DLMS AUTO-RECOVERY] Fetch retry failed:", err);
+      }
+
+      if (retryCount >= maxRetries) {
+        clearInterval(interval);
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [books.length]);
+
   // Try to restore session on boot
   useEffect(() => {
     const checkToken = localStorage.getItem("ramdiri_library_token");

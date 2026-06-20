@@ -181,6 +181,13 @@ const LibraryAuditLogSchema = new mongoose.Schema({
   details: { type: String, required: true }
 });
 
+const LibrarianConfigSchema = new mongoose.Schema({
+  configId: { type: String, required: true, unique: true },
+  username: { type: String, required: true },
+  name: { type: String, required: true },
+  passwordHash: { type: String, required: true }
+});
+
 // Speed-optimizing production-ready database indexes
 BookSchema.index({ bookId: 1 });
 BookSchema.index({ bookName: 1, author: 1, category: 1 });
@@ -195,12 +202,14 @@ BookIssueLogSchema.index({ rollNumber: 1 });
 BookIssueLogSchema.index({ bookId: 1 });
 LibraryAuditLogSchema.index({ id: 1 });
 LibraryAuditLogSchema.index({ timestamp: -1 });
+LibrarianConfigSchema.index({ configId: 1 });
 
 const MongoBook = (mongoose.models.Book || mongoose.model('Book', BookSchema)) as any;
 const MongoStudent = (mongoose.models.Student || mongoose.model('Student', StudentSchema)) as any;
 const MongoBorrowRequest = (mongoose.models.BorrowRequest || mongoose.model('BorrowRequest', BorrowRequestSchema)) as any;
 const MongoBookIssueLog = (mongoose.models.BookIssueLog || mongoose.model('BookIssueLog', BookIssueLogSchema)) as any;
 const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model('LibraryAuditLog', LibraryAuditLogSchema)) as any;
+const MongoLibrarianConfig = (mongoose.models.LibrarianConfig || mongoose.model('LibrarianConfig', LibrarianConfigSchema)) as any;
 
 let cachedConnection: Promise<any> | null = null;
 
@@ -251,6 +260,27 @@ export async function connectDatabase() {
         if (isProduction) {
           console.error("CRITICAL PRODUCTION DEPLOYMENT FAILURE: Lost connection to MongoDB database cluster in production mode.");
         }
+      });
+    }
+
+    if (mongoose.connection.listenerCount('connected') === 0) {
+      mongoose.connection.on('connected', () => {
+        console.log("[MONGO EVENT] Connected to MongoDB Atlas Cloud.");
+        isConnectedToMongo = true;
+      });
+    }
+
+    if (mongoose.connection.listenerCount('disconnected') === 0) {
+      mongoose.connection.on('disconnected', () => {
+        console.log("[MONGO EVENT] Lost connection to MongoDB Atlas Cloud.");
+        isConnectedToMongo = false;
+      });
+    }
+
+    if (mongoose.connection.listenerCount('reconnected') === 0) {
+      mongoose.connection.on('reconnected', () => {
+        console.log("[MONGO EVENT] Reconnected to MongoDB Atlas Cloud.");
+        isConnectedToMongo = true;
       });
     }
 
@@ -329,7 +359,7 @@ function writeLocalFile<T>(filePath: string, data: T[]): void {
 // DATABASE SERVICE EXPORTS
 export const dbService = {
   getMongoConnectionState(): boolean {
-    return isConnectedToMongo;
+    return (mongoose.connection.readyState as number) === 1;
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
@@ -817,5 +847,35 @@ export const dbService = {
       writeLocalFile(ISSUE_LOGS_FILE, issueLogs);
     }
     return true;
+  },
+
+  async getLibrarianConfigDb(): Promise<any | null> {
+    if (isConnectedToMongo) {
+      try {
+        return await MongoLibrarianConfig.findOne({ configId: "primary" }).lean();
+      } catch (err) {
+        console.warn("getLibrarianConfigDb error:", err);
+      }
+    }
+    return null;
+  },
+
+  async saveLibrarianConfigDb(config: any): Promise<void> {
+    if (isConnectedToMongo) {
+      try {
+        await MongoLibrarianConfig.findOneAndUpdate(
+          { configId: "primary" },
+          { 
+            configId: "primary", 
+            username: config.username, 
+            name: config.name, 
+            passwordHash: config.passwordHash 
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.warn("saveLibrarianConfigDb error:", err);
+      }
+    }
   }
 };

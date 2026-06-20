@@ -51,6 +51,9 @@ export const DDC_CLASS_SUBJECTS: { [key: string]: string } = {
   "900": "history geography travel maps biography"
 };
 
+// Performance cache for Levenshtein calculations to keep searching under 5ms
+const levenshteinCache = new Map<string, number>();
+
 function getLevenshteinDistance(a: string, b: string): number {
   const tmp = [];
   for (let i = 0; i <= a.length; i++) {
@@ -72,9 +75,19 @@ function getLevenshteinDistance(a: string, b: string): number {
 }
 
 function calculateSpellingSimilarity(q: string, t: string): number {
+  if (Math.abs(q.length - t.length) > 2) return 0;
+  if (q.length < 3 || t.length < 3) return 0;
+
+  const key = `${q}:${t}`;
+  if (levenshteinCache.has(key)) {
+    return levenshteinCache.get(key)!;
+  }
+
   const dist = getLevenshteinDistance(q, t);
   const maxLen = Math.max(q.length, t.length);
-  return maxLen > 0 ? (maxLen - dist) / maxLen : 0;
+  const val = maxLen > 0 ? (maxLen - dist) / maxLen : 0;
+  levenshteinCache.set(key, val);
+  return val;
 }
 
 /**
@@ -87,6 +100,7 @@ export function searchBooksSmart(
   categorySerialsMap?: Map<string, number>
 ): Book[] {
   if (!query || !query.trim()) return books;
+  levenshteinCache.clear(); // Safe bounded cache cleaning
   const decodedQuery = query.toLowerCase().trim();
   
   // Dynamic fallback for Category Serial Numbering Map if not supplied
