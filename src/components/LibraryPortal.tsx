@@ -8,6 +8,7 @@ import { translations } from '../localization';
 import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from '../types';
 import StudentModule from './StudentModule';
 import LibrarianModule from './LibrarianModule';
+import ErrorBoundary from './ErrorBoundary';
 import { Shield, Key, AlertTriangle, BookOpen } from 'lucide-react';
 
 interface LibraryPortalProps {
@@ -122,47 +123,51 @@ export default function LibraryPortal({
   return (
     <div className="space-y-6" id="portal-router-root">
       {currentRole === 'Student' && loggedInStudent ? (
-        <StudentModule
-          books={books}
-          requests={requests}
-          onAddRequest={onAddRequest}
-          onCancelRequest={onCancelRequest}
-          currentLang={currentLang}
-          loggedInStudent={loggedInStudent}
-          issueLogs={issueLogs}
-        />
+        <ErrorBoundary fallbackTitle="Student Reading Dashboard Error">
+          <StudentModule
+            books={books}
+            requests={requests}
+            onAddRequest={onAddRequest}
+            onCancelRequest={onCancelRequest}
+            currentLang={currentLang}
+            loggedInStudent={loggedInStudent}
+            issueLogs={issueLogs}
+          />
+        </ErrorBoundary>
       ) : currentRole === 'Librarian' ? (
-        <LibrarianModule
-          books={books}
-          students={students}
-          requests={requests}
-          issueLogs={issueLogs}
-          auditLogs={auditLogs || []}
-          onRefreshInputLogs={onRefreshData}
-          onAddBook={onAddBook}
-          onEditBook={onEditBook}
-          onDeleteBook={onDeleteBook}
-          onDeleteBooksBulk={onDeleteBooksBulk}
-          onClearInventory={onClearInventory}
-          onApproveRequest={onApproveRequest}
-          onRejectRequest={onRejectRequest}
-          onCancelRequest={onCancelRequest}
-          onReturnBook={onReturnBook}
-          onImportBooksExcel={onImportBooksExcel}
-          onImportStudentsExcel={onImportStudentsExcel}
-          onAddStudent={onAddStudent}
-          onEditStudent={onEditStudent}
-          onDeleteStudent={onDeleteStudent}
-          onDeleteStudentsBulk={onDeleteStudentsBulk}
-          onClearStudentsRegistry={onClearStudentsRegistry}
-          onBackupDatabase={onBackupDatabase}
-          onRestoreDatabase={onRestoreDatabase}
-          onAddRequest={onAddRequest}
-          onBulkIssue={onBulkIssue}
-          currentLang={currentLang}
-          loggedInName={loggedInName}
-          onUpdateLoggedInName={onUpdateLoggedInName}
-        />
+        <ErrorBoundary fallbackTitle="Librarian Dashboard Error">
+          <LibrarianModule
+            books={books}
+            students={students}
+            requests={requests}
+            issueLogs={issueLogs}
+            auditLogs={auditLogs || []}
+            onRefreshInputLogs={onRefreshData}
+            onAddBook={onAddBook}
+            onEditBook={onEditBook}
+            onDeleteBook={onDeleteBook}
+            onDeleteBooksBulk={onDeleteBooksBulk}
+            onClearInventory={onClearInventory}
+            onApproveRequest={onApproveRequest}
+            onRejectRequest={onRejectRequest}
+            onCancelRequest={onCancelRequest}
+            onReturnBook={onReturnBook}
+            onImportBooksExcel={onImportBooksExcel}
+            onImportStudentsExcel={onImportStudentsExcel}
+            onAddStudent={onAddStudent}
+            onEditStudent={onEditStudent}
+            onDeleteStudent={onDeleteStudent}
+            onDeleteStudentsBulk={onDeleteStudentsBulk}
+            onClearStudentsRegistry={onClearStudentsRegistry}
+            onBackupDatabase={onBackupDatabase}
+            onRestoreDatabase={onRestoreDatabase}
+            onAddRequest={onAddRequest}
+            onBulkIssue={onBulkIssue}
+            currentLang={currentLang}
+            loggedInName={loggedInName}
+            onUpdateLoggedInName={onUpdateLoggedInName}
+          />
+        </ErrorBoundary>
       ) : (
         <div className="p-6 text-center bg-red-50 border border-red-200 rounded-xl space-y-2">
           <AlertTriangle className="w-8 h-8 text-red-650 mx-auto" />

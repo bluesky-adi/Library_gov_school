@@ -57,11 +57,11 @@ interface LibrarianModuleProps {
 }
 
 export default function LibrarianModule({
-  books,
-  students,
-  requests,
-  issueLogs,
-  auditLogs,
+  books: rawBooks,
+  students: rawStudents,
+  requests: rawRequests,
+  issueLogs: rawIssueLogs,
+  auditLogs: rawAuditLogs,
   onRefreshInputLogs,
   currentLang,
   onAddBook,
@@ -88,6 +88,11 @@ export default function LibrarianModule({
   onUpdateLoggedInName,
   onBulkIssue
 }: LibrarianModuleProps) {
+  const books = Array.isArray(rawBooks) ? rawBooks : [];
+  const students = Array.isArray(rawStudents) ? rawStudents : [];
+  const requests = Array.isArray(rawRequests) ? rawRequests : [];
+  const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
+  const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
   const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database'>('books');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);

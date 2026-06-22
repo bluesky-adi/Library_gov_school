@@ -173,12 +173,16 @@ export default function App() {
               setLoggedInRole('Student');
               setLoggedInName(payload.name || "Scholar Reader");
               // Form student profile structure loaded via payload values
+              const sClass = payload.class || "10";
+              const sSection = payload.section || "A";
+              const rNum = Number(payload.rollNumber) || 0;
               setLoggedInStudent({
+                studentId: `${sClass}-${sSection}-${rNum}`,
                 name: payload.name || "Student Reader",
-                rollNumber: payload.rollNumber || 0,
+                rollNumber: rNum,
                 dob: "2010-01-01",
-                class: payload.class || "10",
-                section: payload.section || "A"
+                class: sClass,
+                section: sSection
               });
             }
           }

@@ -20,14 +20,18 @@ interface StudentModuleProps {
 }
 
 export default function StudentModule({
-  books,
-  requests,
-  issueLogs,
+  books: rawBooks = [],
+  requests: rawRequests = [],
+  issueLogs: rawIssueLogs = [],
   loggedInStudent,
   onAddRequest,
   onCancelRequest,
   currentLang
 }: StudentModuleProps) {
+  const books = Array.isArray(rawBooks) ? rawBooks : [];
+  const requests = Array.isArray(rawRequests) ? rawRequests : [];
+  const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
+
   const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile'>('catalogue');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -36,7 +40,7 @@ export default function StudentModule({
   const [requestingBook, setRequestingBook] = useState<Book | null>(null);
   const [requestComment, setRequestComment] = useState<string>('');
 
-  const t = {
+  const translations = {
     EN: {
       studentPortal: "Student Reading Portal",
       welcomeBack: "Welcome back,",
@@ -113,7 +117,11 @@ export default function StudentModule({
       totCurrent: "वर्तमान सक्रिय पुस्तकें",
       totOverdue: "अतिदेय पुस्तकें (Overdue)"
     }
-  }[currentLang];
+  };
+
+  const langKey = (currentLang && currentLang.toUpperCase() === 'HI') ? 'HI' : 'EN';
+  const t = translations[langKey] || translations.EN;
+
 
   // Helper inside loop to check if dynamic issueLog record is overdue
   const isOverdue = (dueDateStr: string): boolean => {
@@ -390,7 +398,7 @@ export default function StudentModule({
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     className="text-xs font-bold p-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-slate-800"
                   >
-                    <option value="All">{t[currentLang].allCategories}</option>
+                    <option value="All">{t.allCategories}</option>
                     {['All', 'Hindi Literature', 'English Literature', 'Mathematics', 'Science', 'Social Science', 'Sanskrit', 'General Knowledge', 'Reference books'].filter(cat => cat !== 'All').map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
@@ -413,7 +421,7 @@ export default function StudentModule({
             {filteredBooks.length === 0 ? (
               <div className="text-center py-12 p-4 text-slate-500 bg-white border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
                 <BookOpen className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                <p className="text-xs font-extrabold">{t[currentLang].noBooks}</p>
+                <p className="text-xs font-extrabold">{t.noBooks}</p>
               </div>
             ) : (
               <div>
@@ -424,7 +432,7 @@ export default function StudentModule({
                   return (
                     <div 
                       key={book.bookId}
-                      className="bg-white dark:bg-slate-900 border-2 border-slate-205 dark:border-slate-800 rounded-xl p-4 flex gap-4 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition-all"
+                      className="bg-white dark:bg-slate-900 border-2 border-slate-205 dark:border-slate-800 rounded-xl p-4 flex gap-4 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition-colors"
                     >
                       <div className="w-24 shrink-0">
                         <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
@@ -439,7 +447,7 @@ export default function StudentModule({
                           </div>
                           
                           <h3 className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2">
-                            {book.bookName}
+                             {book.bookName}
                           </h3>
                           <p className="text-[11px] text-slate-600 dark:text-slate-450 italic font-medium line-clamp-1">
                             by {book.author}
@@ -448,7 +456,7 @@ export default function StudentModule({
                           <div className="pt-2 flex items-center gap-1.5">
                             <span className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
                             <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-350">
-                              {isAvailable ? `${t[currentLang].copiesAvailable} ${book.availableCopies} / ${book.totalCopies}` : t[currentLang].unavailable}
+                              {isAvailable ? `${t.copiesAvailable} ${book.availableCopies} / ${book.totalCopies}` : t.unavailable}
                             </span>
                           </div>
                         </div>
@@ -458,7 +466,7 @@ export default function StudentModule({
                             onClick={() => setSelectedBook(book)}
                             className="px-2.5 py-1.5 border-2 border-slate-250 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10.5px] font-bold text-slate-755 dark:text-slate-300 rounded transition-all cursor-pointer"
                           >
-                            {t[currentLang].bookDetails}
+                            {t.bookDetails}
                           </button>
                           <button
                             onClick={() => handleRequestClick(book)}
@@ -469,7 +477,7 @@ export default function StudentModule({
                                 : 'bg-slate-100 text-slate-400 border-slate-205 cursor-not-allowed'
                             }`}
                           >
-                            {t[currentLang].requestBook}
+                            {t.requestBook}
                           </button>
                         </div>
                       </div>
@@ -602,7 +610,7 @@ export default function StudentModule({
                               ? 'bg-slate-100 text-slate-500 border-slate-200'
                               : 'bg-red-105 text-red-800 border-red-200'
                           }`}>
-                            {req.status === 'Pending' ? t[currentLang].pending : req.status === 'Approved' ? t[currentLang].approved : req.status === 'Cancelled' ? "Cancelled" : t[currentLang].rejected}
+                            {req.status === 'Pending' ? t.pending : req.status === 'Approved' ? t.approved : req.status === 'Cancelled' ? "Cancelled" : t.rejected}
                           </span>
                         </div>
                       </div>
@@ -815,7 +823,7 @@ export default function StudentModule({
                   <div>
                     <span className="text-slate-400 block uppercase font-bold text-[9px] tracking-wide font-mono">Availability State</span>
                     <span className={`font-extrabold block mt-0.5 ${selectedBook.availableCopies > 0 ? 'text-emerald-700 font-bold' : 'text-red-655'}`}>
-                      {selectedBook.availableCopies > 0 ? `${t[currentLang].available} (${selectedBook.availableCopies} Copies)` : t[currentLang].unavailable}
+                      {selectedBook.availableCopies > 0 ? `${t.available} (${selectedBook.availableCopies} Copies)` : t.unavailable}
                     </span>
                   </div>
                 </div>
