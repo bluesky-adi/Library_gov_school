@@ -110,7 +110,11 @@ try {
 }
 
 // Unified MongoDB / Mongoose Configurations
-let isConnectedToMongo = false;
+const hasMongoUriOption = !!process.env.MONGODB_URI && 
+                           process.env.MONGODB_URI.trim() !== "" && 
+                           !process.env.MONGODB_URI.includes("placeholder") && 
+                           !process.env.MONGODB_URI.includes("YOUR_");
+let isConnectedToMongo = hasMongoUriOption;
 
 // Schemas Definitions for MongoDB
 const BookSchema = new mongoose.Schema({
@@ -216,16 +220,26 @@ let cachedConnection: Promise<any> | null = null;
 export async function connectDatabase() {
   const uri = process.env.MONGODB_URI;
   const isProduction = process.env.NODE_ENV === "production";
+  
+  const hasMongoUri = !!uri && uri.trim() !== "" && !uri.includes("placeholder") && !uri.includes("YOUR_");
+
+  if (hasMongoUri) {
+    isConnectedToMongo = true;
+  }
 
   if ((mongoose.connection.readyState as number) === 1) {
-    isConnectedToMongo = true;
+    if (hasMongoUri) isConnectedToMongo = true;
     return;
   }
 
   if (cachedConnection) {
     try {
       await cachedConnection;
-      isConnectedToMongo = (mongoose.connection.readyState as number) === 1;
+      if (hasMongoUri) {
+        isConnectedToMongo = true;
+      } else {
+        isConnectedToMongo = (mongoose.connection.readyState as number) === 1;
+      }
       return;
     } catch (e) {
       cachedConnection = null;
@@ -240,7 +254,7 @@ export async function connectDatabase() {
   console.log(`[DIAGNOSTIC] Vercel Env: ${process.env.VERCEL === '1' ? 'TRUE' : 'FALSE'}`);
   console.log("----------------------------------------------------------------");
 
-  if (!uri || uri.trim() === "" || uri.includes("placeholder") || uri.includes("YOUR_")) {
+  if (!hasMongoUri) {
     const errorMsg = "No MONGODB_URI found in environment configuration.";
     console.log(`${errorMsg} Defaulting to local high-reliability JSON operational store.`);
     isConnectedToMongo = false;
@@ -254,9 +268,7 @@ export async function connectDatabase() {
     // Add a connection error listener so dynamic errors don't trigger unhandled exceptions
     if (mongoose.connection.listenerCount('error') === 0) {
       mongoose.connection.on('error', (err) => {
-        // Sanitize the logged message so standard SSL/TLS IP restriction alerts do not flag the platform's log diagnostic scanners.
-        console.log("Database connection status note: Remote cloud database link is currently inactive or IP restricted. Using high-reliability local file storage.");
-        isConnectedToMongo = false;
+        console.log("Database connection status note: Remote cloud database link error:", err.message);
         if (isProduction) {
           console.error("CRITICAL PRODUCTION DEPLOYMENT FAILURE: Lost connection to MongoDB database cluster in production mode.");
         }
@@ -273,7 +285,9 @@ export async function connectDatabase() {
     if (mongoose.connection.listenerCount('disconnected') === 0) {
       mongoose.connection.on('disconnected', () => {
         console.log("[MONGO EVENT] Lost connection to MongoDB Atlas Cloud.");
-        isConnectedToMongo = false;
+        if (!hasMongoUri) {
+          isConnectedToMongo = false;
+        }
       });
     }
 
@@ -285,7 +299,9 @@ export async function connectDatabase() {
     }
 
     cachedConnection = mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
     });
 
     await cachedConnection;
@@ -303,17 +319,12 @@ export async function connectDatabase() {
       console.log("Seeding complete on Cloud Database cluster.");
     }
   } catch (error: any) {
-    console.log("Database connection status note: Remote database is offline or IP is not whitelisted. Falling back cleanly to local JSON storage registry.");
-    isConnectedToMongo = false;
+    console.warn("MongoDB connection failed under production MONGODB_URI constraint:", error.message);
+    if (!hasMongoUri) {
+      isConnectedToMongo = false;
+    }
     cachedConnection = null;
-    try {
-      await mongoose.disconnect();
-    } catch (e) {
-      // ignore
-    }
-    if (isProduction) {
-      console.warn(`PRODUCTION DATABASE WARNING: Unable to establish active link to MongoDB Atlas Cluster: ${error.message}. Running in localized robust fallback mode.`);
-    }
+    throw error;
   }
 }
 

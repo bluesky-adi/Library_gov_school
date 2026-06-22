@@ -60,34 +60,36 @@ async function getLibrarianConfig(): Promise<any> {
     passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
   };
 
+  const hasMongoUri = !!process.env.MONGODB_URI && 
+                       process.env.MONGODB_URI.trim() !== "" && 
+                       !process.env.MONGODB_URI.includes("placeholder") && 
+                       !process.env.MONGODB_URI.includes("YOUR_");
+
   try {
     await connectDatabase();
-    if (dbService.getMongoConnectionState()) {
+    if (dbService.getMongoConnectionState() || hasMongoUri) {
       const dbConfig = await dbService.getLibrarianConfigDb();
       if (dbConfig) {
         memoryLibrarianConfig = dbConfig;
         return dbConfig;
       } else {
-        // Safe bootstrapping if not found in db yet
-        let diskConfig: any = null;
-        if (fs.existsSync(CONFIG_PATH)) {
-          try {
-            diskConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-          } catch (e) {
-            console.warn("Failed to parse disk config:", e);
-          }
+        if (hasMongoUri) {
+          // Bootstrapping initial default credentials into Atlas
+          await dbService.saveLibrarianConfigDb(fallback);
+          memoryLibrarianConfig = fallback;
+          return fallback;
         }
-        const activeConfig = diskConfig || fallback;
-        if (!activeConfig.name) {
-          activeConfig.name = "S. K. Roy (Chief Librarian)";
-        }
-        await dbService.saveLibrarianConfigDb(activeConfig);
-        memoryLibrarianConfig = activeConfig;
-        return activeConfig;
       }
     }
   } catch (err: any) {
-    console.warn("getLibrarianConfig DB retrieval alert, using disk/static fallback:", err.message);
+    console.error("getLibrarianConfig critical DB retrieval failure:", err.message);
+    if (hasMongoUri) {
+      if (memoryLibrarianConfig) {
+        console.log("Serving cached librarian credentials from hot in-memory store.");
+        return memoryLibrarianConfig;
+      }
+      throw new Error("Administrative Authentication Database currently offline. Please reconnect your MongoDB cluster.");
+    }
   }
 
   if (memoryLibrarianConfig) {
