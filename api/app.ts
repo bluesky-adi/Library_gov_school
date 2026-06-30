@@ -291,7 +291,13 @@ app.post('/api/auth/login', async (req, res) => {
 
       if (matched) {
         const token = jwt.sign(
-          { role: 'Student', rollNumber: roll, name: matched.name },
+          { 
+            role: 'Student', 
+            rollNumber: roll, 
+            name: matched.name,
+            class: matched.class,
+            section: matched.section
+          },
           JWT_SECRET,
           { expiresIn: '1d' }
         );

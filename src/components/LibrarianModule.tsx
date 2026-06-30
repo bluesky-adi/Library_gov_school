@@ -4224,18 +4224,40 @@ export default function LibrarianModule({
 
                   <div className="flex items-center gap-2 self-start sm:sm:self-center shrink-0">
                     {mat.pdfData && (
-                      <button
-                        onClick={() => {
-                          const w = window.open();
-                          if (w) {
-                            w.document.write(`<iframe src="${mat.pdfData}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
-                          }
-                        }}
-                        className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-705 text-xs font-bold rounded flex items-center justify-center transition-all cursor-pointer"
-                        title="Preview PDF document"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            const w = window.open();
+                            if (w) {
+                              w.document.write(`<iframe src="${mat.pdfData}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
+                            } else {
+                              alert("Popup blocked! Please use the download button next to this button instead.");
+                            }
+                          }}
+                          className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-705 text-xs font-bold rounded flex items-center justify-center transition-all cursor-pointer"
+                          title="Preview PDF document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            try {
+                              const linkSource = mat.pdfData;
+                              const downloadLink = document.createElement("a");
+                              const fileName = mat.pdfName || `${mat.title.replace(/\s+/g, '_')}.pdf`;
+                              downloadLink.href = linkSource;
+                              downloadLink.download = fileName;
+                              downloadLink.click();
+                            } catch (e) {
+                              alert("Error initiating PDF download.");
+                            }
+                          }}
+                          className="p-1.5 border border-slate-200 hover:bg-slate-50 text-indigo-650 text-xs font-bold rounded flex items-center justify-center transition-all cursor-pointer"
+                          title="Download PDF document"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={async () => {
