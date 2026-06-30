@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Fuse from 'fuse.js';
-import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from '../types';
+import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
 import { searchBooksSmart } from '../lib/searchUtils';
@@ -22,6 +22,7 @@ interface LibrarianModuleProps {
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
   auditLogs: LibraryAuditLog[];
+  studyMaterials?: StudyMaterial[];
   onRefreshInputLogs?: () => void;
   currentLang: 'EN' | 'HI';
   onAddBook: (book: Book) => void;
@@ -31,8 +32,11 @@ interface LibrarianModuleProps {
   onClearInventory: () => void;
   onApproveRequest: (id: string, dueDate?: string) => void;
   onRejectRequest: (id: string) => void;
+  onHoldRequest?: (id: string) => void;
   onCancelRequest?: (id: string) => void;
   onReturnBook: (logId: string) => void;
+  onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
+  onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
   onAddRequest: (req: BorrowRequest) => void;
   onImportBooksExcel: (books: Book[]) => void;
   onImportStudentsExcel: (students: Student[]) => void;
@@ -62,6 +66,7 @@ export default function LibrarianModule({
   requests: rawRequests,
   issueLogs: rawIssueLogs,
   auditLogs: rawAuditLogs,
+  studyMaterials: rawStudyMaterials = [],
   onRefreshInputLogs,
   currentLang,
   onAddBook,
@@ -71,6 +76,7 @@ export default function LibrarianModule({
   onClearInventory,
   onApproveRequest,
   onRejectRequest,
+  onHoldRequest,
   onCancelRequest,
   onReturnBook,
   onAddRequest,
@@ -86,15 +92,18 @@ export default function LibrarianModule({
   onResetDatabase,
   loggedInName,
   onUpdateLoggedInName,
-  onBulkIssue
+  onBulkIssue,
+  onAddStudyMaterial,
+  onDeleteStudyMaterial
 }: LibrarianModuleProps) {
+  const studyMaterials = Array.isArray(rawStudyMaterials) ? rawStudyMaterials : [];
   const books = Array.isArray(rawBooks) ? rawBooks : [];
   const students = Array.isArray(rawStudents) ? rawStudents : [];
   const requests = Array.isArray(rawRequests) ? rawRequests : [];
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
   const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
-  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database'>('books');
+  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials'>('books');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
@@ -265,6 +274,21 @@ export default function LibrarianModule({
   const [formBookNumber, setFormBookNumber] = useState('');
   const [formSource, setFormSource] = useState('');
   const [formRemarks, setFormRemarks] = useState('');
+  const [formDdcNumber, setFormDdcNumber] = useState('');
+
+  // --- Study Materials State Hooks ---
+  const [matTitle, setMatTitle] = useState('');
+  const [matDescription, setMatDescription] = useState('');
+  const [matVisibleTo, setMatVisibleTo] = useState('All');
+  const [matExpiryDate, setMatExpiryDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1); // 1 year expiry default
+    return d.toISOString().split('T')[0];
+  });
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [pdfBase64, setPdfBase64] = useState<string>('');
+  const [pdfFileName, setPdfFileName] = useState<string>('');
+  const [submittingMaterial, setSubmittingMaterial] = useState(false);
 
   // Manual issue walk-in desk check
   const [walkinClass, setWalkinClass] = useState<string>('10');
@@ -627,6 +651,7 @@ export default function LibrarianModule({
       tabStudents: "Students Database",
       tabRequests: "Requests & Returns",
       tabReports: "Printable Reports",
+      tabStudyMaterials: "Digital Study Notes",
       addBookBtn: "Add Book Manually",
       editBookTitle: "Edit Book Specifications",
       addBookTitle: "Register New Library Book",
@@ -658,6 +683,7 @@ export default function LibrarianModule({
       tabStudents: "छात्र डेटाबेस",
       tabRequests: "अनुरोध एवं वापसी",
       tabReports: "रिपोर्ट प्रिंटर",
+      tabStudyMaterials: "डिजिटल अध्ययन नोट्स",
       addBookBtn: "मैन्युअल पुस्तक जोड़ें",
       editBookTitle: "पुस्तक विवरण संशोधित करें",
       addBookTitle: "नई पुस्तक दर्ज करें",
@@ -1048,7 +1074,8 @@ export default function LibrarianModule({
       callNumber: formCallNumber.trim(),
       bookNumber: formBookNumber.trim(),
       source: formSource.trim(),
-      remarks: formRemarks.trim()
+      remarks: formRemarks.trim(),
+      ddcNumber: formDdcNumber.trim()
     };
 
     if (editingBook) {
@@ -1082,6 +1109,7 @@ export default function LibrarianModule({
     setFormBookNumber('');
     setFormSource('');
     setFormRemarks('');
+    setFormDdcNumber('');
     setShowBookForm(false);
   };
 
@@ -1105,7 +1133,98 @@ export default function LibrarianModule({
     setFormBookNumber(book.bookNumber || '');
     setFormSource(book.source || '');
     setFormRemarks(book.remarks || '');
+    setFormDdcNumber(book.ddcNumber || '');
     setShowBookForm(true);
+  };
+
+  const handleDdcChange = (val: string) => {
+    setFormDdcNumber(val);
+    const numMatch = val.trim().match(/^\d+/);
+    if (numMatch) {
+      const hundredDigit = parseInt(numMatch[0].slice(0, 1));
+      const ddcList = [
+        "Generalities",
+        "Philosophy & Psychology",
+        "Religion",
+        "Social Sciences",
+        "Language & Linguistics",
+        "Science (Mathematics/Natural Science)",
+        "Technology & Applied Sciences",
+        "Arts & Recreation",
+        "Literature",
+        "History & Geography"
+      ];
+      if (hundredDigit >= 0 && hundredDigit <= 9) {
+        setFormCategory(ddcList[hundredDigit]);
+      }
+    }
+  };
+
+  const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processSelectedPdf(file);
+    }
+  };
+
+  const processSelectedPdf = (file: File) => {
+    if (file.type !== 'application/pdf') {
+      alert('Only PDF documents are supported for digital study notes.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      alert('Maximum file size is 5MB.');
+      return;
+    }
+    setUploadingPdf(true);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPdfBase64(reader.result as string);
+      setPdfFileName(file.name);
+      setUploadingPdf(false);
+    };
+    reader.onerror = () => {
+      alert('Error reading PDF file.');
+      setUploadingPdf(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddMaterialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!matTitle.trim()) {
+      alert("Please enter a Title.");
+      return;
+    }
+    if (!pdfBase64) {
+      alert("Please upload a PDF document for this study resource.");
+      return;
+    }
+    setSubmittingMaterial(true);
+    try {
+      if (onAddStudyMaterial) {
+        const success = await onAddStudyMaterial({
+          title: matTitle.trim(),
+          description: matDescription.trim(),
+          visibleTo: matVisibleTo,
+          expiryDate: matExpiryDate,
+          pdfData: pdfBase64,
+          pdfName: pdfFileName
+        });
+        if (success) {
+          setMatTitle('');
+          setMatDescription('');
+          setMatVisibleTo('All');
+          setPdfBase64('');
+          setPdfFileName('');
+          alert("Digital study notes successfully published!");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmittingMaterial(false);
+    }
   };
 
   const handleStudentFormSubmit = async (e: React.FormEvent) => {
@@ -1503,6 +1622,18 @@ export default function LibrarianModule({
         >
           <Printer className="w-4 h-4 shrink-0" />
           <span>{t.tabReports}</span>
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('study-materials'); }}
+          className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'study-materials'
+              ? 'border-slate-800 text-slate-900 dark:text-white font-extrabold bg-slate-10 border-b-slate-80 bg-slate-100 dark:bg-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Upload className="w-4 h-4 shrink-0" />
+          <span>{t.tabStudyMaterials || "Digital Notes"}</span>
         </button>
 
         <button
@@ -2458,6 +2589,15 @@ export default function LibrarianModule({
                             <XCircle className="w-3.5 h-3.5" />
                             <span>Reject</span>
                           </button>
+                          {onHoldRequest && (
+                            <button
+                              onClick={() => onHoldRequest(req.id)}
+                              className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-805 font-bold text-xs rounded transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
+                            >
+                              <Clock className="w-3.5 h-3.5 animate-pulse" />
+                              <span>Hold</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3162,6 +3302,27 @@ export default function LibrarianModule({
                     placeholder="e.g. Gov. Patna Grant"
                     className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-800"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-indigo-900 uppercase block">Dewey Decimal Classification (DDC) Number</label>
+                  <input
+                    type="text"
+                    value={formDdcNumber}
+                    onChange={(e) => handleDdcChange(e.target.value)}
+                    placeholder="e.g., 510 or 370 (Auto-classifies category)"
+                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none font-mono text-indigo-750 font-bold"
+                  />
+                  <span className="text-[9px] text-slate-500 font-sans block">Entering a DDC number dynamically determines the Dewey Category Class.</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 uppercase block">Inferred Category</label>
+                  <div className="p-2 bg-white border border-slate-200 rounded text-xs font-black text-slate-800 font-sans">
+                    {formCategory || "None Inferred"}
+                  </div>
                 </div>
               </div>
 
@@ -3893,6 +4054,217 @@ export default function LibrarianModule({
                 </table>
               </div>
             </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* DIGITAL STUDY NOTES MANAGEMENT PANEL */}
+      {activeTab === 'study-materials' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in" id="study-materials-librarian-tab">
+          
+          {/* Form publish section */}
+          <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4 self-start">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                📢 Publish Course Material
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-1 leading-normal">
+                Upload digital syllabi, questions banks, and PDFs instantly accessible to authorized grade levels.
+              </p>
+            </div>
+
+            <form onSubmit={handleAddMaterialSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold text-indigo-900 uppercase block">Resource Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={matTitle}
+                  onChange={(e) => setMatTitle(e.target.value)}
+                  placeholder="e.g. Class 10 Math Sample Board Papers 2026"
+                  className="w-full text-xs p-2.5 rounded bg-slate-50 border border-slate-250 outline-none text-slate-900 font-bold focus:ring-1 focus:ring-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase block">Description & syllabus indices</label>
+                <textarea
+                  value={matDescription}
+                  onChange={(e) => setMatDescription(e.target.value)}
+                  placeholder="Summarize chapter inclusions or instructions..."
+                  className="w-full text-xs p-2.5 rounded bg-slate-50 border border-slate-250 outline-none min-h-[70px] resize-none text-slate-800"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-550 block">Target Grade / Class</label>
+                  <select
+                    value={matVisibleTo}
+                    onChange={(e) => setMatVisibleTo(e.target.value)}
+                    className="w-full text-xs p-2 bg-white border border-slate-250 rounded block outline-none font-bold text-slate-900"
+                  >
+                    <option value="All">All Grades (Universal)</option>
+                    <option value="9">Class 9</option>
+                    <option value="10">Class 10</option>
+                    <option value="11">Class 11</option>
+                    <option value="12">Class 12</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-550 block">Expiry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={matExpiryDate}
+                    onChange={(e) => setMatExpiryDate(e.target.value)}
+                    className="w-full text-xs p-1.5 bg-white border border-slate-250 rounded block outline-none text-slate-900 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* High-craft Drag-and-Drop or Picker Area for PDF */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase block">Digital Document File (PDF) *</label>
+                
+                {!pdfBase64 ? (
+                  <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 hover:bg-slate-50 transition-all relative">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handlePdfFileSelect}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <span className="text-xs font-bold text-slate-600 block">Drag-and-Drop or click to choose PDF</span>
+                    <span className="text-[10px] text-slate-400 block mt-1 font-mono">Maximum size 5MB</span>
+                  </div>
+                ) : (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-indigo-650" />
+                      </div>
+                      <div className="overflow-hidden max-w-[200px]">
+                        <span className="text-xs font-bold text-indigo-950 block truncate font-mono">{pdfFileName}</span>
+                        <span className="text-[9px] text-indigo-500 font-mono">Ready to Upload</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setPdfBase64(''); setPdfFileName(''); }}
+                      className="w-6 h-6 rounded-full bg-indigo-200 hover:bg-indigo-300 text-indigo-950 flex items-center justify-center text-xs transition-all cursor-pointer font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingMaterial || uploadingPdf}
+                className="w-full p-3 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-955 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-all shadow flex items-center justify-center gap-2"
+              >
+                {submittingMaterial ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4 stroke-[2.5]" />
+                    <span>Publish Resource Notes</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Active materials list section */}
+          <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex justify-between items-center">
+              <div>
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  📂 Published Digital Resources Catalog
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Showing active syllabi references synchronized for students online.
+                </p>
+              </div>
+              <span className="text-[10px] bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-black uppercase">
+                {studyMaterials.length} Active Items
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-150 max-h-[600px] overflow-y-auto pr-1">
+              {studyMaterials.map((mat) => (
+                <div key={mat.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[9px] bg-indigo-50 text-indigo-850 px-2 py-0.5 rounded font-extrabold uppercase border border-indigo-100">
+                        Class {mat.visibleTo}
+                      </span>
+                      <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">
+                        📝 {mat.title}
+                      </h4>
+                    </div>
+                    {mat.description && (
+                      <p className="text-[11px] text-slate-550 line-clamp-2 leading-relaxed">
+                        {mat.description}
+                      </p>
+                    )}
+                    <div className="flex gap-4 text-[10px] text-slate-450 font-mono pt-1">
+                      <span>Published: {mat.createdAt ? new Date(mat.createdAt).toLocaleDateString() : ""}</span>
+                      <span className="text-red-500 font-bold">Expires: {mat.expiryDate}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:sm:self-center shrink-0">
+                    {mat.pdfData && (
+                      <button
+                        onClick={() => {
+                          const w = window.open();
+                          if (w) {
+                            w.document.write(`<iframe src="${mat.pdfData}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
+                          }
+                        }}
+                        className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-705 text-xs font-bold rounded flex items-center justify-center transition-all cursor-pointer"
+                        title="Preview PDF document"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Are you sure you want to delete the published digital resource "${mat.title}"?`)) {
+                          if (onDeleteStudyMaterial) {
+                            const success = await onDeleteStudyMaterial(mat.id);
+                            if (success) {
+                              alert("Digital study material successfully deleted.");
+                            }
+                          }
+                        }
+                      }}
+                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-655 rounded border border-red-100 flex items-center justify-center transition-all cursor-pointer"
+                      title="Delete publication"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {studyMaterials.length === 0 && (
+                <div className="py-16 text-center text-slate-400 space-y-2">
+                  <Upload className="w-10 h-10 mx-auto text-slate-300 stroke-[1.5]" />
+                  <p className="text-xs">No digital study notes or resource publications published yet.</p>
+                </div>
+              )}
+            </div>
+
           </div>
 
         </div>
@@ -5226,6 +5598,19 @@ export default function LibrarianModule({
                   <XCircle className="w-4 h-4" />
                   <span>Reject Borrow Request</span>
                 </button>
+                {onHoldRequest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onHoldRequest(selectedRequestDetails.id);
+                      setSelectedRequestDetails(null);
+                    }}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>Hold Request</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {

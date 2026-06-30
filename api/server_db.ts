@@ -26,10 +26,11 @@ const STUDENTS_FILE = path.join(LOCAL_DB_DIR, 'students.json');
 const REQUESTS_FILE = path.join(LOCAL_DB_DIR, 'requests.json');
 const ISSUE_LOGS_FILE = path.join(LOCAL_DB_DIR, 'issue_logs.json');
 const AUDIT_LOGS_FILE = path.join(LOCAL_DB_DIR, 'audit_logs.json');
+const STUDY_MATERIALS_FILE = path.join(LOCAL_DB_DIR, 'study_materials.json');
 
 // Copy bundled databases to writable /tmp directory if running in a serverless environment
 function ensureWritableDatabaseFiles() {
-  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json'];
+  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json'];
   for (const filename of filesToCopy) {
     const destPath = path.join(LOCAL_DB_DIR, filename);
     const srcPath = path.join(BUNDLED_DB_DIR, filename);
@@ -109,6 +110,14 @@ try {
   console.warn("Operational database initialization notice (Audit Logs):", e);
 }
 
+try {
+  if (!fs.existsSync(STUDY_MATERIALS_FILE) || fs.readFileSync(STUDY_MATERIALS_FILE, 'utf8').trim() === '') {
+    fs.writeFileSync(STUDY_MATERIALS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Study Materials):", e);
+}
+
 // Unified MongoDB / Mongoose Configurations
 const hasMongoUriOption = !!process.env.MONGODB_URI && 
                            process.env.MONGODB_URI.trim() !== "" && 
@@ -139,7 +148,19 @@ const BookSchema = new mongoose.Schema({
   bookNumber: { type: String, default: "" },
   source: { type: String, default: "" },
   remarks: { type: String, default: "" },
-  ddcCategory: { type: String, default: "" }
+  ddcCategory: { type: String, default: "" },
+  ddcNumber: { type: String, default: "" }
+});
+
+const StudyMaterialSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  title: { type: String, required: true },
+  description: { type: String, default: "" },
+  pdfData: { type: String, default: "" }, // Base64 representation of PDF
+  pdfName: { type: String, default: "" },
+  expiryDate: { type: String, required: true }, // YYYY-MM-DD
+  visibleTo: { type: String, required: true }, // 'All' or a specific class grade (e.g., '10')
+  createdAt: { type: String, required: true }
 });
 
 const StudentSchema = new mongoose.Schema({
@@ -158,7 +179,7 @@ const BorrowRequestSchema = new mongoose.Schema({
   bookId: { type: String, required: true },
   bookName: { type: String, required: true },
   requestDate: { type: String, required: true },
-  status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'], default: 'Pending' }
+  status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Hold'], default: 'Pending' }
 });
 
 const BookIssueLogSchema = new mongoose.Schema({
@@ -207,6 +228,8 @@ BookIssueLogSchema.index({ bookId: 1 });
 LibraryAuditLogSchema.index({ id: 1 });
 LibraryAuditLogSchema.index({ timestamp: -1 });
 LibrarianConfigSchema.index({ configId: 1 });
+StudyMaterialSchema.index({ id: 1 });
+StudyMaterialSchema.index({ expiryDate: 1 });
 
 const MongoBook = (mongoose.models.Book || mongoose.model('Book', BookSchema)) as any;
 const MongoStudent = (mongoose.models.Student || mongoose.model('Student', StudentSchema)) as any;
@@ -214,6 +237,7 @@ const MongoBorrowRequest = (mongoose.models.BorrowRequest || mongoose.model('Bor
 const MongoBookIssueLog = (mongoose.models.BookIssueLog || mongoose.model('BookIssueLog', BookIssueLogSchema)) as any;
 const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model('LibraryAuditLog', LibraryAuditLogSchema)) as any;
 const MongoLibrarianConfig = (mongoose.models.LibrarianConfig || mongoose.model('LibrarianConfig', LibrarianConfigSchema)) as any;
+const MongoStudyMaterial = (mongoose.models.StudyMaterial || mongoose.model('StudyMaterial', StudyMaterialSchema)) as any;
 
 let cachedConnection: Promise<any> | null = null;
 
@@ -334,6 +358,7 @@ let studentsCache: any[] | null = null;
 let requestsCache: any[] | null = null;
 let issueLogsCache: any[] | null = null;
 let auditLogsCache: any[] | null = null;
+let studyMaterialsCache: any[] | null = null;
 
 // Local File Helper functions to operate safely with concurrency
 function readLocalFile<T>(filePath: string): T[] {
@@ -342,6 +367,7 @@ function readLocalFile<T>(filePath: string): T[] {
   if (filePath === REQUESTS_FILE && requestsCache) return requestsCache as T[];
   if (filePath === ISSUE_LOGS_FILE && issueLogsCache) return issueLogsCache as T[];
   if (filePath === AUDIT_LOGS_FILE && auditLogsCache) return auditLogsCache as T[];
+  if (filePath === STUDY_MATERIALS_FILE && studyMaterialsCache) return studyMaterialsCache as T[];
 
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -351,6 +377,7 @@ function readLocalFile<T>(filePath: string): T[] {
     if (filePath === REQUESTS_FILE) requestsCache = parsed;
     if (filePath === ISSUE_LOGS_FILE) issueLogsCache = parsed;
     if (filePath === AUDIT_LOGS_FILE) auditLogsCache = parsed;
+    if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = parsed;
     return parsed;
   } catch (err) {
     return [];
@@ -363,6 +390,7 @@ function writeLocalFile<T>(filePath: string, data: T[]): void {
   if (filePath === REQUESTS_FILE) requestsCache = data;
   if (filePath === ISSUE_LOGS_FILE) issueLogsCache = data;
   if (filePath === AUDIT_LOGS_FILE) auditLogsCache = data;
+  if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = data;
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
@@ -374,10 +402,84 @@ export const dbService = {
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
+    let books: Book[];
     if (isConnectedToMongo) {
-      return (await MongoBook.find().lean()) as any[];
+      books = (await MongoBook.find().lean()) as any[];
+    } else {
+      books = readLocalFile<Book>(BOOKS_FILE);
     }
-    return readLocalFile<Book>(BOOKS_FILE);
+
+    const getDdcCategoryName = (ddcNumStr: string | undefined | null): string => {
+      if (!ddcNumStr) return "000 General Works";
+      const numMatch = String(ddcNumStr).trim().match(/^\d+/);
+      if (!numMatch) return "000 General Works";
+      const num = parseInt(numMatch[0], 10);
+      if (isNaN(num)) return "000 General Works";
+      
+      if (num >= 0 && num < 100) return "000 General Works";
+      if (num >= 100 && num < 200) return "100 Philosophy";
+      if (num >= 200 && num < 300) return "200 Religion";
+      if (num >= 300 && num < 400) return "300 Social Sciences";
+      if (num >= 400 && num < 500) return "400 Language";
+      if (num >= 500 && num < 600) return "500 Science";
+      if (num >= 600 && num < 700) return "600 Technology";
+      if (num >= 700 && num < 800) return "700 Arts";
+      if (num >= 800 && num < 900) return "800 Literature";
+      if (num >= 900 && num < 1000) return "900 History & Geography";
+      return "000 General Works";
+    };
+
+    let migrated = false;
+    const migratedBooks = books.map(book => {
+      let changed = false;
+      if (!book.ddcNumber) {
+        const callNum = book.callNumber || "";
+        const match = callNum.trim().match(/^\d+(\.\d+)?/);
+        if (match) {
+          book.ddcNumber = match[0];
+          changed = true;
+        } else {
+          book.ddcNumber = "";
+        }
+      }
+      
+      const expectedCat = getDdcCategoryName(book.ddcNumber);
+      if (!book.ddcCategory || book.ddcCategory === "" || book.ddcCategory === "Generalities") {
+        book.ddcCategory = expectedCat;
+        changed = true;
+      }
+
+      const ddcCategoryList = [
+        "000 General Works", "100 Philosophy", "200 Religion", "300 Social Sciences", "400 Language",
+        "500 Science", "600 Technology", "700 Arts", "800 Literature", "900 History & Geography"
+      ];
+      if (!ddcCategoryList.includes(book.category)) {
+        book.category = book.ddcCategory || expectedCat;
+        changed = true;
+      }
+
+      if (changed) {
+        migrated = true;
+      }
+      return book;
+    });
+
+    if (migrated) {
+      if (isConnectedToMongo) {
+        const ops = migratedBooks.map(b => ({
+          updateOne: {
+            filter: { bookId: b.bookId },
+            update: { $set: b },
+            upsert: true
+          }
+        }));
+        MongoBook.bulkWrite(ops).catch((e: any) => console.error("On-the-fly DDC migration background save failed:", e));
+      } else {
+        writeLocalFile(BOOKS_FILE, migratedBooks);
+      }
+    }
+
+    return migratedBooks;
   },
 
   async saveBook(book: Book, isEdit?: boolean): Promise<Book> {
@@ -748,7 +850,7 @@ export const dbService = {
     }
   },
 
-  async updateBorrowRequestStatus(id: string, status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'): Promise<BorrowRequest | null> {
+  async updateBorrowRequestStatus(id: string, status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Hold'): Promise<BorrowRequest | null> {
     if (isConnectedToMongo) {
       const req = await MongoBorrowRequest.findOneAndUpdate({ id }, { status }, { new: true });
       return req ? (req.toObject() as any) : null;
@@ -887,6 +989,45 @@ export const dbService = {
       } catch (err) {
         console.warn("saveLibrarianConfigDb error:", err);
       }
+    }
+  },
+
+  async getStudyMaterials(): Promise<any[]> {
+    if (isConnectedToMongo) {
+      return (await MongoStudyMaterial.find().lean()) as any[];
+    }
+    return readLocalFile<any>(STUDY_MATERIALS_FILE);
+  },
+
+  async saveStudyMaterial(material: any): Promise<any> {
+    if (isConnectedToMongo) {
+      await MongoStudyMaterial.findOneAndUpdate({ id: material.id }, material, { upsert: true, new: true });
+      return material;
+    } else {
+      const list = readLocalFile<any>(STUDY_MATERIALS_FILE);
+      const idx = list.findIndex(m => m.id === material.id);
+      if (idx !== -1) {
+        list[idx] = material;
+      } else {
+        list.unshift(material);
+      }
+      writeLocalFile(STUDY_MATERIALS_FILE, list);
+      return material;
+    }
+  },
+
+  async deleteStudyMaterial(id: string): Promise<boolean> {
+    if (isConnectedToMongo) {
+      const res = await MongoStudyMaterial.deleteOne({ id });
+      return res.deletedCount > 0;
+    } else {
+      const list = readLocalFile<any>(STUDY_MATERIALS_FILE);
+      const filtered = list.filter(m => m.id !== id);
+      if (filtered.length !== list.length) {
+        writeLocalFile(STUDY_MATERIALS_FILE, filtered);
+        return true;
+      }
+      return false;
     }
   }
 };

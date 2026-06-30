@@ -30,6 +30,18 @@ export interface Book {
   source?: string;
   remarks?: string;
   ddcCategory?: string;
+  ddcNumber?: string;
+}
+
+export interface StudyMaterial {
+  id: string;
+  title: string;
+  description?: string;
+  pdfData?: string; // Base64 representation of PDF
+  pdfName?: string; // filename of the uploaded pdf
+  expiryDate: string; // YYYY-MM-DD
+  visibleTo: 'All' | string; // 'All' or class grade (e.g., '10')
+  createdAt: string;
 }
 
 export interface Student {
@@ -49,7 +61,7 @@ export interface BorrowRequest {
   bookId: string;
   bookName: string;
   requestDate: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Hold';
   comment?: string;
 }
 
@@ -82,6 +94,7 @@ export interface AppState {
   students: Student[];
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
+  studyMaterials?: StudyMaterial[];
   auditLogs?: LibraryAuditLog[];
   currentRole: UserRole | null;
   loggedInStudent?: Student;

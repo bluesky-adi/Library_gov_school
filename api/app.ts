@@ -674,6 +674,19 @@ app.post('/api/requests/:id/reject', authenticateToken, requireLibrarian, async 
   }
 });
 
+app.post('/api/requests/:id/hold', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const reqStatus = await dbService.updateBorrowRequestStatus(req.params.id, 'Hold');
+    if (!reqStatus) {
+      return res.status(404).json({ error: "Borrow request code not discovered." });
+    }
+    await addAuditLog(req, 'Book Issued' as any, `Placed borrow request for book ID '${reqStatus.bookId}' on Hold`);
+    res.json({ success: true, request: reqStatus });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/requests/:id/cancel', authenticateToken, async (req, res) => {
   try {
     const requestId = req.params.id;
@@ -827,6 +840,64 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
 
     await addAuditLog(req, 'Book Returned', `Returned book '${log.bookName}' (ID: ${log.bookId}) from student ${log.studentName} (Roll: ${log.rollNumber})`);
     res.json({ success: true, log });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ---- STUDY MATERIALS ENDPOINTS ----
+app.get('/api/study-materials', authenticateToken, async (req, res) => {
+  try {
+    const materials = await dbService.getStudyMaterials();
+    const reqUser = (req as any).user;
+    
+    if (reqUser?.role === 'Student') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const filtered = materials.filter(m => {
+        const isNotExpired = m.expiryDate >= todayStr;
+        const isVisible = m.visibleTo === 'All' || String(m.visibleTo) === String(reqUser.class);
+        return isNotExpired && isVisible;
+      });
+      return res.json(filtered);
+    }
+    
+    res.json(materials);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/study-materials', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const material = req.body;
+    if (!material.title || !material.expiryDate || !material.visibleTo) {
+      return res.status(400).json({ error: "Missing required study material fields." });
+    }
+    
+    if (!material.id) {
+      material.id = `MAT-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
+    }
+    if (!material.createdAt) {
+      material.createdAt = new Date().toISOString();
+    }
+    
+    const saved = await dbService.saveStudyMaterial(material);
+    await addAuditLog(req, 'Book Added', `Uploaded study material '${material.title}' (Visible to: ${material.visibleTo})`);
+    res.status(201).json(saved);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/study-materials/:id', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const success = await dbService.deleteStudyMaterial(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: "Study material record not found." });
+    }
+    await addAuditLog(req, 'Book Deleted', `Deleted study material ID: ${req.params.id}`);
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

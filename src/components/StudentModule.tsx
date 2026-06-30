@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Book, Student, BorrowRequest, BookIssueLog } from '../types';
+import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial } from '../types';
 import { GoogleBookCover } from './PublicHome';
 import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
@@ -14,6 +14,7 @@ interface StudentModuleProps {
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
   loggedInStudent: Student;
+  studyMaterials?: StudyMaterial[];
   onAddRequest: (req: BorrowRequest) => void;
   onCancelRequest: (id: string) => Promise<boolean>;
   currentLang: 'EN' | 'HI';
@@ -24,6 +25,7 @@ export default function StudentModule({
   requests: rawRequests = [],
   issueLogs: rawIssueLogs = [],
   loggedInStudent,
+  studyMaterials = [],
   onAddRequest,
   onCancelRequest,
   currentLang
@@ -32,7 +34,7 @@ export default function StudentModule({
   const requests = Array.isArray(rawRequests) ? rawRequests : [];
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile'>('catalogue');
+  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile' | 'study-materials'>('catalogue');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -70,6 +72,7 @@ export default function StudentModule({
       copiesAvailable: "Copies Available:",
       profileTab: "My Profile Dashboard",
       catalogueTab: "Books Catalogue",
+      studyMaterialsTab: "Study Notes",
       studentBioTitle: "Student Bio Credentials",
       statsTitle: "Reading & Checkout Highlights",
       historyTableTitle: "Detailed Checking & Return History Logs",
@@ -108,6 +111,7 @@ export default function StudentModule({
       copiesAvailable: "उपलब्ध प्रतियाँ:",
       profileTab: "मेरा प्रोफाइल डैशबोर्ड",
       catalogueTab: "पुस्तकों की सूची",
+      studyMaterialsTab: "अध्ययन नोट्स",
       studentBioTitle: "छात्र जैव प्रमाण-पत्र",
       statsTitle: "पाठन और चेकआउट विवरण",
       historyTableTitle: "विस्तृत पठन इतिहास तालिका",
@@ -350,6 +354,16 @@ export default function StudentModule({
           }`}
         >
           📖 {t.catalogueTab}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('study-materials')}
+          className={`px-5 py-3 text-xs font-extrabold tracking-wide uppercase border-b-2 transition-all ${
+            activeSubTab === 'study-materials'
+              ? 'border-slate-850 text-slate-900 dark:text-slate-100 font-black'
+              : 'border-transparent text-slate-400 hover:text-slate-655'
+          }`}
+        >
+          📂 {t.studyMaterialsTab || "Study Notes"}
         </button>
         <button
           onClick={() => setActiveSubTab('profile')}
@@ -642,7 +656,7 @@ export default function StudentModule({
           </div>
 
         </div>
-      ) : (
+      ) : activeSubTab === 'profile' ? (
         /* Detailed Student Profile Page/Tab */
         <div className="space-y-6 animate-fade-in" id="student-profile-detailed-tab">
           
@@ -776,7 +790,94 @@ export default function StudentModule({
           </div>
 
         </div>
-      )}
+      ) : activeSubTab === 'study-materials' ? (
+        /* Study Materials Page/Tab */
+        <div className="space-y-4 animate-fade-in" id="student-study-materials-tab">
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-6 rounded-xl shadow-xs space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                  {currentLang === 'EN' ? "Curated Study Materials & Question Banks" : "पाठ्यक्रम अध्ययन सामग्री और प्रश्न बैंक"}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {currentLang === 'EN' 
+                    ? `Showing syllabus references allocated specifically for Class ${loggedInStudent.class}` 
+                    : `कक्षा ${loggedInStudent.class} के लिए उपलब्ध डिजिटल अध्ययन नोट्स और संसाधन`}
+                </p>
+              </div>
+            </div>
+
+            {studyMaterials && studyMaterials.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                {studyMaterials.map((mat) => (
+                  <div 
+                    key={mat.id}
+                    className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-205 dark:border-slate-800 hover:border-slate-400 hover:shadow-xs transition-all flex flex-col justify-between space-y-3"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-black uppercase">
+                          {currentLang === 'EN' ? "Class" : "कक्षा"} {mat.visibleTo}
+                        </span>
+                        <span className="text-[9px] text-slate-450 font-mono">
+                          {mat.createdAt ? new Date(mat.createdAt).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <h4 className="font-extrabold text-xs text-[#0f172a] dark:text-slate-100 leading-snug">
+                        📝 {mat.title}
+                      </h4>
+                      {mat.description && (
+                        <p className="text-[11px] text-slate-505 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                          {mat.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-150 dark:border-slate-800 flex items-center justify-between">
+                      <div className="text-[10px] text-red-500 font-bold flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>Expires: {mat.expiryDate}</span>
+                      </div>
+                      {mat.pdfData && (
+                        <button
+                          onClick={() => {
+                            try {
+                              const linkSource = mat.pdfData;
+                              const downloadLink = document.createElement("a");
+                              const fileName = mat.pdfName || `${mat.title.replace(/\s+/g, '_')}.pdf`;
+                              downloadLink.href = linkSource;
+                              downloadLink.download = fileName;
+                              downloadLink.click();
+                            } catch (e) {
+                              alert("Error initiating PDF download.");
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-955 font-bold text-[10px] rounded flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Clock className="w-3 h-3 text-slate-955" />
+                          <span>Download PDF</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <BookOpen className="w-10 h-10 mx-auto opacity-30 text-slate-400" />
+                <p className="text-xs">
+                  {currentLang === 'EN' 
+                    ? `No custom syllabus resources uploaded for Class ${loggedInStudent.class} at the moment.` 
+                    : `वर्तमान में कक्षा ${loggedInStudent.class} के लिए कोई डिजिटल अध्ययन संसाधन उपलब्ध नहीं हैं।`}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* DETAILED BOOK DIALOG MODAL */}
       {selectedBook && (

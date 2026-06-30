@@ -9,7 +9,7 @@ import PublicHome from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
 import PRD_Architecture from './components/PRD_Architecture';
 import { translations } from './localization';
-import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog } from './types';
+import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
 import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export default function App() {
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [issueLogs, setIssueLogs] = useState<BookIssueLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<LibraryAuditLog[]>([]);
+  const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
 
   // --- Dynamic Layout Configuration States ---
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
@@ -70,25 +71,29 @@ export default function App() {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       if (payload.role === 'Librarian') {
-        const [studentsData, requestsData, logsData, auditData] = await Promise.all([
+        const [studentsData, requestsData, logsData, auditData, materialsData] = await Promise.all([
           handleSafeFetch('/api/students', { headers }),
           handleSafeFetch('/api/requests', { headers }),
           handleSafeFetch('/api/issue-logs', { headers }),
-          handleSafeFetch('/api/audit-logs', { headers })
+          handleSafeFetch('/api/audit-logs', { headers }),
+          handleSafeFetch('/api/study-materials', { headers })
         ]);
 
         if (studentsData) setStudents(studentsData);
         if (requestsData) setRequests(requestsData);
         if (logsData) setIssueLogs(logsData);
         if (auditData) setAuditLogs(auditData);
+        if (materialsData) setStudyMaterials(materialsData);
       } else if (payload.role === 'Student') {
-        const [requestsData, logsData] = await Promise.all([
+        const [requestsData, logsData, materialsData] = await Promise.all([
           handleSafeFetch('/api/requests', { headers }),
-          handleSafeFetch('/api/issue-logs', { headers })
+          handleSafeFetch('/api/issue-logs', { headers }),
+          handleSafeFetch('/api/study-materials', { headers })
         ]);
 
         if (requestsData) setRequests(requestsData);
         if (logsData) setIssueLogs(logsData);
+        if (materialsData) setStudyMaterials(materialsData);
       }
     } catch (e: any) {
       console.warn("Secure metadata log synchronization gracefully deferred:", e?.message || e);
@@ -727,6 +732,72 @@ export default function App() {
     }
   };
 
+  // 8.1 Hold a pending borrow request (Librarian)
+  const handleHoldRequest = async (id: string) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/requests/${id}/hold`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddStudyMaterial = async (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/study-materials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(material)
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to upload material: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
+  const handleDeleteStudyMaterial = async (id: string) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/study-materials/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Failed to delete material: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
   // 8.5 Cancel a pending checkout request (Student)
   const handleCancelRequest = async (id: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
@@ -1034,6 +1105,7 @@ export default function App() {
                 requests={requests}
                 issueLogs={issueLogs}
                 auditLogs={auditLogs}
+                studyMaterials={studyMaterials}
                 onRefreshData={refreshData}
                 onAddBook={handleAddBook}
                 onEditBook={handleEditBook}
@@ -1042,6 +1114,7 @@ export default function App() {
                 onClearInventory={handleClearBooksInventory}
                 onApproveRequest={handleApproveRequest}
                 onRejectRequest={handleRejectRequest}
+                onHoldRequest={handleHoldRequest}
                 onCancelRequest={handleCancelRequest}
                 onReturnBook={handleReturnBook}
                 onImportBooksExcel={handleImportBooksExcel}
@@ -1059,6 +1132,8 @@ export default function App() {
                 loggedInName={loggedInName}
                 onUpdateLoggedInName={setLoggedInName}
                 onBulkIssue={handleBulkIssue}
+                onAddStudyMaterial={handleAddStudyMaterial}
+                onDeleteStudyMaterial={handleDeleteStudyMaterial}
               />
             )}
 

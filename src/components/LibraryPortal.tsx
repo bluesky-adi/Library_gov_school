@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { translations } from '../localization';
-import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog } from '../types';
+import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
 import StudentModule from './StudentModule';
 import LibrarianModule from './LibrarianModule';
 import ErrorBoundary from './ErrorBoundary';
@@ -28,7 +28,11 @@ interface LibraryPortalProps {
   onClearInventory: () => void;
   onApproveRequest: (id: string, dueDate?: string) => void;
   onRejectRequest: (id: string) => void;
+  onHoldRequest?: (id: string) => void;
   onCancelRequest: (id: string) => Promise<boolean>;
+  studyMaterials?: StudyMaterial[];
+  onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
+  onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
   onReturnBook: (logId: string) => void;
   onImportBooksExcel: (imported: Book[]) => void;
   onImportStudentsExcel: (imported: Student[]) => void;
@@ -71,8 +75,12 @@ export default function LibraryPortal({
   onClearInventory,
   onApproveRequest,
   onRejectRequest,
+  onHoldRequest,
   onCancelRequest,
   onReturnBook,
+  studyMaterials,
+  onAddStudyMaterial,
+  onDeleteStudyMaterial,
   onImportBooksExcel,
   onImportStudentsExcel,
   onAddStudent,
@@ -132,6 +140,7 @@ export default function LibraryPortal({
             currentLang={currentLang}
             loggedInStudent={loggedInStudent}
             issueLogs={issueLogs}
+            studyMaterials={studyMaterials || []}
           />
         </ErrorBoundary>
       ) : currentRole === 'Librarian' ? (
@@ -142,6 +151,7 @@ export default function LibraryPortal({
             requests={requests}
             issueLogs={issueLogs}
             auditLogs={auditLogs || []}
+            studyMaterials={studyMaterials || []}
             onRefreshInputLogs={onRefreshData}
             onAddBook={onAddBook}
             onEditBook={onEditBook}
@@ -150,6 +160,7 @@ export default function LibraryPortal({
             onClearInventory={onClearInventory}
             onApproveRequest={onApproveRequest}
             onRejectRequest={onRejectRequest}
+            onHoldRequest={onHoldRequest}
             onCancelRequest={onCancelRequest}
             onReturnBook={onReturnBook}
             onImportBooksExcel={onImportBooksExcel}
@@ -163,6 +174,8 @@ export default function LibraryPortal({
             onRestoreDatabase={onRestoreDatabase}
             onAddRequest={onAddRequest}
             onBulkIssue={onBulkIssue}
+            onAddStudyMaterial={onAddStudyMaterial}
+            onDeleteStudyMaterial={onDeleteStudyMaterial}
             currentLang={currentLang}
             loggedInName={loggedInName}
             onUpdateLoggedInName={onUpdateLoggedInName}
