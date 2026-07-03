@@ -76,23 +76,27 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
   };
 
   const determineDdcCategory = (callNumber?: string): string => {
-    if (!callNumber) return "Generalities";
-    const numStr = String(callNumber).trim().match(/\d+/);
-    if (!numStr) return "Generalities";
-    const firstDigit = parseInt(numStr[0].slice(0, 1));
-    switch (firstDigit) {
-      case 0: return "Generalities";
-      case 1: return "Philosophy";
-      case 2: return "Religion";
-      case 3: return "Social Sciences";
-      case 4: return "Language";
-      case 5: return "Science";
-      case 6: return "Technology";
-      case 7: return "Arts & Recreation";
-      case 8: return "Literature";
-      case 9: return "History & Geography";
-      default: return "Generalities";
-    }
+    if (!callNumber) return "Needs Librarian Review";
+    const trimStr = String(callNumber).trim();
+    if (trimStr === "") return "Needs Librarian Review";
+    
+    const numMatch = trimStr.match(/^\d+/);
+    if (!numMatch) return "Needs Librarian Review";
+    
+    const num = parseInt(numMatch[0], 10);
+    if (isNaN(num)) return "Needs Librarian Review";
+    
+    if (num >= 0 && num < 100) return "000 General Works";
+    if (num >= 100 && num < 200) return "100 Philosophy";
+    if (num >= 200 && num < 300) return "200 Religion";
+    if (num >= 300 && num < 400) return "300 Social Sciences";
+    if (num >= 400 && num < 500) return "400 Language";
+    if (num >= 500 && num < 600) return "500 Science";
+    if (num >= 600 && num < 700) return "600 Technology";
+    if (num >= 700 && num < 800) return "700 Arts";
+    if (num >= 800 && num < 900) return "800 Literature";
+    if (num >= 900 && num < 1000) return "900 History & Geography";
+    return "Needs Librarian Review";
   };
 
   const parseBooksFromSheetData = (

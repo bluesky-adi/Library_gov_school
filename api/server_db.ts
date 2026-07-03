@@ -410,11 +410,15 @@ export const dbService = {
     }
 
     const getDdcCategoryName = (ddcNumStr: string | undefined | null): string => {
-      if (!ddcNumStr) return "000 General Works";
-      const numMatch = String(ddcNumStr).trim().match(/^\d+/);
-      if (!numMatch) return "000 General Works";
+      if (!ddcNumStr) return "Needs Librarian Review";
+      const trimStr = String(ddcNumStr).trim();
+      if (trimStr === "") return "Needs Librarian Review";
+      
+      const numMatch = trimStr.match(/^\d+/);
+      if (!numMatch) return "Needs Librarian Review";
+      
       const num = parseInt(numMatch[0], 10);
-      if (isNaN(num)) return "000 General Works";
+      if (isNaN(num)) return "Needs Librarian Review";
       
       if (num >= 0 && num < 100) return "000 General Works";
       if (num >= 100 && num < 200) return "100 Philosophy";
@@ -426,35 +430,37 @@ export const dbService = {
       if (num >= 700 && num < 800) return "700 Arts";
       if (num >= 800 && num < 900) return "800 Literature";
       if (num >= 900 && num < 1000) return "900 History & Geography";
-      return "000 General Works";
+      return "Needs Librarian Review";
     };
 
     let migrated = false;
     const migratedBooks = books.map(book => {
       let changed = false;
-      if (!book.ddcNumber) {
+      
+      // Determine ddcNumber from current state or callNumber
+      let ddcNum = book.ddcNumber ? book.ddcNumber.trim() : "";
+      if (!ddcNum) {
         const callNum = book.callNumber || "";
         const match = callNum.trim().match(/^\d+(\.\d+)?/);
         if (match) {
-          book.ddcNumber = match[0];
-          changed = true;
-        } else {
-          book.ddcNumber = "";
+          ddcNum = match[0];
         }
       }
       
+      if (book.ddcNumber !== ddcNum) {
+        book.ddcNumber = ddcNum;
+        changed = true;
+      }
+      
       const expectedCat = getDdcCategoryName(book.ddcNumber);
-      if (!book.ddcCategory || book.ddcCategory === "" || book.ddcCategory === "Generalities") {
+      
+      if (book.ddcCategory !== expectedCat) {
         book.ddcCategory = expectedCat;
         changed = true;
       }
 
-      const ddcCategoryList = [
-        "000 General Works", "100 Philosophy", "200 Religion", "300 Social Sciences", "400 Language",
-        "500 Science", "600 Technology", "700 Arts", "800 Literature", "900 History & Geography"
-      ];
-      if (!ddcCategoryList.includes(book.category)) {
-        book.category = book.ddcCategory || expectedCat;
+      if (book.category !== expectedCat) {
+        book.category = expectedCat;
         changed = true;
       }
 

@@ -366,6 +366,17 @@ export default function LibrarianModule({
 
   // Categories expansion state persistence
   const defaultCategories = useMemo(() => [
+    "000 General Works",
+    "100 Philosophy",
+    "200 Religion",
+    "300 Social Sciences",
+    "400 Language",
+    "500 Science",
+    "600 Technology",
+    "700 Arts",
+    "800 Literature",
+    "900 History & Geography",
+    "Needs Librarian Review",
     'Academic', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Computer Science',
     'English', 'Hindi', 'History', 'Geography', 'Political Science',
     'Economics', 'Commerce', 'Literature', 'General Knowledge', 'Arts & Culture',
@@ -1139,25 +1150,30 @@ export default function LibrarianModule({
 
   const handleDdcChange = (val: string) => {
     setFormDdcNumber(val);
-    const numMatch = val.trim().match(/^\d+/);
+    const trimStr = val.trim();
+    if (trimStr === "") {
+      setFormCategory("Needs Librarian Review");
+      return;
+    }
+    const numMatch = trimStr.match(/^\d+/);
     if (numMatch) {
-      const hundredDigit = parseInt(numMatch[0].slice(0, 1));
-      const ddcList = [
-        "Generalities",
-        "Philosophy & Psychology",
-        "Religion",
-        "Social Sciences",
-        "Language & Linguistics",
-        "Science (Mathematics/Natural Science)",
-        "Technology & Applied Sciences",
-        "Arts & Recreation",
-        "Literature",
-        "History & Geography"
-      ];
-      if (hundredDigit >= 0 && hundredDigit <= 9) {
-        setFormCategory(ddcList[hundredDigit]);
+      const num = parseInt(numMatch[0], 10);
+      if (!isNaN(num)) {
+        if (num >= 0 && num < 100) setFormCategory("000 General Works");
+        else if (num >= 100 && num < 200) setFormCategory("100 Philosophy");
+        else if (num >= 200 && num < 300) setFormCategory("200 Religion");
+        else if (num >= 300 && num < 400) setFormCategory("300 Social Sciences");
+        else if (num >= 400 && num < 500) setFormCategory("400 Language");
+        else if (num >= 500 && num < 600) setFormCategory("500 Science");
+        else if (num >= 600 && num < 700) setFormCategory("600 Technology");
+        else if (num >= 700 && num < 800) setFormCategory("700 Arts");
+        else if (num >= 800 && num < 900) setFormCategory("800 Literature");
+        else if (num >= 900 && num < 1000) setFormCategory("900 History & Geography");
+        else setFormCategory("Needs Librarian Review");
+        return;
       }
     }
+    setFormCategory("Needs Librarian Review");
   };
 
   const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1780,24 +1796,22 @@ export default function LibrarianModule({
                 All Books ({books.length})
               </button>
               {[
-                { name: "Generalities", label: "Generalities" },
-                { name: "Philosophy", label: "Philosophy" },
-                { name: "Religion", label: "Religion" },
-                { name: "Social Science", label: "Social Science" },
-                { name: "Language", label: "Language" },
-                { name: "Science", label: "Science" },
-                { name: "Technology", label: "Technology" },
-                { name: "Arts & Recreation", label: "Arts & Recreation" },
-                { name: "Literature", label: "Literature" },
-                { name: "History", label: "History & Geography" }
+                { name: "000 General Works", label: "000 General Works" },
+                { name: "100 Philosophy", label: "100 Philosophy" },
+                { name: "200 Religion", label: "200 Religion" },
+                { name: "300 Social Sciences", label: "300 Social Sciences" },
+                { name: "400 Language", label: "400 Language" },
+                { name: "500 Science", label: "500 Science" },
+                { name: "600 Technology", label: "600 Technology" },
+                { name: "700 Arts", label: "700 Arts" },
+                { name: "800 Literature", label: "800 Literature" },
+                { name: "900 History & Geography", label: "900 History & Geography" },
+                { name: "Needs Librarian Review", label: "Needs Librarian Review" }
               ].map(cat => {
                 const count = books.filter(b => {
                   const bCat = (b.category || "").toLowerCase().trim();
                   const fCat = cat.name.toLowerCase().trim();
-                  if (bCat === fCat) return true;
-                  if (fCat === 'social science' && bCat.includes('social science')) return true;
-                  if (fCat === 'history' && bCat.includes('history')) return true;
-                  return bCat.includes(fCat);
+                  return bCat === fCat || bCat.includes(fCat);
                 }).length;
                 return (
                   <button

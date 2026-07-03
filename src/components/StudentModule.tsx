@@ -148,6 +148,9 @@ export default function StudentModule({
   };
 
   const [studentViewMode, setStudentViewMode] = useState<'cards' | 'table'>('cards');
+  const [availabilityFilter, setAvailabilityFilter] = useState<string>('all');
+  const [bookLanguageFilter, setBookLanguageFilter] = useState<string>('all');
+  const [sortByFilter, setSortByFilter] = useState<string>('relevance');
 
   // Create Category-wise Shelf Serial Map
   const categorySerialsMap = useMemo(() => {
@@ -178,12 +181,45 @@ export default function StudentModule({
 
   // Search and Filter books catalogue with smart multi-lingual transliteration matches
   const filteredBooks = useMemo(() => {
-    let result = books;
+    let result = [...books];
     if (selectedCategory !== 'All') {
       result = result.filter(b => b.category === selectedCategory);
     }
-    return searchBooksSmart(result, searchTerm);
-  }, [books, searchTerm, selectedCategory]);
+    if (availabilityFilter === 'available') {
+      result = result.filter(b => b.availableCopies > 0);
+    } else if (availabilityFilter === 'outofstock') {
+      result = result.filter(b => b.availableCopies === 0);
+    }
+    if (bookLanguageFilter === 'hindi') {
+      result = result.filter(b => /[\u0900-\u097F]/.test(b.bookName || b.author || ""));
+    } else if (bookLanguageFilter === 'english') {
+      result = result.filter(b => !/[\u0900-\u097F]/.test(b.bookName || b.author || ""));
+    }
+    if (searchTerm) {
+      result = searchBooksSmart(result, searchTerm);
+    }
+    if (sortByFilter === 'title-asc') {
+      result.sort((a, b) => (a.bookName || "").localeCompare(b.bookName || "", undefined, { sensitivity: 'base' }));
+    } else if (sortByFilter === 'title-desc') {
+      result.sort((a, b) => (b.bookName || "").localeCompare(a.bookName || "", undefined, { sensitivity: 'base' }));
+    } else if (sortByFilter === 'ddc-asc') {
+      result.sort((a, b) => {
+        const ddcA = String(a.ddcNumber || a.callNumber || "").trim();
+        const ddcB = String(b.ddcNumber || b.callNumber || "").trim();
+        return ddcA.localeCompare(ddcB, undefined, { numeric: true });
+      });
+    } else if (sortByFilter === 'copies-desc') {
+      result.sort((a, b) => (b.availableCopies || 0) - (a.availableCopies || 0));
+    } else {
+      result.sort((a, b) => {
+        const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
+        const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
+        if (idA !== idB) return idA - idB;
+        return a.bookId.localeCompare(b.bookId, undefined, { numeric: true });
+      });
+    }
+    return result;
+  }, [books, searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
   // Client-side pagination hooks to speed up rendering with zero freezing
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -191,7 +227,7 @@ export default function StudentModule({
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory]);
+  }, [searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
   const totalPages = Math.ceil(filteredBooks.length / itemsPerPage);
 
@@ -413,9 +449,62 @@ export default function StudentModule({
                     className="text-xs font-bold p-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-slate-800"
                   >
                     <option value="All">{t.allCategories}</option>
-                    {['All', 'Hindi Literature', 'English Literature', 'Mathematics', 'Science', 'Social Science', 'Sanskrit', 'General Knowledge', 'Reference books'].filter(cat => cat !== 'All').map(cat => (
+                    {bookCategories.filter(cat => cat !== 'All').map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Dynamic Filters Segment (Availability, Language, Sort By) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 dark:border-slate-800 pt-3" id="student-catalog-combined-filters">
+                {/* Availability Filter */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    {currentLang === 'EN' ? "Availability" : "उपलब्धता"}
+                  </label>
+                  <select
+                    value={availabilityFilter}
+                    onChange={(e) => setAvailabilityFilter(e.target.value)}
+                    className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-650 cursor-pointer"
+                  >
+                    <option value="all">{currentLang === 'EN' ? "All Books" : "सभी पुस्तकें"}</option>
+                    <option value="available">{currentLang === 'EN' ? "Available on Shelf" : "शेल्फ पर उपलब्ध"}</option>
+                    <option value="outofstock">{currentLang === 'EN' ? "All Issued / Out of Stock" : "सभी जारी / स्टॉक में नहीं"}</option>
+                  </select>
+                </div>
+
+                {/* Book Language Filter */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    {currentLang === 'EN' ? "Book Medium / Script" : "पुस्तक माध्यम / लिपि"}
+                  </label>
+                  <select
+                    value={bookLanguageFilter}
+                    onChange={(e) => setBookLanguageFilter(e.target.value)}
+                    className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-655 cursor-pointer"
+                  >
+                    <option value="all">{currentLang === 'EN' ? "All Media" : "सभी माध्यम"}</option>
+                    <option value="hindi">{currentLang === 'EN' ? "Hindi Medium / हिंदी" : "हिंदी माध्यम / देवनागरी"}</option>
+                    <option value="english">{currentLang === 'EN' ? "English Medium / CBSE" : "अंग्रेजी माध्यम"}</option>
+                  </select>
+                </div>
+
+                {/* Sorting */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    {currentLang === 'EN' ? "Sort Catalogue By" : "क्रमबद्ध करें"}
+                  </label>
+                  <select
+                    value={sortByFilter}
+                    onChange={(e) => setSortByFilter(e.target.value)}
+                    className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-660 cursor-pointer"
+                  >
+                    <option value="relevance">{currentLang === 'EN' ? "Relevance / Shelf Serial" : "प्रासंगिकता / शेल्फ क्रमांक"}</option>
+                    <option value="title-asc">{currentLang === 'EN' ? "Title (A to Z)" : "शीर्षक (A से Z)"}</option>
+                    <option value="title-desc">{currentLang === 'EN' ? "Title (Z to A)" : "शीर्षक (Z से A)"}</option>
+                    <option value="ddc-asc">{currentLang === 'EN' ? "DDC Call Number" : "DDC कॉल नंबर"}</option>
+                    <option value="copies-desc">{currentLang === 'EN' ? "Highest Available Copies" : "अधिकतम उपलब्ध प्रतियां"}</option>
                   </select>
                 </div>
               </div>

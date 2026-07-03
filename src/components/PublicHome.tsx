@@ -125,6 +125,11 @@ export default function PublicHome({
   const [homeSearchQuery, setHomeSearchQuery] = useState<string>('');
   const [homeViewMode, setHomeViewMode] = useState<'cards' | 'table'>('cards');
 
+  // Combined Filters state
+  const [availabilityFilter, setAvailabilityFilter] = useState<string>('all');
+  const [bookLanguageFilter, setBookLanguageFilter] = useState<string>('all');
+  const [sortByFilter, setSortByFilter] = useState<string>('relevance');
+
   React.useEffect(() => {
     const handler = setTimeout(() => {
       setHomeSearchQuery(homeSearchInput);
@@ -159,22 +164,59 @@ export default function PublicHome({
     return map;
   }, [books]);
 
-  // Filter books dynamically based on category tab selection and search query
+  // Filter books dynamically based on category tab selection, availability, language, search query, and sorting
   const filteredFeaturedBooks = React.useMemo(() => {
     let result = [...books];
-    // Numeric sorting by real database/serial bookId to avoid string sorting anomalies (e.g. 1, 10, 2)
-    result.sort((a, b) => {
-      const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
-      const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
-      if (idA !== idB) return idA - idB;
-      return a.bookId.localeCompare(b.bookId, undefined, { numeric: true });
-    });
 
+    // 1. DDC Category Filter
     if (selectedCategory !== 'All') {
       result = result.filter(b => b.category === selectedCategory);
     }
-    return searchBooksSmart(result, homeSearchQuery);
-  }, [books, selectedCategory, homeSearchQuery]);
+
+    // 2. Availability Filter
+    if (availabilityFilter === 'available') {
+      result = result.filter(b => b.availableCopies > 0);
+    } else if (availabilityFilter === 'outofstock') {
+      result = result.filter(b => b.availableCopies === 0);
+    }
+
+    // 3. Book Language Filter
+    if (bookLanguageFilter === 'hindi') {
+      result = result.filter(b => /[\u0900-\u097F]/.test(b.bookName || b.author || ""));
+    } else if (bookLanguageFilter === 'english') {
+      result = result.filter(b => !/[\u0900-\u097F]/.test(b.bookName || b.author || ""));
+    }
+
+    // 4. Search Filter (incorporating Hinglish, spelling corrections, DDC class)
+    if (homeSearchQuery) {
+      result = searchBooksSmart(result, homeSearchQuery);
+    }
+
+    // 5. Sorting
+    if (sortByFilter === 'title-asc') {
+      result.sort((a, b) => (a.bookName || "").localeCompare(b.bookName || "", undefined, { sensitivity: 'base' }));
+    } else if (sortByFilter === 'title-desc') {
+      result.sort((a, b) => (b.bookName || "").localeCompare(a.bookName || "", undefined, { sensitivity: 'base' }));
+    } else if (sortByFilter === 'ddc-asc') {
+      result.sort((a, b) => {
+        const ddcA = String(a.ddcNumber || a.callNumber || "").trim();
+        const ddcB = String(b.ddcNumber || b.callNumber || "").trim();
+        return ddcA.localeCompare(ddcB, undefined, { numeric: true });
+      });
+    } else if (sortByFilter === 'copies-desc') {
+      result.sort((a, b) => (b.availableCopies || 0) - (a.availableCopies || 0));
+    } else {
+      // Default: numeric shelf serial sorting to avoid string sequence anomalies
+      result.sort((a, b) => {
+        const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
+        const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
+        if (idA !== idB) return idA - idB;
+        return a.bookId.localeCompare(b.bookId, undefined, { numeric: true });
+      });
+    }
+
+    return result;
+  }, [books, selectedCategory, availabilityFilter, bookLanguageFilter, homeSearchQuery, sortByFilter]);
 
   const featuredBooks = filteredFeaturedBooks;
 
@@ -182,10 +224,10 @@ export default function PublicHome({
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const itemsPerPage = 16;
 
-  // Reset page when search query or filter changes
+  // Reset page when any filter parameters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory, homeSearchQuery]);
+  }, [selectedCategory, homeSearchQuery, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
   const totalPages = Math.ceil(featuredBooks.length / itemsPerPage);
 
@@ -535,6 +577,59 @@ export default function PublicHome({
           <p className="leading-normal">
             <span className="font-extrabold text-indigo-700">Hindi/Hinglish Search Enabled:</span> Try typing <strong>"itihaas"</strong> to find <strong>"इतिहास"</strong>, <strong>"vigyan"</strong> for <strong>"विज्ञान"</strong>, <strong>"ganit"</strong> for <strong>"गणित"</strong>, or enter direct shelf Call Numbers (e.g., 510/NCERT).
           </p>
+        </div>
+
+        {/* Dynamic Filters Segment (Availability, Language, Sort By) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/60 dark:bg-slate-950/45 p-3 rounded-xl border border-slate-200 dark:border-slate-800" id="homepage-combined-filters">
+          {/* Availability Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+              {currentLang === 'EN' ? "Availability" : "उपलब्धता"}
+            </label>
+            <select
+              value={availabilityFilter}
+              onChange={(e) => setAvailabilityFilter(e.target.value)}
+              className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-650 cursor-pointer"
+            >
+              <option value="all">{currentLang === 'EN' ? "All Books" : "सभी पुस्तकें"}</option>
+              <option value="available">{currentLang === 'EN' ? "Available on Shelf" : "शेल्फ पर उपलब्ध"}</option>
+              <option value="outofstock">{currentLang === 'EN' ? "All Issued / Out of Stock" : "सभी जारी / स्टॉक में नहीं"}</option>
+            </select>
+          </div>
+
+          {/* Book Language Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+              {currentLang === 'EN' ? "Book Medium / Script" : "पुस्तक माध्यम / लिपि"}
+            </label>
+            <select
+              value={bookLanguageFilter}
+              onChange={(e) => setBookLanguageFilter(e.target.value)}
+              className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-655 cursor-pointer"
+            >
+              <option value="all">{currentLang === 'EN' ? "All Media" : "सभी माध्यम"}</option>
+              <option value="hindi">{currentLang === 'EN' ? "Hindi Medium / हिंदी" : "हिंदी माध्यम / देवनागरी"}</option>
+              <option value="english">{currentLang === 'EN' ? "English Medium / CBSE" : "अंग्रेजी माध्यम"}</option>
+            </select>
+          </div>
+
+          {/* Sorting */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+              {currentLang === 'EN' ? "Sort Catalogue By" : "क्रमबद्ध करें"}
+            </label>
+            <select
+              value={sortByFilter}
+              onChange={(e) => setSortByFilter(e.target.value)}
+              className="w-full text-xs font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg p-2 outline-none focus:ring-1 focus:ring-indigo-660 cursor-pointer"
+            >
+              <option value="relevance">{currentLang === 'EN' ? "Relevance / Shelf Serial" : "प्रासंगिकता / शेल्फ क्रमांक"}</option>
+              <option value="title-asc">{currentLang === 'EN' ? "Title (A to Z)" : "शीर्षक (A से Z)"}</option>
+              <option value="title-desc">{currentLang === 'EN' ? "Title (Z to A)" : "शीर्षक (Z से A)"}</option>
+              <option value="ddc-asc">{currentLang === 'EN' ? "DDC Call Number" : "DDC कॉल नंबर"}</option>
+              <option value="copies-desc">{currentLang === 'EN' ? "Highest Available Copies" : "अधिकतम उपलब्ध प्रतियां"}</option>
+            </select>
+          </div>
         </div>
 
         {/* Category filtering buttons list inline */}
