@@ -7,6 +7,7 @@ import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, FileText, CheckCircle, AlertTriangle, Download, ArrowRight, Table, HelpCircle, Users } from 'lucide-react';
 import { Book, Student } from '../types';
+import { getDdcCategoryName } from '../lib/searchUtils';
 
 interface ExcelModuleProps {
   onImportBooks: (importedBooks: Book[]) => void;
@@ -75,29 +76,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
     return required.every(field => headers.some(h => h.trim().toLowerCase() === field.toLowerCase()));
   };
 
-  const determineDdcCategory = (callNumber?: string): string => {
-    if (!callNumber) return "Needs Librarian Review";
-    const trimStr = String(callNumber).trim();
-    if (trimStr === "") return "Needs Librarian Review";
-    
-    const numMatch = trimStr.match(/^\d+/);
-    if (!numMatch) return "Needs Librarian Review";
-    
-    const num = parseInt(numMatch[0], 10);
-    if (isNaN(num)) return "Needs Librarian Review";
-    
-    if (num >= 0 && num < 100) return "000 General Works";
-    if (num >= 100 && num < 200) return "100 Philosophy";
-    if (num >= 200 && num < 300) return "200 Religion";
-    if (num >= 300 && num < 400) return "300 Social Sciences";
-    if (num >= 400 && num < 500) return "400 Language";
-    if (num >= 500 && num < 600) return "500 Science";
-    if (num >= 600 && num < 700) return "600 Technology";
-    if (num >= 700 && num < 800) return "700 Arts";
-    if (num >= 800 && num < 900) return "800 Literature";
-    if (num >= 900 && num < 1000) return "900 History & Geography";
-    return "Needs Librarian Review";
-  };
+
 
   const parseBooksFromSheetData = (
     sheetData: any[], 
@@ -173,8 +152,8 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       }
 
       const callNumber = callNumberVal ? String(callNumberVal).trim() : "";
-      const ddcCategory = determineDdcCategory(callNumber);
-      const primaryCategory = callNumber ? ddcCategory : (sheetCategory || "Generalities");
+      const ddcCategory = getDdcCategoryName(callNumber);
+      const primaryCategory = callNumber && ddcCategory !== "Needs Librarian Review" ? ddcCategory : (sheetCategory || "Needs Librarian Review");
 
       let finalDescription = descVal ? String(descVal).trim() : "";
       if (!finalDescription) {

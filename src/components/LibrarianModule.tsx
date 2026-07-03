@@ -8,7 +8,7 @@ import Fuse from 'fuse.js';
 import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
-import { searchBooksSmart } from '../lib/searchUtils';
+import { searchBooksSmart, getDdcCategoryName } from '../lib/searchUtils';
 import { 
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
@@ -1062,6 +1062,20 @@ export default function LibrarianModule({
       return;
     }
 
+    const ddcValue = formDdcNumber.trim();
+    const originalDdc = editingBook ? (editingBook.ddcNumber || "").trim() : "";
+    
+    if (ddcValue !== "" && ddcValue !== originalDdc) {
+      const isValidDdc = /^\d{3}(\.\d+)?$/.test(ddcValue);
+      if (!isValidDdc) {
+        alert(currentLang === 'EN' 
+          ? "Validation Error: The entered DDC Classification Number is invalid. A valid DDC number must start with exactly 3 digits, followed optionally by a decimal point and digits (e.g. 005, 398.2, 621.381)."
+          : "सत्यापन त्रुटि: दर्ज किया गया डीडीसी वर्गीकरण नंबर अमान्य है। एक मान्य डीडीसी नंबर में ठीक 3 अंक होने चाहिए, जिसके बाद वैकल्पिक रूप से एक दशमलव बिंदु और अंक हो सकते हैं (जैसे 005, 398.2, 621.381)।"
+        );
+        return;
+      }
+    }
+
     const copies = parseInt(formCopies.toString()) || 1;
     const finalAccession = formAccessionNumber.trim();
 
@@ -1150,30 +1164,7 @@ export default function LibrarianModule({
 
   const handleDdcChange = (val: string) => {
     setFormDdcNumber(val);
-    const trimStr = val.trim();
-    if (trimStr === "") {
-      setFormCategory("Needs Librarian Review");
-      return;
-    }
-    const numMatch = trimStr.match(/^\d+/);
-    if (numMatch) {
-      const num = parseInt(numMatch[0], 10);
-      if (!isNaN(num)) {
-        if (num >= 0 && num < 100) setFormCategory("000 General Works");
-        else if (num >= 100 && num < 200) setFormCategory("100 Philosophy");
-        else if (num >= 200 && num < 300) setFormCategory("200 Religion");
-        else if (num >= 300 && num < 400) setFormCategory("300 Social Sciences");
-        else if (num >= 400 && num < 500) setFormCategory("400 Language");
-        else if (num >= 500 && num < 600) setFormCategory("500 Science");
-        else if (num >= 600 && num < 700) setFormCategory("600 Technology");
-        else if (num >= 700 && num < 800) setFormCategory("700 Arts");
-        else if (num >= 800 && num < 900) setFormCategory("800 Literature");
-        else if (num >= 900 && num < 1000) setFormCategory("900 History & Geography");
-        else setFormCategory("Needs Librarian Review");
-        return;
-      }
-    }
-    setFormCategory("Needs Librarian Review");
+    setFormCategory(getDdcCategoryName(val));
   };
 
   const handlePdfFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1996,7 +1987,7 @@ export default function LibrarianModule({
                       <div className="mt-3 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-150 dark:border-slate-800 text-[10px] space-y-1.5 text-slate-600 dark:text-slate-300 font-mono animate-fade-in">
                         <div><b className="text-slate-500">Accession Number:</b> {book.accessionNumber || book.bookId || "N/A"}</div>
                         <div><b className="text-slate-500">Call Number:</b> {book.callNumber || "N/A"}</div>
-                        <div><b className="text-slate-500">DDC Mapping:</b> {book.ddcCategory || "Generalities"}</div>
+                        <div><b className="text-slate-500">DDC Mapping:</b> {book.ddcCategory || "Needs Librarian Review"}</div>
                         {book.bookNumber && <div><b className="text-slate-500">Book Number:</b> {book.bookNumber}</div>}
                         {book.yearOfPublication && <div><b className="text-slate-500 font-mono">Published:</b> {book.yearOfPublication} {book.placeOfPublication ? `at ${book.placeOfPublication}` : ""}</div>}
                         {book.editor && <div><b className="text-slate-500 font-mono">Editor:</b> {book.editor}</div>}
@@ -3283,11 +3274,7 @@ export default function LibrarianModule({
                       if (e.target.value) {
                         const numStr = String(e.target.value).trim().match(/\d+/);
                         if (numStr) {
-                          const firstDigit = parseInt(numStr[0].slice(0, 1));
-                          const ddcList = ["Generalities", "Philosophy", "Religion", "Social Sciences", "Language", "Science", "Technology", "Arts & Recreation", "Literature", "History & Geography"];
-                          if (firstDigit >= 0 && firstDigit < 10) {
-                            setFormCategory(ddcList[firstDigit]);
-                          }
+                          setFormCategory(getDdcCategoryName(numStr[0]));
                         }
                       }
                     }}

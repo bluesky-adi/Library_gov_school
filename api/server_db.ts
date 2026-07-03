@@ -495,9 +495,12 @@ export const dbService = {
     }
 
     const accession = book.accessionNumber?.trim();
-    if (accession && !isEdit) {
+    if (accession) {
       const allBooks = await this.getBooks();
-      const duplicate = allBooks.find(b => b.accessionNumber?.trim().toLowerCase() === accession.toLowerCase());
+      const duplicate = allBooks.find(b => 
+        b.bookId !== book.bookId && 
+        b.accessionNumber?.trim().toLowerCase() === accession.toLowerCase()
+      );
       if (duplicate) {
         throw new Error(`Data Integrity Guard: A book record already exists with Accession Number "${accession}" (Title: "${duplicate.bookName}"). Duplicate books on identical Accession Numbers are prohibited.`);
       }

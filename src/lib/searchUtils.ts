@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import Fuse from 'fuse.js';
 import { Book } from '../types';
 
 export const HINGLISH_MAP: { [key: string]: string } = {
@@ -39,60 +40,78 @@ export const HINGLISH_MAP: { [key: string]: string } = {
 
 // Map search terms of DDC class numbers to subject terms
 export const DDC_CLASS_SUBJECTS: { [key: string]: string } = {
-  "000": "general information computer science computing",
-  "100": "philosophy psychology",
-  "200": "religion spirituality",
-  "300": "social sciences civics economics sociology",
-  "400": "language grammar sanskrit english hindi languages",
-  "500": "science mathematics biology math geometry physics chemistry",
-  "600": "technology engineering medical health agriculture applied science",
-  "700": "arts recreation sports games music",
-  "800": "literature poems drama stories essays novels",
-  "900": "history geography travel maps biography"
+  "000": "general information computer science computing books library research cyber 005",
+  "100": "philosophy psychology ethics logic mind 100",
+  "200": "religion spirituality god bible quran veda 200",
+  "300": "social sciences civics economics sociology law politics education 300 398",
+  "400": "language grammar sanskrit english hindi languages linguistics 400",
+  "500": "science mathematics biology math geometry physics chemistry astronomy geology 500",
+  "600": "technology engineering medical health agriculture applied science electronics electricity 600",
+  "700": "arts recreation sports games music painting theater 700",
+  "800": "literature poems drama stories essays novels poetry 800",
+  "900": "history geography travel maps biography historical world 900"
 };
 
-// Performance cache for Levenshtein calculations to keep searching under 5ms
-const levenshteinCache = new Map<string, number>();
-
-function getLevenshteinDistance(a: string, b: string): number {
-  const tmp = [];
-  for (let i = 0; i <= a.length; i++) {
-    tmp[i] = [i];
-  }
-  for (let j = 0; j <= b.length; j++) {
-    tmp[0][j] = j;
-  }
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      tmp[i][j] = Math.min(
-        tmp[i - 1][j] + 1,
-        tmp[i][j - 1] + 1,
-        tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-      );
-    }
-  }
-  return tmp[a.length][b.length];
-}
-
-function calculateSpellingSimilarity(q: string, t: string): number {
-  if (Math.abs(q.length - t.length) > 2) return 0;
-  if (q.length < 3 || t.length < 3) return 0;
-
-  const key = `${q}:${t}`;
-  if (levenshteinCache.has(key)) {
-    return levenshteinCache.get(key)!;
-  }
-
-  const dist = getLevenshteinDistance(q, t);
-  const maxLen = Math.max(q.length, t.length);
-  const val = maxLen > 0 ? (maxLen - dist) / maxLen : 0;
-  levenshteinCache.set(key, val);
-  return val;
+/**
+ * Unified, canonical DDC category classification function.
+ * This is the SINGLE SOURCE OF TRUTH for the entire application.
+ */
+export function getDdcCategoryName(ddcNumStr: string | undefined | null): string {
+  if (!ddcNumStr) return "Needs Librarian Review";
+  const trimStr = String(ddcNumStr).trim();
+  if (trimStr === "") return "Needs Librarian Review";
+  
+  const numMatch = trimStr.match(/^\d+/);
+  if (!numMatch) return "Needs Librarian Review";
+  
+  const num = parseInt(numMatch[0], 10);
+  if (isNaN(num)) return "Needs Librarian Review";
+  
+  if (num >= 0 && num < 100) return "000 General Works";
+  if (num >= 100 && num < 200) return "100 Philosophy";
+  if (num >= 200 && num < 300) return "200 Religion";
+  if (num >= 300 && num < 400) return "300 Social Sciences";
+  if (num >= 400 && num < 500) return "400 Language";
+  if (num >= 500 && num < 600) return "500 Science";
+  if (num >= 600 && num < 700) return "600 Technology";
+  if (num >= 700 && num < 800) return "700 Arts";
+  if (num >= 800 && num < 900) return "800 Literature";
+  if (num >= 900 && num < 1000) return "900 History & Geography";
+  return "Needs Librarian Review";
 }
 
 /**
- * Smart search engine that expands Hinglish to Hindi, matches metadata,
- * handles fuzzy spelling corrections, interprets DDC ranges, and processes Category Serials.
+ * Helper to compute transliteration search keywords for a book record.
+ */
+function getTransliterationKeywords(book: Book): string {
+  const text = `${book.bookName || ""} ${book.author || ""} ${book.category || ""} ${book.description || ""}`.toLowerCase();
+  const keywords: string[] = [];
+  for (const [eng, hin] of Object.entries(HINGLISH_MAP)) {
+    if (text.includes(eng) || text.includes(hin.toLowerCase())) {
+      keywords.push(eng, hin);
+    }
+  }
+  return keywords.join(' ');
+}
+
+/**
+ * Helper to retrieve DDC century class.
+ */
+function getCenturyClass(ddc: string | undefined | null): string {
+  if (!ddc) return "";
+  const match = ddc.trim().match(/^\d+/);
+  if (!match) return "";
+  const num = parseInt(match[0], 10);
+  if (isNaN(num)) return "";
+  const century = Math.floor(num / 100) * 100;
+  if (century >= 0 && century < 1000) {
+    return String(century).padStart(3, '0');
+  }
+  return "";
+}
+
+/**
+ * Modern, high-performance Fuse.js smart search engine.
  */
 export function searchBooksSmart(
   books: Book[], 
@@ -100,163 +119,100 @@ export function searchBooksSmart(
   categorySerialsMap?: Map<string, number>
 ): Book[] {
   if (!query || !query.trim()) return books;
-  levenshteinCache.clear(); // Safe bounded cache cleaning
+  
   const decodedQuery = query.toLowerCase().trim();
   
-  // Dynamic fallback for Category Serial Numbering Map if not supplied
-  let serialsMap = categorySerialsMap;
-  if (!serialsMap) {
-    serialsMap = new Map<string, number>();
-    const groups: { [cat: string]: Book[] } = {};
-    for (const b of books) {
-      const cat = b.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(b);
-    }
-    for (const cat of Object.keys(groups)) {
-      groups[cat].sort((a, b) => {
-        const idA = a.accessionNumber || a.bookId;
-        const idB = b.accessionNumber || b.bookId;
-        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
-      });
-      groups[cat].forEach((b, idx) => {
-        serialsMap!.set(b.bookId, idx + 1);
-      });
-    }
-  }
+  // 1. Enriched Books for Fuse indexing
+  const enrichedBooks = books.map(book => {
+    const bookDdc = book.ddcNumber || book.callNumber || "";
+    const century = getCenturyClass(bookDdc);
+    const ddcKeywords = century ? (DDC_CLASS_SUBJECTS[century] || "") : "";
+    const translit = getTransliterationKeywords(book);
+    
+    // Add shelf serial number string if present
+    const catSerial = categorySerialsMap ? String(categorySerialsMap.get(book.bookId) || "") : "";
+    
+    return {
+      book,
+      bookId: book.bookId,
+      bookName: book.bookName || "",
+      author: book.author || "",
+      publisher: book.publisher || "",
+      category: book.category || "",
+      description: book.description || "",
+      accessionNumber: book.accessionNumber || "",
+      callNumber: book.callNumber || "",
+      bookNumber: book.bookNumber || "",
+      ddcNumber: book.ddcNumber || "",
+      _ddcKeywords: ddcKeywords,
+      _transliteration: translit,
+      _shelfSerial: catSerial,
+    };
+  });
 
-  // 1. Expand search tokens
-  const queryTokens = decodedQuery.split(/[\s,.\-/]+/).filter(t => t.length > 0);
-  if (queryTokens.length === 0) return books;
-
-  // Enhance tokens with Hinglish expansions
+  // 2. Expand Query for bilingual matching
+  const tokens = decodedQuery.split(/[\s,.\-/]+/).filter(t => t.length > 0);
   const expandedTokens: string[] = [];
-  for (const token of queryTokens) {
+  for (const token of tokens) {
     expandedTokens.push(token);
-    // Direct maps
     if (HINGLISH_MAP[token]) {
-      expandedTokens.push(HINGLISH_MAP[token].toLowerCase());
+      expandedTokens.push(HINGLISH_MAP[token]);
     }
-    // Reverse maps
     for (const [eng, hin] of Object.entries(HINGLISH_MAP)) {
       if (token === hin || hin.toLowerCase() === token) {
         expandedTokens.push(eng);
       }
     }
   }
+  const expandedQuery = Array.from(new Set(expandedTokens)).join(' ');
 
-  const finalEnhancedTokens = Array.from(new Set(expandedTokens));
+  // 3. Configure Fuse.js with optimized weights & thresholds
+  const options = {
+    keys: [
+      { name: 'accessionNumber', weight: 4.5 },
+      { name: 'bookId', weight: 4.0 },
+      { name: '_shelfSerial', weight: 4.0 },
+      { name: 'bookName', weight: 3.5 },
+      { name: 'ddcNumber', weight: 3.0 },
+      { name: 'callNumber', weight: 3.0 },
+      { name: 'author', weight: 2.5 },
+      { name: '_transliteration', weight: 2.5 },
+      { name: '_ddcKeywords', weight: 2.0 },
+      { name: 'category', weight: 1.5 },
+      { name: 'publisher', weight: 1.2 },
+      { name: 'description', weight: 0.8 }
+    ],
+    threshold: 0.45,       // Ideal balance for fuzzy typo tolerance without false positives
+    ignoreLocation: true,  // Search whole string regardless of match position
+    findAllMatches: true,
+    minMatchCharLength: 1
+  };
 
-  // 2. Score each book on closeness to query
-  const scoredBooks = books.map(book => {
-    let score = 0;
-    
-    const name = (book.bookName || "").toLowerCase();
-    const author = (book.author || "").toLowerCase();
-    const publisher = (book.publisher || "").toLowerCase();
-    const category = (book.category || "").toLowerCase();
-    const accession = (book.accessionNumber || "").toLowerCase();
-    const callNum = (book.callNumber || "").toLowerCase();
-    const bookNum = (book.bookNumber || "").toLowerCase();
-    const desc = (book.description || "").toLowerCase();
-    const bookId = (book.bookId || "").toLowerCase();
-    
-    // Retrieve Category Serial Number if available
-    const catSerial = serialsMap ? String(serialsMap.get(book.bookId)) : "";
-
-    // Exact string matches on complete query string
-    if (name.includes(decodedQuery)) score += 120;
-    if (author.includes(decodedQuery)) score += 90;
-    if (category.includes(decodedQuery)) score += 60;
-    if (accession === decodedQuery || accession.includes(decodedQuery)) score += 150; // High correlation
-    if (callNum === decodedQuery || callNum.includes(decodedQuery)) score += 130;
-    if (bookNum === decodedQuery || bookNum.includes(decodedQuery)) score += 110;
-    if (catSerial && catSerial === decodedQuery) score += 140; // Perfect match on category shelf number
-    if (bookId === decodedQuery) score += 150;
-
-    // Checks on each enhanced token individually
-    for (const token of finalEnhancedTokens) {
-      // 1. Precise match boosts
-      if (accession === token || accession.includes(token)) score += 90;
-      if (callNum === token || callNum.includes(token)) score += 60;
-      if (bookNum === token || bookNum.includes(token)) score += 65;
-      if (catSerial && catSerial === token) score += 75;
-
-      // Substring matches for expanded tokens
-      if (name.includes(token)) score += 75;
-      if (author.includes(token)) score += 45;
-      if (publisher.includes(token)) score += 20;
-      if (category.includes(token)) score += 30;
-      if (bookId.includes(token)) score += 40;
-
-      // Class 100-999 / DDC numbers checks
-      const isDdcCode = /^[0-9]00$/.test(token);
-      if (isDdcCode) {
-        const century = token.charAt(0);
-        const matchesCentury = callNum.startsWith(century);
-        const subjectDescription = DDC_CLASS_SUBJECTS[token] || "";
-        const matchesCategory = subjectDescription.split(" ").some(kw => category.includes(kw));
-        if (matchesCentury) score += 150;
-        if (matchesCategory) score += 100;
-      }
-
-      // 2. Title word matches / Fuzzy typo tolerance
-      const nameWords = name.split(/[\s,.\-/]+/).filter(w => w.length > 1);
-      for (const w of nameWords) {
-        if (w === token) {
-          score += 50;
-        } else if (w.includes(token) || token.includes(w)) {
-          score += 30;
-        } else {
-          // Fuzzy distance
-          const sim = calculateSpellingSimilarity(token, w);
-          if (sim >= 0.65) {
-            score += Math.floor(sim * 35);
-          }
-        }
-      }
-
-      // 3. Author word matches / Fuzzy typo tolerance
-      const authorWords = author.split(/[\s,.\-/]+/).filter(w => w.length > 1);
-      for (const w of authorWords) {
-        if (w === token) {
-          score += 40;
-        } else if (w.includes(token) || token.includes(w)) {
-          score += 20;
-        } else {
-          const sim = calculateSpellingSimilarity(token, w);
-          if (sim >= 0.70) {
-            score += Math.floor(sim * 25);
-          }
-        }
-      }
-
-      // 4. Publisher word matches
-      if (publisher.includes(token)) score += 20;
-      else {
-        const sim = calculateSpellingSimilarity(token, publisher);
-        if (sim >= 0.75) score += 15;
-      }
-
-      // 5. Category word/DDC checks
-      if (category.includes(token)) score += 25;
-      if (desc.includes(token)) score += 10;
-    }
-
-    return { book, score };
+  const fuse = new Fuse(enrichedBooks, options);
+  
+  // Try exact matches first for codes (e.g. accession numbers or call numbers or direct exact titles)
+  const exactMatches = enrichedBooks.filter(item => {
+    const term = decodedQuery;
+    return (
+      item.accessionNumber.toLowerCase() === term ||
+      item.bookId.toLowerCase() === term ||
+      item.ddcNumber.toLowerCase() === term ||
+      item.callNumber.toLowerCase() === term ||
+      item._shelfSerial === term
+    );
   });
 
-  // Filter books with a non-zero matching score, then sort from highest to lowest score
-  const matches = scoredBooks.filter(item => item.score > 0);
-  matches.sort((a, b) => {
-    if (b.score !== a.score) {
-      return b.score - a.score;
+  const fuseResults = fuse.search(expandedQuery).map(res => res.item);
+  
+  // Merge results, giving exact matches top priority
+  const mergedResults = [...exactMatches];
+  const exactSet = new Set(exactMatches.map(m => m.bookId));
+  
+  for (const item of fuseResults) {
+    if (!exactSet.has(item.bookId)) {
+      mergedResults.push(item);
     }
-    const idA = parseInt(a.book.bookId.replace(/\D/g, ''), 10) || 0;
-    const idB = parseInt(b.book.bookId.replace(/\D/g, ''), 10) || 0;
-    if (idA !== idB) return idA - idB;
-    return a.book.bookId.localeCompare(b.book.bookId, undefined, { numeric: true });
-  });
+  }
 
-  return matches.map(item => item.book);
+  return mergedResults.map(item => item.book);
 }
