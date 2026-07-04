@@ -9,6 +9,102 @@ import { Upload, FileText, CheckCircle, AlertTriangle, Download, ArrowRight, Tab
 import { Book, Student } from '../types';
 import { getDdcCategoryName } from '../lib/searchUtils';
 
+export interface SheetColumnMapping {
+  sheetName: string;
+  nameCol: string | null;
+  rollCol: string | null;
+  dobCol: string | null;
+  classCol: string | null;
+  sectionCol: string | null;
+  missing: string[];
+}
+
+export const STUDENT_ALIASES = {
+  name: [
+    "name", "student name", "full name", "studentname", "fullname", "stuname", "nameofstudent", "studentfullname",
+    "name of student", "student's name", "students name"
+  ],
+  rollNumber: [
+    "roll no", "roll number", "admission no", "admission number", "student roll", "rollnumber", "rollno", 
+    "admissionno", "admissionnumber", "studentroll", "roll", "adm no", "adm number", "admission #", "roll #",
+    "student roll no", "student roll number"
+  ],
+  dateOfBirth: [
+    "dob", "date of birth", "birth date", "dateofbirth", "birthdate", "date of birth dob", "dob date of birth",
+    "birth_date", "birth-date"
+  ],
+  class: [
+    "class", "standard", "grade", "std"
+  ],
+  section: [
+    "section", "sec", "division", "div"
+  ]
+};
+
+export const normalizeHeader = (h: string): string => {
+  return h
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\._\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+export const matchHeaderToAlias = (header: string, aliases: string[]): boolean => {
+  const normHeader = normalizeHeader(header);
+  const normHeaderNoSpaces = normHeader.replace(/\s/g, '');
+  
+  return aliases.some(alias => {
+    const normAlias = normalizeHeader(alias);
+    const normAliasNoSpaces = normAlias.replace(/\s/g, '');
+    return (
+      normHeader === normAlias || 
+      normHeaderNoSpaces === normAliasNoSpaces ||
+      normHeader.includes(normAlias) ||
+      normAlias.includes(normHeader)
+    );
+  });
+};
+
+export const detectStudentColumnsInSheet = (headers: string[]): SheetColumnMapping => {
+  let nameCol: string | null = null;
+  let rollCol: string | null = null;
+  let dobCol: string | null = null;
+  let classCol: string | null = null;
+  let sectionCol: string | null = null;
+
+  headers.forEach(h => {
+    if (!nameCol && matchHeaderToAlias(h, STUDENT_ALIASES.name)) {
+      nameCol = h;
+    } else if (!rollCol && matchHeaderToAlias(h, STUDENT_ALIASES.rollNumber)) {
+      rollCol = h;
+    } else if (!dobCol && matchHeaderToAlias(h, STUDENT_ALIASES.dateOfBirth)) {
+      dobCol = h;
+    } else if (!classCol && matchHeaderToAlias(h, STUDENT_ALIASES.class)) {
+      classCol = h;
+    } else if (!sectionCol && matchHeaderToAlias(h, STUDENT_ALIASES.section)) {
+      sectionCol = h;
+    }
+  });
+
+  const missing: string[] = [];
+  if (!nameCol) missing.push("Name");
+  if (!rollCol) missing.push("Roll Number");
+  if (!classCol) missing.push("Class");
+  if (!sectionCol) missing.push("Section");
+  if (!dobCol) missing.push("Date of Birth");
+
+  return {
+    sheetName: "",
+    nameCol,
+    rollCol,
+    dobCol,
+    classCol,
+    sectionCol,
+    missing
+  };
+};
+
 interface ExcelModuleProps {
   onImportBooks: (importedBooks: Book[]) => void;
   onImportStudents: (importedStudents: Student[]) => void;
@@ -32,6 +128,27 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
   const [sheetsAvailable, setSheetsAvailable] = useState<{ name: string; rawData: any[] }[]>([]);
   const [selectedSheetNames, setSelectedSheetNames] = useState<string[]>([]);
   const [importMode, setImportMode] = useState<'entire' | 'multiple' | 'single'>('entire');
+
+  const [studentMappings, setStudentMappings] = useState<SheetColumnMapping[]>([]);
+
+  React.useEffect(() => {
+    if (activePreset === 'students' && sheetsAvailable.length > 0) {
+      const newMappings: SheetColumnMapping[] = [];
+      sheetsAvailable.forEach(sheet => {
+        if (selectedSheetNames.includes(sheet.name)) {
+          if (sheet.rawData.length > 0) {
+            const headers = Object.keys(sheet.rawData[0]);
+            const mapping = detectStudentColumnsInSheet(headers);
+            mapping.sheetName = sheet.name;
+            newMappings.push(mapping);
+          }
+        }
+      });
+      setStudentMappings(newMappings);
+    } else {
+      setStudentMappings([]);
+    }
+  }, [sheetsAvailable, selectedSheetNames, activePreset]);
 
   const [successReport, setSuccessReport] = useState<{
     booksImported: number;
@@ -72,8 +189,8 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
   }[currentLang];
 
   const validateStudentHeaders = (headers: string[]): boolean => {
-    const required = ["Name", "Roll Number", "DOB", "Class", "Section"];
-    return required.every(field => headers.some(h => h.trim().toLowerCase() === field.toLowerCase()));
+    const mapping = detectStudentColumnsInSheet(headers);
+    return mapping.missing.length === 0;
   };
 
 
@@ -253,21 +370,29 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       setIsValidated(true);
       setLogs(validationLogs);
     } else {
-      // Student worksheet validating selection
-      let hasInvalidHeaders = false;
-      sheetsAvailable.forEach(sheet => {
-        if (selectedSheetNames.includes(sheet.name)) {
-          if (sheet.rawData.length > 0) {
-            const headers = Object.keys(sheet.rawData[0]);
-            if (!validateStudentHeaders(headers)) {
-              hasInvalidHeaders = true;
+      // Student worksheet validating selection using pre-computed mapping
+      if (studentMappings.length === 0) {
+        setErrorMessage(currentLang === 'EN' ? "No data sheets selected or parsed." : "कोई डेटा शीट चयनित या विश्लेषित नहीं है।");
+        setIsValidated(false);
+        return;
+      }
+
+      let overallMissing: string[] = [];
+      studentMappings.forEach(mapping => {
+        if (mapping.missing.length > 0) {
+          mapping.missing.forEach(m => {
+            if (!overallMissing.includes(m)) {
+              overallMissing.push(m);
             }
-          }
+          });
         }
       });
 
-      if (hasInvalidHeaders) {
-        setErrorMessage(t.invalidHeaders + " " + t.columnsStudents);
+      if (overallMissing.length > 0) {
+        const missingText = currentLang === 'EN'
+          ? `Missing required column: ${overallMissing.join(', ')}`
+          : `आवश्यक कॉलम गायब है: ${overallMissing.join(', ')}`;
+        setErrorMessage(missingText);
         setStudentsParsed([]);
         setIsValidated(false);
         return;
@@ -276,18 +401,24 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       const studentsList: Student[] = [];
       sheetsAvailable.forEach(sheet => {
         if (selectedSheetNames.includes(sheet.name)) {
+          const mapping = studentMappings.find(m => m.sheetName === sheet.name);
+          if (!mapping) return;
+
           sheet.rawData.forEach((row, index) => {
-            const nameRaw = row["Name"] || row["name"];
+            const nameRaw = mapping.nameCol ? row[mapping.nameCol] : undefined;
             const name = nameRaw ? nameRaw.toString().trim() : "";
             
-            const rollRaw = row["Roll Number"] || row["roll number"];
-            const rollNumber = parseInt(rollRaw || "0", 10);
+            const rollRaw = mapping.rollCol ? row[mapping.rollCol] : undefined;
+            let rollNumber = 0;
+            if (rollRaw !== undefined && rollRaw !== null) {
+              rollNumber = parseInt(String(rollRaw).trim(), 10);
+            }
             
-            const dobRaw = row["DOB"] || row["dob"];
-            const classRaw = row["Class"] || row["class"];
+            const dobRaw = mapping.dobCol ? row[mapping.dobCol] : undefined;
+            const classRaw = mapping.classCol ? row[mapping.classCol] : undefined;
             const studClass = classRaw ? classRaw.toString().trim() : "";
             
-            const sectionRaw = row["Section"] || row["section"];
+            const sectionRaw = mapping.sectionCol ? row[mapping.sectionCol] : undefined;
             const section = sectionRaw ? sectionRaw.toString().trim().toUpperCase() : "";
 
             if (!name) {
@@ -306,7 +437,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
               validationWarnings.push(`Row ${index + 2} in [${sheet.name}]: Student '${name}' is missing a valid manually-assigned Roll Number. Skipping.`);
               return;
             }
-            if (!dobRaw) {
+            if (dobRaw === undefined || dobRaw === null) {
               validationWarnings.push(`Row ${index + 2} in [${sheet.name}]: Student '${name}' is missing Date of Birth (DOB). Skipping.`);
               return;
             }
@@ -833,6 +964,71 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activePreset === 'students' && sheetsAvailable.length > 0 && (
+        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3 shadow-sm select-none" id="detected-columns-mapping-card">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h5 className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-350">
+              {currentLang === 'EN' ? "Excel Schema Mapping Status" : "एक्सेल स्कीमा मैपिंग स्थिति"}
+            </h5>
+            <span className="text-[10px] text-slate-400 font-mono italic">
+              {currentLang === 'EN' ? "Bilingual Alias Mapping Active" : "द्विभाषी उपनाम मैपिंग सक्रिय"}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { key: 'name', label: currentLang === 'EN' ? 'Name' : 'नाम', desc: 'Student Name' },
+              { key: 'rollNumber', label: currentLang === 'EN' ? 'Roll Number' : 'रोल नंबर', desc: 'Roll / Admission' },
+              { key: 'class', label: currentLang === 'EN' ? 'Class' : 'कक्षा', desc: 'Class / Grade' },
+              { key: 'section', label: currentLang === 'EN' ? 'Section' : 'वर्ग', desc: 'Section / Division' },
+              { key: 'dateOfBirth', label: currentLang === 'EN' ? 'Date of Birth' : 'जन्म तिथि', desc: 'DOB / Birth Date' }
+            ].map(field => {
+              const isMapped = studentMappings.some(m => m[field.key as keyof SheetColumnMapping + 'Col'] !== null);
+              const matchedNames = studentMappings
+                .filter(m => m[field.key as keyof SheetColumnMapping + 'Col'] !== null)
+                .map(m => m[field.key as keyof SheetColumnMapping + 'Col']);
+              const columnName = matchedNames.length > 0 ? String(matchedNames[0]) : null;
+
+              return (
+                <div 
+                  key={field.key} 
+                  className={`border rounded-lg p-3 flex flex-col justify-between transition-all ${
+                    isMapped 
+                      ? 'border-emerald-200 bg-emerald-50/20 dark:border-emerald-950/20 dark:bg-emerald-950/10' 
+                      : 'border-red-200 bg-red-50/20 dark:border-red-950/20 dark:bg-red-950/10'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                      {field.label}
+                    </span>
+                    {isMapped ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 text-xs font-black">✓</span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-450 text-xs font-black">✕</span>
+                    )}
+                  </div>
+                  <div className="mt-2 text-[10px] font-mono leading-tight">
+                    {isMapped ? (
+                      <div className="space-y-0.5">
+                        <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Mapped From:</span>
+                        <span className="text-slate-900 dark:text-slate-100 font-bold bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 px-1 py-0.5 rounded block truncate max-w-[130px]" title={columnName || ""}>
+                          {columnName}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Status:</span>
+                        <span className="text-red-655 dark:text-red-400 font-extrabold uppercase tracking-wide text-[9.5px]">Missing Required</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
