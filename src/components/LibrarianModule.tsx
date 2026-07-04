@@ -13,7 +13,7 @@ import {
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
   Key, Eye, EyeOff, Shield, Sliders, AlertCircle, User, Database, RefreshCw, Upload, Clock,
-  Grid, LayoutGrid, ArrowUpDown
+  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star
 } from 'lucide-react';
 
 interface LibrarianModuleProps {
@@ -103,7 +103,7 @@ export default function LibrarianModule({
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
   const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
-  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials'>('books');
+  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback'>('books');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
@@ -122,6 +122,100 @@ export default function LibrarianModule({
   // Performance Profiling Metrics
   const [bookSearchElapsed, setBookSearchElapsed] = useState<number>(0.15);
   const [studentSearchElapsed, setStudentSearchElapsed] = useState<number>(0.11);
+
+  // --- STUDENT FEEDBACK moderation states & handlers ---
+  const [allFeedbacks, setAllFeedbacks] = useState<any[]>([]);
+  const [feedbacksLoading, setFeedbacksLoading] = useState<boolean>(false);
+  const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
+  const [feedbackFilter, setFeedbackFilter] = useState<'All' | 'Pending' | 'Approved' | 'Spam' | 'Resolved'>('All');
+
+  const fetchLibrarianFeedbacks = () => {
+    setFeedbacksLoading(true);
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch('/api/feedback/all', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAllFeedbacks(data);
+        }
+      })
+      .catch(err => console.error("Error loading all feedbacks:", err))
+      .finally(() => setFeedbacksLoading(false));
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'feedback') {
+      fetchLibrarianFeedbacks();
+    }
+  }, [activeTab]);
+
+  const handleUpdateStatus = (id: string, newStatus: string) => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch(`/api/feedback/${id}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ status: newStatus })
+    })
+      .then(res => {
+        if (res.ok) {
+          fetchLibrarianFeedbacks();
+        } else {
+          alert("Could not update status.");
+        }
+      })
+      .catch(() => alert("Network error updating feedback status."));
+  };
+
+  const handleSendReply = (id: string) => {
+    if (!replyText.trim()) {
+      alert("Please write a response.");
+      return;
+    }
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch(`/api/feedback/${id}/reply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ reply: replyText })
+    })
+      .then(res => {
+        if (res.ok) {
+          setActiveReplyId(null);
+          setReplyText('');
+          fetchLibrarianFeedbacks();
+        } else {
+          alert("Could not post reply.");
+        }
+      })
+      .catch(() => alert("Network error sending reply."));
+  };
+
+  const handleDeleteFeedback = (id: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this student suggestion / complaint? This cannot be undone.")) {
+      return;
+    }
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch(`/api/feedback/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => {
+        if (res.ok) {
+          fetchLibrarianFeedbacks();
+        } else {
+          alert("Could not delete feedback.");
+        }
+      })
+      .catch(() => alert("Network error deleting feedback."));
+  };
 
   // --- CSV DATA MIGRATION HELPERS ---
   const exportToCSV = (data: any[], filename: string, headers: string[], keys: string[]) => {
@@ -337,6 +431,14 @@ export default function LibrarianModule({
   const [secSuccess, setSecSuccess] = useState<string | null>(null);
   const [secLoading, setSecLoading] = useState<boolean>(false);
 
+  // Profile Form States
+  const [profileDesignation, setProfileDesignation] = useState<string>('');
+  const [profileBiography, setProfileBiography] = useState<string>('');
+  const [profilePhoto, setProfilePhoto] = useState<string>('');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState<boolean>(false);
+
   // Custom high-fidelity non-blocking interactive overlay states
   const [confirmModal, setConfirmModal] = useState<{
     type: 'delete-book' | 'delete-selected-books' | 'clear-books' | 'delete-student' | 'delete-selected-students' | 'clear-students' | 'restore-database' | 'reset-database';
@@ -408,6 +510,18 @@ export default function LibrarianModule({
           setNewUsername("ramdiri_admin_roy");
         }
       }
+      
+      // Fetch dynamic profile fields
+      fetch('/api/librarian/profile')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success) {
+            setProfileDesignation(data.designation || "Senior Chief Librarian");
+            setProfileBiography(data.biography || "");
+            setProfilePhoto(data.profilePhoto || "");
+          }
+        })
+        .catch(err => console.error("Could not load librarian profile settings:", err));
     }
   }, [activeTab, loggedInName]);
 
@@ -649,6 +763,54 @@ export default function LibrarianModule({
     })
     .finally(() => {
       setSecLoading(false);
+    });
+  };
+
+  const handleUpdateProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(null);
+
+    if (!newName.trim()) {
+      setProfileError("Librarian Display Name is required.");
+      return;
+    }
+
+    setProfileLoading(true);
+    const token = localStorage.getItem("ramdiri_library_token");
+
+    fetch('/api/librarian/profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        name: newName.trim(),
+        designation: profileDesignation.trim(),
+        biography: profileBiography.trim(),
+        profilePhoto: profilePhoto.trim()
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        setProfileSuccess("Chief Librarian profile settings updated successfully!");
+        if (data.token) {
+          localStorage.setItem("ramdiri_library_token", data.token);
+        }
+        if (onUpdateLoggedInName && data.profile && data.profile.name) {
+          onUpdateLoggedInName(data.profile.name);
+        }
+      } else {
+        setProfileError(data.error || "Unable to update profile settings.");
+      }
+    })
+    .catch(() => {
+      setProfileError("Network connection fault. Unable to submit profile settings to server.");
+    })
+    .finally(() => {
+      setProfileLoading(false);
     });
   };
 
@@ -1641,6 +1803,18 @@ export default function LibrarianModule({
         >
           <Upload className="w-4 h-4 shrink-0" />
           <span>{t.tabStudyMaterials || "Digital Notes"}</span>
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('feedback'); }}
+          className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'feedback'
+              ? 'border-slate-800 text-slate-900 dark:text-white font-extrabold bg-slate-10 border-b-slate-80 bg-slate-100 dark:bg-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4 shrink-0" />
+          <span>Student Feedback</span>
         </button>
 
         <button
@@ -4302,158 +4476,462 @@ export default function LibrarianModule({
         </div>
       )}
 
+      {/* --- STUDENT FEEDBACK MODERATION AND SUGGESTIONS MODULE --- */}
+      {activeTab === 'feedback' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-5 sm:p-6 rounded-xl space-y-6 shadow-xs animate-fade-in" id="feedback-moderator-tab">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-indigo-600" />
+                <span>Student Suggestions, Complaints & Reviews Registry</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Moderate incoming student reviews. Approved feedbacks become immediately visible on the public portal homepage.
+              </p>
+            </div>
+            
+            {/* Moderation Filter controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              {(['All', 'Pending', 'Approved', 'Resolved', 'Spam'] as const).map((filterOpt) => (
+                <button
+                  key={filterOpt}
+                  onClick={() => setFeedbackFilter(filterOpt)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                    feedbackFilter === filterOpt
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-sm'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 dark:bg-slate-950 dark:border-slate-850 dark:text-slate-405'
+                  }`}
+                >
+                  {filterOpt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {feedbacksLoading ? (
+            <div className="text-center py-16 text-xs text-slate-400 font-mono">
+              Fetching suggestions archive from server...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {allFeedbacks
+                .filter(f => feedbackFilter === 'All' || f.status === feedbackFilter)
+                .length === 0 ? (
+                  <div className="text-center py-16 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                    <MessageSquare className="w-10 h-10 mx-auto text-slate-300 stroke-[1.5]" />
+                    <p className="text-xs text-slate-500 font-bold">No feedback items match the selected status filter.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-4">
+                    {allFeedbacks
+                      .filter(f => feedbackFilter === 'All' || f.status === feedbackFilter)
+                      .map((f) => (
+                        <div key={f.id} className="pt-4 first:pt-0 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-150 dark:border-slate-855">
+                            
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-extrabold text-xs text-slate-900 dark:text-white">
+                                  {f.studentName || "Verified Scholar"}
+                                </span>
+                                <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono">
+                                  Class {f.studentClass || "?"}-{f.studentSection || "?"}
+                                </span>
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 px-2.5 py-0.5 rounded font-mono">
+                                  Roll {f.studentRoll || "?"}
+                                </span>
+                                <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded text-amber-800 dark:text-amber-400">
+                                  ★ {f.rating} / 5
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-750 dark:text-slate-300 font-medium leading-relaxed mt-1">
+                                <span className="text-[10px] font-black uppercase text-indigo-650 block">[{f.type}]</span>
+                                {f.comment}
+                              </p>
+                              {f.reply && (
+                                <div className="p-2.5 bg-indigo-50/40 dark:bg-slate-850/60 border-l-2 border-indigo-550 text-[11px] text-slate-750 dark:text-slate-300 rounded-r mt-2">
+                                  <span className="text-[9.5px] font-black uppercase text-indigo-700 dark:text-indigo-450 block mb-1">Response Replied:</span>
+                                  "{f.reply}"
+                                </div>
+                              )}
+                              <span className="text-[9px] font-mono text-slate-400 block mt-1">
+                                Logged: {f.createdAt ? new Date(f.createdAt).toLocaleString() : ""}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap sm:flex-col items-stretch justify-end gap-2 shrink-0">
+                              
+                              {/* Status Badge */}
+                              <div className="flex items-center justify-between gap-1 mb-1 sm:self-end">
+                                <span className="text-[9px] uppercase font-bold text-slate-400">Status:</span>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                  f.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
+                                  f.status === 'Pending' ? 'bg-amber-100 text-amber-800' :
+                                  f.status === 'Resolved' ? 'bg-blue-100 text-blue-805' : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {f.status}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5 justify-end">
+                                {f.status !== 'Approved' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(f.id, 'Approved')}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10.5px] rounded cursor-pointer"
+                                    title="Make visible publicly on Home"
+                                  >
+                                    Approve
+                                  </button>
+                                )}
+                                {f.status !== 'Resolved' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(f.id, 'Resolved')}
+                                    className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10.5px] rounded cursor-pointer"
+                                    title="Mark resolved"
+                                  >
+                                    Resolve
+                                  </button>
+                                )}
+                                {f.status !== 'Spam' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(f.id, 'Spam')}
+                                    className="px-2 py-1 bg-slate-550 text-slate-700 hover:bg-slate-200 border border-slate-300 font-bold text-[10.5px] rounded cursor-pointer"
+                                    title="Mark spam"
+                                  >
+                                    Spam
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setActiveReplyId(activeReplyId === f.id ? null : f.id);
+                                    setReplyText(f.reply || '');
+                                  }}
+                                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10.5px] rounded cursor-pointer"
+                                >
+                                  {f.reply ? 'Edit Reply' : 'Reply'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteFeedback(f.id)}
+                                  className="px-2 py-1 border border-red-200 hover:bg-red-50 text-red-700 font-bold text-[10.5px] rounded cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+
+                              {/* Inline Reply input */}
+                              {activeReplyId === f.id && (
+                                <div className="mt-2 space-y-1.5 w-full sm:w-[250px] animate-fade-in">
+                                  <textarea
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    placeholder="Write administrative response..."
+                                    className="w-full text-xs p-2 border border-slate-300 dark:border-slate-800 rounded outline-none"
+                                    rows={2}
+                                  />
+                                  <div className="flex gap-1.5 justify-end">
+                                    <button
+                                      onClick={() => setActiveReplyId(null)}
+                                      className="px-2 py-1 text-[10px] text-slate-500 border border-slate-200 rounded cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={() => handleSendReply(f.id)}
+                                      className="px-2 py-1 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded cursor-pointer"
+                                    >
+                                      Submit
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                            </div>
+
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* CHIEF LIBRARIAN CREDENTIAL ROTATION SECURITY SETTINGS PANEL */}
       {activeTab === 'security' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-6 shadow-xs animate-fade-in" id="security-tab-content">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-3 select-none">
             <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              <Shield className="w-5 h-5 text-emerald-600 shrink-0" />
-              Administrative Security Settings
+              <Shield className="w-5 h-5 text-indigo-600 shrink-0" />
+              Administrative settings & Profile desk
             </h3>
             <p className="text-xs text-slate-500 mt-1 leading-normal">
-              Rotate school library management credentials. These settings are updated securely using salted BCrypt hashing and instantly written to the backend database store.
+              Manage the public-facing Librarian's Desk biography, professional designation, profile photo, and change administrative credentials.
             </p>
           </div>
 
-          <form onSubmit={handleUpdateCredentials} className="max-w-md space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
-            <div className="space-y-1">
-              <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                Chief Librarian Display Name
-              </label>
-              <input
-                type="text"
-                required
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Enter full librarian display name"
-                className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-              />
-              <span className="text-[10px] text-slate-400 block font-sans select-none">Displayed on top level headers, printable files, and certification badges.</span>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                New Administrative Username
-              </label>
-              <input
-                type="text"
-                required
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="Enter new username"
-                className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-              />
-              <span className="text-[10px] text-slate-400 block font-sans select-none">Usernames are non-case sensitive. We recommend using lowercase characters.</span>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                Current Password Passphrase (Required)
-              </label>
-              <div className="relative">
-                <input
-                  type={showOldPassword ? "text" : "password"}
-                  required
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="Verify your identity with current password"
-                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 pr-10 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowOldPassword(!showOldPassword)}
-                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  title={showOldPassword ? "Hide password" : "Show password"}
-                >
-                  {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {/* COLUMN 1: PUBLIC PROFILE EDITING PANEL */}
+            <div className="space-y-4 border-r border-slate-100 dark:border-slate-800 lg:pr-8">
+              <div className="select-none">
+                <h4 className="font-extrabold text-xs text-slate-950 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-slate-500 shrink-0" />
+                  Librarian's Desk Profile Card
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-normal">
+                  These profile values populate the "Librarian's Desk" card visible to students and school guests on the library portal homepage.
+                </p>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                  New Secure Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? "text" : "password"}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min 6 chars (Leave blank to keep)"
-                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 pr-10 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+              {/* Avatar live preview */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-850 flex items-center gap-4">
+                {profilePhoto ? (
+                  <img 
+                    src={profilePhoto} 
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 rounded-full object-cover border border-indigo-200 dark:border-slate-850 shadow-inner shrink-0" 
+                    alt="Preview"
+                    onError={(e) => {
+                      (e.target as any).src = ""; // Force avatar placeholder on fail
+                    }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    title={showNewPassword ? "Hide password" : "Show password"}
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-indigo-600 border border-indigo-200 dark:border-slate-850 flex items-center justify-center text-white text-xl font-black shadow-inner shrink-0 select-none">
+                    {newName ? newName.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() : "SR"}
+                  </div>
+                )}
+                <div>
+                  <h5 className="font-black text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
+                    {newName || "S. K. Roy (Chief Librarian)"}
+                  </h5>
+                  <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                    {profileDesignation || "Senior Chief Librarian"}
+                  </p>
+                  <span className="text-[9.5px] text-slate-400 block font-sans mt-1">Live Display Preview Card</span>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat new password"
-                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-                />
-              </div>
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Librarian Full Display Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Enter full librarian name"
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Professional Designation
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profileDesignation}
+                    onChange={(e) => setProfileDesignation(e.target.value)}
+                    placeholder="e.g., Senior Chief Librarian"
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-sans select-none">Official administrative title used throughout the school register.</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Desk biography (Welcome Quote)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={profileBiography}
+                    onChange={(e) => setProfileBiography(e.target.value)}
+                    placeholder="Write a warm message to scholars visiting the library..."
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-medium placeholder-slate-400"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Profile Photo URL
+                  </label>
+                  <input
+                    type="url"
+                    value={profilePhoto}
+                    onChange={(e) => setProfilePhoto(e.target.value)}
+                    placeholder="https://images.unsplash.com/photo-..."
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-sans select-none">Optionally provide a web link to a professional headshot. If empty, the system generates initials automatically.</span>
+                </div>
+
+                {profileError && (
+                  <div className="p-3 bg-red-50 text-red-800 border border-red-200 rounded text-xs flex items-start gap-1.5 animate-bounce-short">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                {profileSuccess && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{profileSuccess}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={profileLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 select-none"
+                >
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  <span>{profileLoading ? "Saving Profile..." : "Save Profile Details"}</span>
+                </button>
+              </form>
             </div>
 
-            {secError && (
-              <div className="p-3 bg-red-50 text-red-800 border border-red-200 rounded text-xs flex items-start gap-1.5 animate-bounce-short">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <span>{secError}</span>
+            {/* COLUMN 2: LOGIN ACCESS SECURITY CONTROL PANEL */}
+            <div className="space-y-4">
+              <div className="select-none">
+                <h4 className="font-extrabold text-xs text-slate-950 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <Shield className="w-4 h-4 text-slate-500 shrink-0" />
+                  Access Credentials & Rotation
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-normal">
+                  Rotate access login credentials for the chief administrative portal. All entries are hashed using salted cryptographic BCrypt algorithms.
+                </p>
               </div>
-            )}
 
-            {secSuccess && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{secSuccess}</span>
-              </div>
-            )}
-
-            {successReportName && (
-              <div className="p-4 bg-indigo-55 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-950 rounded-xl space-y-2 animate-fade-in text-xs shadow-inner">
-                <div className="flex items-center gap-1.5 font-black text-indigo-950 dark:text-indigo-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span>⚙️ SYSTEM PERSISTENCE STATUS REPORT:</span>
+              <form onSubmit={handleUpdateCredentials} className="space-y-4">
+                
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Administrative Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-sans select-none">Usernames are non-case sensitive. Lowercase characters are recommended.</span>
                 </div>
-                <div className="flex items-center gap-3 font-mono bg-white dark:bg-slate-950 p-2 rounded border border-indigo-100 dark:border-indigo-900">
-                  <div>
-                    <span className="text-[9px] text-slate-400 block uppercase font-bold">Previous Name</span>
-                    <span className="text-slate-500 line-through truncate block text-[11px] font-bold">{successReportName.prev}</span>
-                  </div>
-                  <span className="text-slate-400 font-bold shrink-0">→</span>
-                  <div>
-                    <span className="text-[9px] text-emerald-500 block uppercase font-bold text-emerald-600 dark:text-emerald-400">New Name</span>
-                    <span className="text-emerald-800 dark:text-emerald-400 truncate block text-[11.5px] font-black">{successReportName.curr}</span>
+
+                <div className="space-y-1">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    Current Password (Verification Required)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showOldPassword ? "text" : "password"}
+                      required
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      placeholder="Verify identity with current password"
+                      className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 pr-10 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPassword(!showOldPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      title={showOldPassword ? "Hide password" : "Show password"}
+                    >
+                      {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
-                <p className="text-[10px] text-indigo-650 dark:text-indigo-400 italic">✓ Display updated in global Header, Navigation Sidebar, and Administrative Roster Register.</p>
-              </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={secLoading}
-              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 select-none"
-            >
-              <Key className="w-3.5 h-3.5 shrink-0" />
-              <span>{secLoading ? "Updating Configurations..." : "Commit Credentials Update"}</span>
-            </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                      New Secure Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Min 6 chars (Blank to keep)"
+                        className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 pr-10 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title={showNewPassword ? "Hide password" : "Show password"}
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-          </form>
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
+                    />
+                  </div>
+                </div>
+
+                {secError && (
+                  <div className="p-3 bg-red-50 text-red-800 border border-red-200 rounded text-xs flex items-start gap-1.5 animate-bounce-short">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{secError}</span>
+                  </div>
+                )}
+
+                {secSuccess && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{secSuccess}</span>
+                  </div>
+                )}
+
+                {successReportName && (
+                  <div className="p-4 bg-indigo-55 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-950 rounded-xl space-y-2 animate-fade-in text-xs shadow-inner">
+                    <div className="flex items-center gap-1.5 font-black text-indigo-950 dark:text-indigo-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                      <span>⚙️ SYSTEM PERSISTENCE STATUS REPORT:</span>
+                    </div>
+                    <div className="flex items-center gap-3 font-mono bg-white dark:bg-slate-950 p-2 rounded border border-indigo-100 dark:border-indigo-900">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">Previous Name</span>
+                        <span className="text-slate-500 line-through truncate block text-[11px] font-bold">{successReportName.prev}</span>
+                      </div>
+                      <span className="text-slate-400 font-bold shrink-0">→</span>
+                      <div>
+                        <span className="text-[9px] text-emerald-500 block uppercase font-bold text-emerald-600 dark:text-emerald-400">New Name</span>
+                        <span className="text-emerald-800 dark:text-emerald-400 truncate block text-[11.5px] font-black">{successReportName.curr}</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-indigo-650 dark:text-indigo-400 italic">✓ Display updated in global Header, Navigation Sidebar, and Administrative Roster Register.</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={secLoading}
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 select-none animate-fade-in"
+                >
+                  <Key className="w-3.5 h-3.5 shrink-0" />
+                  <span>{secLoading ? "Updating Credentials..." : "Commit Credentials Update"}</span>
+                </button>
+              </form>
+            </div>
+
+          </div>
 
           {/* Secure guidelines about rotating access key hashes and storage */}
           <div className="border-t border-slate-100 dark:border-slate-800 pt-5 text-xs text-slate-500 space-y-2 select-none">

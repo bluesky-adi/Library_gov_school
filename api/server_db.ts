@@ -27,10 +27,11 @@ const REQUESTS_FILE = path.join(LOCAL_DB_DIR, 'requests.json');
 const ISSUE_LOGS_FILE = path.join(LOCAL_DB_DIR, 'issue_logs.json');
 const AUDIT_LOGS_FILE = path.join(LOCAL_DB_DIR, 'audit_logs.json');
 const STUDY_MATERIALS_FILE = path.join(LOCAL_DB_DIR, 'study_materials.json');
+const FEEDBACK_FILE = path.join(LOCAL_DB_DIR, 'feedback.json');
 
 // Copy bundled databases to writable /tmp directory if running in a serverless environment
 function ensureWritableDatabaseFiles() {
-  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json'];
+  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json', 'feedback.json'];
   for (const filename of filesToCopy) {
     const destPath = path.join(LOCAL_DB_DIR, filename);
     const srcPath = path.join(BUNDLED_DB_DIR, filename);
@@ -116,6 +117,14 @@ try {
   }
 } catch (e) {
   console.warn("Operational database initialization notice (Study Materials):", e);
+}
+
+try {
+  if (!fs.existsSync(FEEDBACK_FILE) || fs.readFileSync(FEEDBACK_FILE, 'utf8').trim() === '') {
+    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Feedback):", e);
 }
 
 // Unified MongoDB / Mongoose Configurations
@@ -210,7 +219,22 @@ const LibrarianConfigSchema = new mongoose.Schema({
   configId: { type: String, required: true, unique: true },
   username: { type: String, required: true },
   name: { type: String, required: true },
-  passwordHash: { type: String, required: true }
+  passwordHash: { type: String, required: true },
+  designation: { type: String, default: "" },
+  biography: { type: String, default: "" },
+  profilePhoto: { type: String, default: "" }
+});
+
+const FeedbackSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  studentId: { type: String, required: true },
+  studentName: { type: String, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  type: { type: String, required: true, default: 'General' },
+  comment: { type: String, required: true },
+  reply: { type: String, default: "" },
+  status: { type: String, enum: ['Pending', 'Approved', 'Resolved', 'Spam'], default: 'Pending' },
+  createdAt: { type: String, required: true }
 });
 
 // Speed-optimizing production-ready database indexes
@@ -230,6 +254,9 @@ LibraryAuditLogSchema.index({ timestamp: -1 });
 LibrarianConfigSchema.index({ configId: 1 });
 StudyMaterialSchema.index({ id: 1 });
 StudyMaterialSchema.index({ expiryDate: 1 });
+FeedbackSchema.index({ id: 1 });
+FeedbackSchema.index({ status: 1 });
+FeedbackSchema.index({ createdAt: -1 });
 
 const MongoBook = (mongoose.models.Book || mongoose.model('Book', BookSchema)) as any;
 const MongoStudent = (mongoose.models.Student || mongoose.model('Student', StudentSchema)) as any;
@@ -238,6 +265,7 @@ const MongoBookIssueLog = (mongoose.models.BookIssueLog || mongoose.model('BookI
 const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model('LibraryAuditLog', LibraryAuditLogSchema)) as any;
 const MongoLibrarianConfig = (mongoose.models.LibrarianConfig || mongoose.model('LibrarianConfig', LibrarianConfigSchema)) as any;
 const MongoStudyMaterial = (mongoose.models.StudyMaterial || mongoose.model('StudyMaterial', StudyMaterialSchema)) as any;
+const MongoFeedback = (mongoose.models.Feedback || mongoose.model('Feedback', FeedbackSchema)) as any;
 
 let cachedConnection: Promise<any> | null = null;
 
@@ -331,6 +359,14 @@ export async function connectDatabase() {
     await cachedConnection;
     console.log("Successfully connected to MongoDB Atlas Cloud instances.");
     isConnectedToMongo = true;
+
+    // Try to safely drop any legacy unique index on rollNumber
+    try {
+      await MongoStudent.collection.dropIndex("rollNumber_1");
+      console.log("Successfully dropped legacy unique rollNumber index.");
+    } catch (e: any) {
+      console.log("Muted index drop trace (normal if index does not exist or was already dropped):", e.message);
+    }
 
     // Seed MongoDB from local files if empty
     const bookCount = await MongoBook.countDocuments();
@@ -485,7 +521,49 @@ export const dbService = {
       }
     }
 
-    return migratedBooks;
+    // Dynamic Self-Healing & Reconciliation of available copies
+    // availableCopies = totalCopies - (number of active un-returned loans in issueLogs for this bookId)
+    let logs: BookIssueLog[] = [];
+    try {
+      logs = await this.getIssueLogs();
+    } catch (err) {
+      console.error("Failed to load issue logs for books reconciliation:", err);
+    }
+    const activeLoans = logs.filter(l => l.status === 'Issued');
+    const activeCountMap = new Map<string, number>();
+    for (const loan of activeLoans) {
+      const bId = loan.bookId;
+      if (bId) {
+        activeCountMap.set(bId, (activeCountMap.get(bId) || 0) + 1);
+      }
+    }
+
+    let reconciled = false;
+    const reconciledBooks = migratedBooks.map(b => {
+      const activeCount = activeCountMap.get(b.bookId) || 0;
+      const expectedAvailable = Math.max(0, b.totalCopies - activeCount);
+      if (b.availableCopies !== expectedAvailable) {
+        b.availableCopies = expectedAvailable;
+        reconciled = true;
+      }
+      return b;
+    });
+
+    if (reconciled) {
+      if (isConnectedToMongo) {
+        const ops = reconciledBooks.map(b => ({
+          updateOne: {
+            filter: { bookId: b.bookId },
+            update: { $set: { availableCopies: b.availableCopies } }
+          }
+        }));
+        MongoBook.bulkWrite(ops).catch((e: any) => console.error("On-the-fly reconciliation background save failed:", e));
+      } else {
+        writeLocalFile(BOOKS_FILE, reconciledBooks);
+      }
+    }
+
+    return reconciledBooks;
   },
 
   async saveBook(book: Book, isEdit?: boolean): Promise<Book> {
@@ -613,6 +691,7 @@ export const dbService = {
     let studentsCount = 0;
     let requestsCount = 0;
     let issueLogsCount = 0;
+    let activeIssuedCount = 0;
 
     if (isConnectedToMongo) {
       try {
@@ -620,6 +699,7 @@ export const dbService = {
         studentsCount = await MongoStudent.countDocuments();
         requestsCount = await MongoBorrowRequest.countDocuments();
         issueLogsCount = await MongoBookIssueLog.countDocuments();
+        activeIssuedCount = await MongoBookIssueLog.countDocuments({ status: 'Issued' });
       } catch (err) {
         mongoConnected = false;
       }
@@ -630,7 +710,9 @@ export const dbService = {
       booksCount = readLocalFile<any>(BOOKS_FILE).length;
       studentsCount = readLocalFile<any>(STUDENTS_FILE).length;
       requestsCount = readLocalFile<any>(REQUESTS_FILE).length;
-      issueLogsCount = readLocalFile<any>(ISSUE_LOGS_FILE).length;
+      const logsList = readLocalFile<any>(ISSUE_LOGS_FILE);
+      issueLogsCount = logsList.length;
+      activeIssuedCount = logsList.filter((l: any) => l.status === 'Issued').length;
     }
 
     // Load last import stats
@@ -653,6 +735,7 @@ export const dbService = {
       studentsCount,
       requestsCount,
       issueLogsCount,
+      activeIssuedCount,
       lastImportDate,
       lastImportSize
     };
@@ -811,29 +894,52 @@ export const dbService = {
     }
   },
 
-  async saveStudentsBulk(students: Student[]): Promise<{ saved: Student[], skippedCount: number }> {
+  async saveStudentsBulk(students: Student[]): Promise<{ saved: Student[], skippedCount: number, updatedCount: number, errorCount: number, errors: string[] }> {
     const saved: Student[] = [];
     let skippedCount = 0;
-    const existingIds = new Set<string>((await this.getStudents()).map(s => s.studentId));
+    let updatedCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    const allStudents = await this.getStudents();
+    const studentMap = new Map<string, Student>();
+    for (const s of allStudents) {
+      if (s.studentId) {
+        studentMap.set(s.studentId.toUpperCase(), s);
+      }
+    }
 
     for (const stud of students) {
       if (!stud.name || !stud.rollNumber || !stud.class || !stud.section) {
-        continue; // skip incomplete rows gracefully
+        errorCount++;
+        errors.push(`Row missing required fields for student: ${stud.name || 'Unknown'}`);
+        continue;
       }
       stud.dob = stud.dob || "";
       const genId = `${stud.class.trim().toUpperCase()}-${stud.section.trim().toUpperCase()}-${stud.rollNumber}`;
       stud.studentId = genId;
 
-      if (existingIds.has(genId)) {
-        skippedCount++;
-        continue; // skip duplicates of existing student IDs
+      try {
+        if (studentMap.has(genId.toUpperCase())) {
+          // Update the existing student record instead of failing or throwing an error!
+          await this.saveStudent(stud, true);
+          updatedCount++;
+        } else {
+          const output = await this.saveStudent(stud, false);
+          saved.push(output);
+          studentMap.set(genId.toUpperCase(), output);
+        }
+      } catch (err: any) {
+        errorCount++;
+        errors.push(`Failed to import student "${stud.name}" (Roll: ${stud.rollNumber}, Class: ${stud.class}-${stud.section}): ${err.message}`);
+        console.error("Bulk save individual student record failure:", err);
       }
-      
-      existingIds.add(genId);
-      const output = await this.saveStudent(stud, false);
-      saved.push(output);
     }
-    return { saved, skippedCount };
+
+    // Clear caches
+    studentsCache = null;
+
+    return { saved, skippedCount, updatedCount, errorCount, errors };
   },
 
   // REQUESTS (BORROW)
@@ -993,7 +1099,10 @@ export const dbService = {
             configId: "primary", 
             username: config.username, 
             name: config.name, 
-            passwordHash: config.passwordHash 
+            passwordHash: config.passwordHash,
+            designation: config.designation || "",
+            biography: config.biography || "",
+            profilePhoto: config.profilePhoto || ""
           },
           { upsert: true, new: true }
         );
@@ -1036,6 +1145,45 @@ export const dbService = {
       const filtered = list.filter(m => m.id !== id);
       if (filtered.length !== list.length) {
         writeLocalFile(STUDY_MATERIALS_FILE, filtered);
+        return true;
+      }
+      return false;
+    }
+  },
+
+  async getFeedbacks(): Promise<any[]> {
+    if (isConnectedToMongo) {
+      return (await MongoFeedback.find().lean()) as any[];
+    }
+    return readLocalFile<any>(FEEDBACK_FILE);
+  },
+
+  async saveFeedback(feedback: any): Promise<any> {
+    if (isConnectedToMongo) {
+      await MongoFeedback.findOneAndUpdate({ id: feedback.id }, feedback, { upsert: true, new: true });
+      return feedback;
+    } else {
+      const list = readLocalFile<any>(FEEDBACK_FILE);
+      const idx = list.findIndex(f => f.id === feedback.id);
+      if (idx !== -1) {
+        list[idx] = feedback;
+      } else {
+        list.unshift(feedback);
+      }
+      writeLocalFile(FEEDBACK_FILE, list);
+      return feedback;
+    }
+  },
+
+  async deleteFeedback(id: string): Promise<boolean> {
+    if (isConnectedToMongo) {
+      const res = await MongoFeedback.deleteOne({ id });
+      return res.deletedCount > 0;
+    } else {
+      const list = readLocalFile<any>(FEEDBACK_FILE);
+      const filtered = list.filter(f => f.id !== id);
+      if (filtered.length !== list.length) {
+        writeLocalFile(FEEDBACK_FILE, filtered);
         return true;
       }
       return false;

@@ -359,7 +359,7 @@ export const StudentModel = mongoose.model('Student', StudentSchema);`}
                   <div className="p-2.5 bg-white dark:bg-slate-900 border rounded font-mono">
                     <span className="font-bold text-[10px] text-slate-500 block uppercase">1. SECURE LIBRARIAN USER</span>
                     <span className="block mt-1">Username: <b className="text-slate-900 dark:text-white select-all">sk_roy_ramdiri_librarian</b></span>
-                    <span className="block">Password: <b className="text-slate-900 dark:text-white select-all">RamdiriSecurePass@2026!</b></span>
+                    <span className="block">Password: <span className="text-slate-500 italic">Managed securely via environment variables (refer to .env.example)</span></span>
                   </div>
                   <div className="p-2.5 bg-white dark:bg-slate-900 border rounded font-mono">
                     <span className="font-bold text-[10px] text-slate-500 block uppercase">2. SEED STUDENT USER</span>

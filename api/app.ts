@@ -12,8 +12,83 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { connectDatabase, dbService } from './server_db.js';
 import { Book, Student, BorrowRequest, BookIssueLog } from '../src/types.js';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
+
+let aiClient: any = null;
+function getGeminiClient() {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY environment variable is not defined.");
+      return null;
+    }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return aiClient;
+}
+
+async function classifyFeedbackContent(comment: string): Promise<{ classification: 'CONSTRUCTIVE_CRITICISM' | 'SPAM_OR_ABUSE'; reason: string }> {
+  const client = getGeminiClient();
+  if (!client) {
+    console.warn("Gemini client not initialized, performing basic keyword safety checks.");
+    return fallbackContentClassification(comment);
+  }
+  try {
+    const response = await client.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Analyze this student feedback/review comment: "${comment}"`,
+      config: {
+        systemInstruction: "You are an AI content moderator for a school library portal (PM SHRI Senior Secondary School, Begusarai, Bihar). Classify the comment as either 'CONSTRUCTIVE_CRITICISM' (clean, helpful, suggestions, feedback, complaints, or constructive critical remarks) or 'SPAM_OR_ABUSE' (profanity, vulgarity, advertisements, irrelevant nonsense words, offensive slurs, gibberish, or harassment). Always allow constructive feedback even if it is negative about library services. Be lenient with student language but strict with actual spam/abuse.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            classification: {
+              type: Type.STRING,
+              description: "Must be exactly 'CONSTRUCTIVE_CRITICISM' or 'SPAM_OR_ABUSE'"
+            },
+            reason: {
+              type: Type.STRING,
+              description: "Brief reason."
+            }
+          },
+          required: ["classification", "reason"]
+        }
+      }
+    });
+
+    const text = response.text?.trim() || "";
+    const result = JSON.parse(text);
+    if (result.classification === 'CONSTRUCTIVE_CRITICISM' || result.classification === 'SPAM_OR_ABUSE') {
+      return result;
+    }
+    return { classification: 'CONSTRUCTIVE_CRITICISM', reason: "Failed valid classification enum." };
+  } catch (error: any) {
+    console.error("Gemini classification failed:", error.message);
+    return fallbackContentClassification(comment);
+  }
+}
+
+function fallbackContentClassification(comment: string): { classification: 'CONSTRUCTIVE_CRITICISM' | 'SPAM_OR_ABUSE'; reason: string } {
+  const badWords = [
+    "abuse", "idiot", "stupid", "bastard", "fucker", "asshole", "bitch", "shit", "fuck", "cheap sex", "viagra", "casino", "free money", "earn fast"
+  ];
+  const lower = comment.toLowerCase();
+  const hasBadWord = badWords.some(w => lower.includes(w));
+  if (hasBadWord) {
+    return { classification: 'SPAM_OR_ABUSE', reason: "Triggered fallback spam/abuse keyword block list." };
+  }
+  return { classification: 'CONSTRUCTIVE_CRITICISM', reason: "Cleared fallback safety scanner." };
+}
 
 const app = express();
 
@@ -44,7 +119,10 @@ try {
     const initialConfig = {
       username: "ramdiri_admin_roy",
       name: "S. K. Roy (Chief Librarian)",
-      passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
+      passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
+      designation: "Senior Chief Librarian",
+      biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+      profilePhoto: ""
     };
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(initialConfig, null, 2));
     memoryLibrarianConfig = initialConfig;
@@ -57,7 +135,10 @@ async function getLibrarianConfig(): Promise<any> {
   const fallback = {
     username: "ramdiri_admin_roy",
     name: "S. K. Roy (Chief Librarian)",
-    passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10)
+    passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
+    designation: "Senior Chief Librarian",
+    biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+    profilePhoto: ""
   };
 
   const hasMongoUri = !!process.env.MONGODB_URI && 
@@ -376,6 +457,7 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, as
   }
 
   const updatedConfig = {
+    ...activeConfig,
     username: updatedUsername,
     name: updatedName,
     passwordHash: updatedPasswordHash
@@ -404,6 +486,60 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, as
     name: updatedName,
     username: updatedUsername
   });
+});
+
+app.get('/api/librarian/profile', async (req, res) => {
+  try {
+    const config = await getLibrarianConfig();
+    res.json({
+      success: true,
+      name: config.name || "S. K. Roy (Chief Librarian)",
+      designation: config.designation || "Senior Chief Librarian",
+      biography: config.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+      profilePhoto: config.profilePhoto || ""
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (req, res) => {
+  const { name, designation, biography, profilePhoto } = req.body;
+  try {
+    const config = await getLibrarianConfig();
+    const updatedConfig = {
+      ...config,
+      name: (name !== undefined) ? name.trim() : (config.name || "S. K. Roy (Chief Librarian)"),
+      designation: (designation !== undefined) ? designation.trim() : (config.designation || "Senior Chief Librarian"),
+      biography: (biography !== undefined) ? biography.trim() : (config.biography || ""),
+      profilePhoto: (profilePhoto !== undefined) ? profilePhoto.trim() : (config.profilePhoto || "")
+    };
+
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
+    memoryLibrarianConfig = updatedConfig;
+    await dbService.saveLibrarianConfigDb(updatedConfig);
+
+    // If name changed, we can return a new token too so headers keep working smoothly
+    const newToken = jwt.sign(
+      { role: 'Librarian', username: updatedConfig.username, name: updatedConfig.name },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.json({
+      success: true,
+      message: "Librarian profile updated successfully",
+      token: newToken,
+      profile: {
+        name: updatedConfig.name,
+        designation: updatedConfig.designation,
+        biography: updatedConfig.biography,
+        profilePhoto: updatedConfig.profilePhoto
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 
@@ -448,6 +584,30 @@ app.get('/api/database/stats', authenticateToken, requireLibrarian, async (req, 
   try {
     const stats = await dbService.getDbStats();
     res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/public-stats', async (req, res) => {
+  try {
+    const stats = await dbService.getDbStats();
+    const materials = await dbService.getStudyMaterials();
+    const feedbacks = await dbService.getFeedbacks();
+    const approvedFeedbacks = feedbacks.filter(f => f.status === 'Approved');
+    const totalFeedbackCount = approvedFeedbacks.length;
+    const avgRating = totalFeedbackCount > 0 
+      ? Number((approvedFeedbacks.reduce((sum, f) => sum + f.rating, 0) / totalFeedbackCount).toFixed(1))
+      : 0.0;
+
+    res.json({
+      booksCount: stats.booksCount,
+      studentsCount: stats.studentsCount,
+      digitalMaterialsCount: materials.length,
+      activeIssuedCount: stats.activeIssuedCount || 0,
+      avgRating,
+      totalFeedbackCount
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -544,9 +704,17 @@ app.post('/api/students/bulk', authenticateToken, requireLibrarian, async (req, 
     if (!Array.isArray(records)) {
       return res.status(400).json({ error: "Invalid student bulk upload content." });
     }
-    const { saved, skippedCount } = await dbService.saveStudentsBulk(records);
-    await addAuditLog(req, 'Student Added', `Bulk imported list of ${saved.length} students from enrollment Excel sheet. Skipped ${skippedCount} duplicate student rolls.`);
-    res.json({ success: true, count: saved.length, skippedCount, records: saved });
+    const { saved, skippedCount, updatedCount, errorCount, errors } = await dbService.saveStudentsBulk(records);
+    await addAuditLog(req, 'Student Added', `Bulk imported list of students from enrollment Excel sheet. Saved: ${saved.length}, Updated: ${updatedCount}, Skipped: ${skippedCount}, Failed: ${errorCount}.`);
+    res.json({ 
+      success: true, 
+      count: saved.length, 
+      skippedCount, 
+      updatedCount, 
+      errorCount, 
+      errors, 
+      records: saved 
+    });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -863,22 +1031,39 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
 
 
 // ---- STUDY MATERIALS ENDPOINTS ----
-app.get('/api/study-materials', authenticateToken, async (req, res) => {
+app.get('/api/study-materials', async (req, res) => {
   try {
     const materials = await dbService.getStudyMaterials();
-    const reqUser = (req as any).user;
+    const todayStr = new Date().toISOString().split('T')[0];
     
-    if (reqUser?.role === 'Student') {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const filtered = materials.filter(m => {
-        const isNotExpired = m.expiryDate >= todayStr;
-        const isVisible = m.visibleTo === 'All' || String(m.visibleTo) === String(reqUser.class);
-        return isNotExpired && isVisible;
-      });
-      return res.json(filtered);
+    // Check if there is an optional authorization header to see class-level restrictions
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    let reqUser: any = null;
+    
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || "ramdiri-secret-key-1092-2025";
+        reqUser = jwt.verify(token, JWT_SECRET);
+      } catch (e) {
+        // Ignore invalid token, treat as guest
+      }
     }
     
-    res.json(materials);
+    // If it's a librarian, return all
+    if (reqUser?.role === 'Librarian') {
+      return res.json(materials);
+    }
+    
+    // For students and guest viewers, return only non-expired study materials
+    const filtered = materials.filter(m => {
+      const isNotExpired = !m.expiryDate || m.expiryDate >= todayStr;
+      const isVisible = !m.visibleTo || m.visibleTo === 'All' || (reqUser?.role === 'Student' && String(m.visibleTo) === String(reqUser.class));
+      return isNotExpired && isVisible;
+    });
+    
+    res.json(filtered);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -913,6 +1098,183 @@ app.delete('/api/study-materials/:id', authenticateToken, requireLibrarian, asyn
       return res.status(404).json({ error: "Study material record not found." });
     }
     await addAuditLog(req, 'Book Deleted', `Deleted study material ID: ${req.params.id}`);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ---- FEEDBACK ENDPOINTS ----
+// 1. Submit feedback (Students only)
+app.post('/api/feedback', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+    const { rating, type, comment } = req.body;
+    if (!rating || !type || !comment) {
+      return res.status(400).json({ error: "Missing required feedback fields. Rating, Type, and Comment are mandatory." });
+    }
+    const rateNum = Number(rating);
+    if (isNaN(rateNum) || rateNum < 1 || rateNum > 5) {
+      return res.status(400).json({ error: "Invalid rating value. Must be an integer between 1 and 5." });
+    }
+
+    const studentId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
+    const allFeedbacks = await dbService.getFeedbacks();
+    const existingFeedback = allFeedbacks.find(f => f.studentId === studentId);
+
+    // AI content moderation
+    const moderation = await classifyFeedbackContent(comment);
+    const isSpam = moderation.classification === 'SPAM_OR_ABUSE';
+    const computedStatus = isSpam ? 'Spam' : 'Approved';
+
+    let savedFeedback: any;
+
+    if (existingFeedback) {
+      // Update existing feedback (editable later)
+      existingFeedback.rating = rateNum;
+      existingFeedback.type = type;
+      existingFeedback.comment = comment;
+      existingFeedback.status = computedStatus;
+      existingFeedback.createdAt = new Date().toISOString();
+      
+      savedFeedback = await dbService.saveFeedback(existingFeedback);
+      console.log(`Updated feedback for studentId ${studentId}. Moderation result: ${moderation.classification}. Status set to: ${computedStatus}`);
+    } else {
+      // Submit brand new feedback
+      const feedbackId = `FB-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
+      const newFeedback = {
+        id: feedbackId,
+        studentId,
+        studentName: reqUser.name || "Student",
+        rating: rateNum,
+        type,
+        comment,
+        reply: "",
+        status: computedStatus,
+        createdAt: new Date().toISOString()
+      };
+
+      savedFeedback = await dbService.saveFeedback(newFeedback);
+      console.log(`Created new feedback for studentId ${studentId}. Moderation result: ${moderation.classification}. Status set to: ${computedStatus}`);
+    }
+
+    res.status(201).json({
+      ...savedFeedback,
+      moderation: {
+        classification: moderation.classification,
+        reason: moderation.reason,
+        isSpam
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 1b. Get current student's own review
+app.get('/api/feedback/my-review', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+    const studentId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
+    const all = await dbService.getFeedbacks();
+    const found = all.find(f => f.studentId === studentId);
+    res.json({ feedback: found || null });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Get public feedback (Anyone, including guests)
+app.get('/api/feedback/public', async (req, res) => {
+  try {
+    const all = await dbService.getFeedbacks();
+    const approved = all.filter(f => f.status === 'Approved');
+    
+    // Sort by newest first
+    approved.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const totalCount = approved.length;
+    const avgRating = totalCount > 0 
+      ? Number((approved.reduce((sum, f) => sum + f.rating, 0) / totalCount).toFixed(1))
+      : 5.0;
+
+    res.json({
+      feedbacks: approved,
+      avgRating,
+      totalCount
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Get all feedback (Librarians only)
+app.get('/api/feedback/all', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const all = await dbService.getFeedbacks();
+    all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(all);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Update feedback status (Librarians only)
+app.post('/api/feedback/:id/status', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['Pending', 'Approved', 'Resolved', 'Spam'].includes(status)) {
+      return res.status(400).json({ error: "Invalid feedback status option." });
+    }
+    const all = await dbService.getFeedbacks();
+    const feedback = all.find(f => f.id === req.params.id);
+    if (!feedback) {
+      return res.status(404).json({ error: "Feedback record not discovered." });
+    }
+
+    feedback.status = status;
+    const saved = await dbService.saveFeedback(feedback);
+    await addAuditLog(req, 'Student Edited', `Feedback ID: ${feedback.id} status set to ${status}`);
+    res.json(saved);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Reply to feedback (Librarians only)
+app.post('/api/feedback/:id/reply', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { reply } = req.body;
+    const all = await dbService.getFeedbacks();
+    const feedback = all.find(f => f.id === req.params.id);
+    if (!feedback) {
+      return res.status(404).json({ error: "Feedback record not discovered." });
+    }
+
+    feedback.reply = reply || "";
+    const saved = await dbService.saveFeedback(feedback);
+    await addAuditLog(req, 'Student Edited', `Replied to Feedback ID: ${feedback.id}`);
+    res.json(saved);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 6. Delete feedback completely (Librarians only)
+app.delete('/api/feedback/:id', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const success = await dbService.deleteFeedback(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: "Feedback record not found." });
+    }
+    await addAuditLog(req, 'Student Deleted', `Deleted feedback ID: ${req.params.id}`);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

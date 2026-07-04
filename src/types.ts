@@ -89,6 +89,18 @@ export interface LibraryAuditLog {
   details: string;
 }
 
+export interface Feedback {
+  id: string;
+  studentId: string;
+  studentName: string;
+  rating: number;
+  type: 'General' | 'Bug' | 'Suggestion' | 'Feature Request';
+  comment: string;
+  reply?: string;
+  status: 'Pending' | 'Approved' | 'Resolved' | 'Spam';
+  createdAt: string;
+}
+
 export interface AppState {
   books: Book[];
   students: Student[];
@@ -96,6 +108,7 @@ export interface AppState {
   issueLogs: BookIssueLog[];
   studyMaterials?: StudyMaterial[];
   auditLogs?: LibraryAuditLog[];
+  feedbacks?: Feedback[];
   currentRole: UserRole | null;
   loggedInStudent?: Student;
 }

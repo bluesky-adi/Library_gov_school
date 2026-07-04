@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import PublicHome from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
-import PRD_Architecture from './components/PRD_Architecture';
 import { translations } from './localization';
 import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
@@ -40,63 +39,74 @@ export default function App() {
     type: 'books' | 'students';
   }>({ status: 'idle', processed: 0, total: 0, type: 'books' });
 
+  const isSyncingRef = useRef(false);
+
   const t = translations[currentLang];
 
   // Refresh all system metrics and records from servers safely
   const refreshData = async () => {
-    const handleSafeFetch = async (url: string, init?: RequestInit) => {
-      try {
-        const res = await fetch(url, init);
-        if (res.ok) {
-          return await res.json();
-        } else {
-          console.warn(`Server responded with safe-fetch warning for ${url}: status ${res.status}`);
-        }
-      } catch (err: any) {
-        console.warn(`Database sync offline transition for ${url}: ${err?.message || err}`);
-      }
-      return null;
-    };
-
-    const dataBooks = await handleSafeFetch('/api/books');
-    if (dataBooks) setBooks(dataBooks);
-
-    const token = localStorage.getItem("ramdiri_library_token");
-    if (!token) return;
-
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     try {
-      const payloadStr = atob(token.split('.')[1]);
-      const payload = JSON.parse(payloadStr);
+      const handleSafeFetch = async (url: string, init?: RequestInit) => {
+        try {
+          const res = await fetch(url, init);
+          if (res.ok) {
+            return await res.json();
+          } else {
+            console.warn(`Server responded with safe-fetch warning for ${url}: status ${res.status}`);
+          }
+        } catch (err: any) {
+          console.warn(`Database sync offline transition for ${url}: ${err?.message || err}`);
+        }
+        return null;
+      };
 
-      const headers = { 'Authorization': `Bearer ${token}` };
+      const dataBooks = await handleSafeFetch('/api/books');
+      if (dataBooks) setBooks(dataBooks);
 
-      if (payload.role === 'Librarian') {
-        const [studentsData, requestsData, logsData, auditData, materialsData] = await Promise.all([
-          handleSafeFetch('/api/students', { headers }),
-          handleSafeFetch('/api/requests', { headers }),
-          handleSafeFetch('/api/issue-logs', { headers }),
-          handleSafeFetch('/api/audit-logs', { headers }),
-          handleSafeFetch('/api/study-materials', { headers })
-        ]);
+      const dataMaterials = await handleSafeFetch('/api/study-materials');
+      if (dataMaterials) setStudyMaterials(dataMaterials);
 
-        if (studentsData) setStudents(studentsData);
-        if (requestsData) setRequests(requestsData);
-        if (logsData) setIssueLogs(logsData);
-        if (auditData) setAuditLogs(auditData);
-        if (materialsData) setStudyMaterials(materialsData);
-      } else if (payload.role === 'Student') {
-        const [requestsData, logsData, materialsData] = await Promise.all([
-          handleSafeFetch('/api/requests', { headers }),
-          handleSafeFetch('/api/issue-logs', { headers }),
-          handleSafeFetch('/api/study-materials', { headers })
-        ]);
+      const token = localStorage.getItem("ramdiri_library_token");
+      if (!token) return;
 
-        if (requestsData) setRequests(requestsData);
-        if (logsData) setIssueLogs(logsData);
-        if (materialsData) setStudyMaterials(materialsData);
+      try {
+        const payloadStr = atob(token.split('.')[1]);
+        const payload = JSON.parse(payloadStr);
+
+        const headers = { 'Authorization': `Bearer ${token}` };
+
+        if (payload.role === 'Librarian') {
+          const [studentsData, requestsData, logsData, auditData, materialsData] = await Promise.all([
+            handleSafeFetch('/api/students', { headers }),
+            handleSafeFetch('/api/requests', { headers }),
+            handleSafeFetch('/api/issue-logs', { headers }),
+            handleSafeFetch('/api/audit-logs', { headers }),
+            handleSafeFetch('/api/study-materials', { headers })
+          ]);
+
+          if (studentsData) setStudents(studentsData);
+          if (requestsData) setRequests(requestsData);
+          if (logsData) setIssueLogs(logsData);
+          if (auditData) setAuditLogs(auditData);
+          if (materialsData) setStudyMaterials(materialsData);
+        } else if (payload.role === 'Student') {
+          const [requestsData, logsData, materialsData] = await Promise.all([
+            handleSafeFetch('/api/requests', { headers }),
+            handleSafeFetch('/api/issue-logs', { headers }),
+            handleSafeFetch('/api/study-materials', { headers })
+          ]);
+
+          if (requestsData) setRequests(requestsData);
+          if (logsData) setIssueLogs(logsData);
+          if (materialsData) setStudyMaterials(materialsData);
+        }
+      } catch (e: any) {
+        console.warn("Secure metadata log synchronization gracefully deferred:", e?.message || e);
       }
-    } catch (e: any) {
-      console.warn("Secure metadata log synchronization gracefully deferred:", e?.message || e);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
@@ -440,6 +450,9 @@ export default function App() {
 
     let totalSaved = 0;
     let totalSkipped = 0;
+    let totalUpdated = 0;
+    let totalErrors = 0;
+    const allErrors: string[] = [];
 
     try {
       for (let i = 0; i < total; i += chunkSize) {
@@ -459,6 +472,11 @@ export default function App() {
         const data = await resp.json();
         totalSaved += data.count || 0;
         totalSkipped += data.skippedCount || 0;
+        totalUpdated += data.updatedCount || 0;
+        totalErrors += data.errorCount || 0;
+        if (data.errors && Array.isArray(data.errors)) {
+          allErrors.push(...data.errors);
+        }
 
         setImportProgress(prev => ({
           ...prev,
@@ -467,8 +485,11 @@ export default function App() {
         await new Promise(resolve => setTimeout(resolve, 60));
       }
       await refreshData();
-      if (totalSkipped > 0) {
-        alert(`Student enrollment import finished:\n- ${totalSaved} students enrolled/registered.\n- ${totalSkipped} duplicate student records (same Class, Section, and Roll) were skipped.`);
+      
+      if (totalErrors > 0) {
+        alert(`Student enrollment import finished with warnings:\n- ${totalSaved} new students enrolled.\n- ${totalUpdated} existing students updated.\n- ${totalSkipped} duplicates skipped.\n- ${totalErrors} records failed.\n\nFirst 5 Errors:\n${allErrors.slice(0, 5).join('\n')}`);
+      } else if (totalSkipped > 0 || totalUpdated > 0) {
+        alert(`Student enrollment import finished:\n- ${totalSaved} new students enrolled.\n- ${totalUpdated} existing students updated.\n- ${totalSkipped} duplicate student records (same Class, Section, and Roll) were skipped.`);
       } else {
         alert(`Enrolled all ${totalSaved} students in the school library login list successfully!`);
       }
@@ -1087,6 +1108,7 @@ export default function App() {
                 currentLang={currentLang}
                 books={books}
                 students={students}
+                studyMaterials={studyMaterials}
                 onLoginSuccess={handleLoginSuccess}
                 isLoggedIn={loggedInRole !== 'Guest'}
                 loggedInUserLabel={loggedInName}

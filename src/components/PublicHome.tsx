@@ -8,7 +8,7 @@ import { Book, Student } from '../types';
 import { 
   BookOpen, Award, GraduationCap, MapPin, 
   Phone, Mail, Calendar, Key, Shield, User, X, CheckCircle, AlertCircle, Eye, EyeOff,
-  Search, LayoutGrid, Table, Info
+  Search, LayoutGrid, Table, Info, FileText, MessageSquare, Download, Star, Send, ChevronDown
 } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
@@ -81,6 +81,7 @@ interface PublicHomeProps {
   currentLang: 'EN' | 'HI';
   books: Book[];
   students: Student[];
+  studyMaterials?: any[];
   onLoginSuccess: (role: 'Student' | 'Librarian', student?: Student) => void;
   isLoggedIn: boolean;
   loggedInUserLabel: string;
@@ -92,12 +93,162 @@ export default function PublicHome({
   currentLang,
   books,
   students,
+  studyMaterials = [],
   onLoginSuccess,
   isLoggedIn,
   loggedInUserLabel,
   onLogout,
   onNavigatePortal
 }: PublicHomeProps) {
+  // New Layout & Feature States
+  const [homeActiveTab, setHomeActiveTab] = useState<'catalog' | 'resources' | 'feedback'>('catalog');
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // Live Stats
+  const [liveStats, setLiveStats] = useState({
+    booksCount: books.length,
+    studentsCount: students.length,
+    digitalMaterialsCount: studyMaterials.length,
+    activeIssuedCount: 0,
+    avgRating: 0.0,
+    totalFeedbackCount: 0
+  });
+
+  // Feedback states
+  const [publicFeedbacks, setPublicFeedbacks] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState<boolean>(false);
+  const [feedbackSubmitLoading, setFeedbackSubmitLoading] = useState<boolean>(false);
+  const [feedbackSuccessMsg, setFeedbackSuccessMsg] = useState<string | null>(null);
+  const [newFeedbackForm, setNewFeedbackForm] = useState({
+    rating: 5,
+    type: 'General',
+    comment: ''
+  });
+  const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState<number>(0);
+  const [existingUserReview, setExistingUserReview] = useState<any | null>(null);
+
+  const [librarianProfile, setLibrarianProfile] = useState({
+    name: "S. K. Roy (Chief Librarian)",
+    designation: "Senior Chief Librarian",
+    biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+    profilePhoto: ""
+  });
+
+  useEffect(() => {
+    fetch('/api/librarian/profile')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          setLibrarianProfile({
+            name: data.name || "S. K. Roy (Chief Librarian)",
+            designation: data.designation || "Senior Chief Librarian",
+            biography: data.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+            profilePhoto: data.profilePhoto || ""
+          });
+        }
+      })
+      .catch(err => console.warn("Could not load librarian profile:", err));
+  }, []);
+
+  useEffect(() => {
+    // Fetch live public statistics
+    fetch('/api/public-stats')
+      .then(res => res.json())
+      .then(data => {
+        if (data && !data.error) {
+          setLiveStats({
+            booksCount: typeof data.booksCount === 'number' ? data.booksCount : books.length,
+            studentsCount: typeof data.studentsCount === 'number' ? data.studentsCount : students.length,
+            digitalMaterialsCount: typeof data.digitalMaterialsCount === 'number' ? data.digitalMaterialsCount : studyMaterials.length,
+            activeIssuedCount: typeof data.activeIssuedCount === 'number' ? data.activeIssuedCount : 0,
+            avgRating: typeof data.avgRating === 'number' ? data.avgRating : 0.0,
+            totalFeedbackCount: typeof data.totalFeedbackCount === 'number' ? data.totalFeedbackCount : 0
+          });
+        }
+      })
+      .catch(err => console.warn("Could not load public statistics:", err));
+
+    // Fetch public feedbacks
+    setFeedbackLoading(true);
+    fetch('/api/feedback/public')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.feedbacks) {
+          setPublicFeedbacks(data.feedbacks);
+        }
+      })
+      .catch(err => console.warn("Could not load public feedbacks:", err))
+      .finally(() => setFeedbackLoading(false));
+  }, [books.length, students.length, studyMaterials.length, feedbackRefreshTrigger]);
+
+  useEffect(() => {
+    if (isLoggedIn && homeActiveTab === 'feedback') {
+      const token = localStorage.getItem("ramdiri_library_token");
+      if (token) {
+        fetch('/api/feedback/my-review', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.feedback) {
+              setExistingUserReview(data.feedback);
+              setNewFeedbackForm({
+                rating: data.feedback.rating || 5,
+                type: data.feedback.type || 'General',
+                comment: data.feedback.comment || ''
+              });
+            } else {
+              setExistingUserReview(null);
+            }
+          })
+          .catch(err => console.warn("Could not fetch current student's review:", err));
+      }
+    } else if (!isLoggedIn) {
+      setExistingUserReview(null);
+    }
+  }, [isLoggedIn, homeActiveTab, feedbackRefreshTrigger]);
+
+  const handleFeedbackSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFeedbackForm.comment.trim()) {
+      alert(currentLang === 'EN' ? "Please write some feedback comment." : "कृपया अपनी प्रतिक्रिया या टिप्पणी लिखें।");
+      return;
+    }
+    setFeedbackSubmitLoading(true);
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(newFeedbackForm)
+    })
+      .then(res => res.json().then(data => ({ status: res.status, data })))
+      .then(({ status, data }) => {
+        if (status === 201) {
+          const wasSpam = data.moderation?.isSpam;
+          const msg = wasSpam
+            ? (currentLang === 'EN'
+                ? "Review saved. Note: Our AI filter flagged the text as potential spam/abusive language. It will require physical librarian moderation before appearing publicly."
+                : "आपकी प्रतिक्रिया सुरक्षित की गई। नोट: हमारे AI फ़िल्टर ने इस पाठ को संभावित स्पैम या अनुचित भाषा के रूप में चिह्नित किया है। यह सार्वजनिक होने से पहले पुस्तकालयाध्यक्ष द्वारा समीक्षा के लिए लंबित रहेगा।")
+            : (currentLang === 'EN'
+                ? "Your verified review and rating was saved successfully!"
+                : "आपकी सत्यापित प्रतिक्रिया और रेटिंग सफलतापूर्वक सहेज ली गई है!");
+          
+          setFeedbackSuccessMsg(msg);
+          setFeedbackRefreshTrigger(prev => prev + 1);
+          setTimeout(() => setFeedbackSuccessMsg(null), 10000);
+        } else {
+          alert(data.error || "Could not submit feedback.");
+        }
+      })
+      .catch(() => alert("Network error submitting feedback."))
+      .finally(() => setFeedbackSubmitLoading(false));
+  };
+
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [loginRole, setLoginRole] = useState<'Student' | 'Librarian'>('Student');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -264,7 +415,16 @@ export default function PublicHome({
       aboutContent: "PM SHRI Ramdiri +2 High School, located in the historical district of Begusarai, Bihar, is a state-supported senior secondary high school selected under the PM SHRI initiative. Developed by the Ministry of Education, PM SHRI schools showcase leadership, high educational standards, and modern digital tooling like this automated Library Portal to foster reading, academic focus, and student growth.",
       locationText: "Ramdiri Village, Begusarai District, Bihar - 851129",
       contactPhone: "+91-6243-245102 (BSEB Begusarai Office)",
-      contactMail: "library@ramdirihighschool.bihar.gov.in"
+      statTotalBooks: "Total Books",
+      statIssuedBooks: "Issued Books",
+      statRegisteredStudents: "Registered Students",
+      statDigitalResources: "Digital Resources",
+      statCommunityRating: "Community Rating",
+      unitUnits: "units",
+      unitActive: "active",
+      unitScholars: "scholars",
+      unitPdfs: "PDFs",
+      unitReviews: "reviews"
     },
     HI: {
       dlmsTitle: "डिजिटल पुस्तकालय प्रबंधन प्रणाली",
@@ -293,7 +453,16 @@ export default function PublicHome({
       aboutContent: "पीएम श्री रामदीरी +2 उच्च विद्यालय, बेगूसराय, बिहार के ऐतिहासिक क्षेत्र में स्थित एक प्रमुख माध्यमिक एवं उच्चतर माध्यमिक विद्यालय है, जिसे भारत सरकार की पीएम श्री (PM SHRI) योजना के तहत चयनित किया गया है। पीएम श्री पहल के तहत उन्नत और उत्कृष्ट शैक्षिक मानकों का प्रदर्शन करते हुए, यह स्वचालित डिजिटल पुस्तकालय पोर्टल छात्रों में अध्ययनशीलता को बढ़ावा देने और सुगम पुस्तकालय संचालन को सुनिश्चित करने के लिए कार्यरत है।",
       locationText: "ग्राम - रामदीरी, बेगूसराय जिला, बिहार - 851129",
       contactPhone: "+91-6243-245102 (बेगूसराय शिक्षा कार्यालय)",
-      contactMail: "library@ramdirihighschool.bihar.gov.in"
+      statTotalBooks: "कुल पुस्तकें",
+      statIssuedBooks: "जारी पुस्तकें",
+      statRegisteredStudents: "पंजीकृत छात्र",
+      statDigitalResources: "डिजिटल संसाधन",
+      statCommunityRating: "सामुदायिक रेटिंग",
+      unitUnits: "इकाइयां",
+      unitActive: "सक्रिय",
+      unitScholars: "छात्र",
+      unitPdfs: "पीडीएफ",
+      unitReviews: "समीक्षाएं"
     }
   }[currentLang];
 
@@ -400,7 +569,7 @@ export default function PublicHome({
         
         <div className="flex items-center gap-4 text-center md:text-left flex-col md:flex-row">
           {/* Circular School Seal */}
-          <div className="w-16 h-16 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-800 font-extrabold shadow-inner shrink-0 select-none">
+          <div className="w-16 h-16 rounded-full bg-slate-105 border border-slate-300 flex items-center justify-center text-slate-800 font-extrabold shadow-inner shrink-0 select-none">
             <GraduationCap className="w-8 h-8 text-slate-700" />
           </div>
           <div>
@@ -456,40 +625,119 @@ export default function PublicHome({
         </div>
       </div>
 
-      {/* Hero Announcement Block */}
-      <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-6 sm:p-10 rounded-2xl shadow-md relative border border-slate-700">
-        <div className="max-w-2xl space-y-3 relative z-10">
-          <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block font-mono">★★ Begusarai District Scholars Portal ★★</span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Connecting Tradition with Technology
-          </h2>
-          <p className="text-slate-200 text-xs sm:text-sm leading-relaxed font-sans font-light">
-            {t.tagline}
-          </p>
-          <div className="pt-2 flex flex-wrap gap-3">
-            <a
-              href="#about-section"
-              className="px-4.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold rounded shadow transition-all"
-            >
-              Learn More
-            </a>
-            {!isLoggedIn && (
-              <button
-                onClick={() => {
-                  setAuthError(null);
-                  setShowLoginModal(true);
-                }}
-                className="px-4.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-955 text-xs font-extrabold rounded shadow tracking-wide animate-pulse"
-              >
-                Access Account Now
-              </button>
-            )}
+      {/* Dynamic Real-Time Statistics Panel */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statTotalBooks}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{liveStats.booksCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitUnits}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statIssuedBooks}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono">{liveStats.activeIssuedCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitActive}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statRegisteredStudents}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-emerald-650 dark:text-emerald-400 font-mono">{liveStats.studentsCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitScholars}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statDigitalResources}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-amber-600 font-mono">{liveStats.digitalMaterialsCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitPdfs}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs col-span-2 md:col-span-1">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statCommunityRating}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-amber-500 font-mono">★ {liveStats.avgRating}</span>
+            <span className="text-[10px] text-slate-500">({liveStats.totalFeedbackCount} {t.unitReviews})</span>
           </div>
         </div>
       </div>
 
+      {/* Main Feature Tabs Switcher */}
+      <div className="flex border-b-2 border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto pb-0.5 scrollbar-thin">
+        <button
+          onClick={() => setHomeActiveTab('catalog')}
+          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-4 transition-all shrink-0 flex items-center gap-2 ${
+            homeActiveTab === 'catalog'
+              ? 'border-indigo-600 text-indigo-650 dark:text-indigo-400 font-black'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>{currentLang === 'EN' ? "Book Catalog" : "पुस्तक सूची (Catalog)"}</span>
+        </button>
+        <button
+          onClick={() => setHomeActiveTab('resources')}
+          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-4 transition-all shrink-0 flex items-center gap-2 ${
+            homeActiveTab === 'resources'
+              ? 'border-indigo-600 text-indigo-650 dark:text-indigo-400 font-black'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>{currentLang === 'EN' ? "Digital Notes & Syllabus" : "डिजिटल संसाधन (Syllabus)"}</span>
+        </button>
+        <button
+          onClick={() => setHomeActiveTab('feedback')}
+          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-4 transition-all shrink-0 flex items-center gap-2 ${
+            homeActiveTab === 'feedback'
+              ? 'border-indigo-600 text-indigo-650 dark:text-indigo-400 font-black'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>{currentLang === 'EN' ? "Community Reviews" : "सुझाव और फीडबैक"}</span>
+        </button>
+      </div>
+
+      {/* Hero Announcement Block - Secondary teaser */}
+      {homeActiveTab === 'catalog' && (
+        <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-6 sm:p-10 rounded-2xl shadow-md relative border border-slate-700">
+          <div className="max-w-2xl space-y-3 relative z-10">
+            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block font-mono">★★ Begusarai District Scholars Portal ★★</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Connecting Tradition with Technology
+            </h2>
+            <p className="text-slate-200 text-xs sm:text-sm leading-relaxed font-sans font-light">
+              {t.tagline}
+            </p>
+            <div className="pt-2 flex flex-wrap gap-3">
+              <a
+                href="#about-section"
+                className="px-4.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold rounded shadow transition-all"
+              >
+                Learn More
+              </a>
+              {!isLoggedIn && (
+                <button
+                  onClick={() => {
+                    setAuthError(null);
+                    setShowLoginModal(true);
+                  }}
+                  className="px-4.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-955 text-xs font-extrabold rounded shadow tracking-wide animate-pulse"
+                >
+                  Access Account Now
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unified Book Catalog Register & Search Engine */}
-      <div className="space-y-5 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm">
+      {homeActiveTab === 'catalog' && (
+        <div className="space-y-5 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm">
         
         {/* Catalog Header with view switches */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b-2 border-slate-205 dark:border-slate-800 pb-4">
@@ -835,33 +1083,577 @@ export default function PublicHome({
           </div>
         )}
       </div>
+      )}
 
-      {/* About & Principal desk segment */}
+      {/* --- DIGITAL RESOURCES TAB VIEW --- */}
+      {homeActiveTab === 'resources' && (
+        <div className="space-y-6 animate-fade-in" id="public-digital-resources-block">
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-amber-500" />
+                  <span>Syllabus Handbooks & Digital Notes Repository</span>
+                </h3>
+                <p className="text-xs text-slate-550 dark:text-slate-400">
+                  Approved study materials, chapter summaries, and NCERT reference PDFs.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-black bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-1 rounded-lg">
+                {studyMaterials.length} Resources Available
+              </span>
+            </div>
+
+            {studyMaterials.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                <p className="text-sm font-extrabold text-slate-700 dark:text-slate-300">No public study notes cataloged yet.</p>
+                <p className="text-xs text-slate-500">Librarians can upload study files as PDFs from their management panel.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {studyMaterials.map((mat: any) => (
+                  <div key={mat.id} className="bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 p-4.5 rounded-xl flex flex-col justify-between hover:shadow-md transition-all">
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase bg-indigo-100 text-indigo-805 dark:bg-indigo-950 dark:text-indigo-400 px-2 py-0.5 rounded">
+                          Grade {mat.visibleTo === 'All' ? '1-12' : mat.visibleTo}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          Expires: {mat.expiryDate || "Never"}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs sm:text-sm line-clamp-1">
+                          {mat.title}
+                        </h4>
+                        <p className="text-[11px] text-slate-550 dark:text-slate-450 line-clamp-2 mt-1">
+                          {mat.description || "Official curriculum support handbook and reference notes."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-201 dark:border-slate-800/60 pt-3 mt-3 flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono font-bold text-slate-400 block truncate max-w-[150px]">
+                        ID: {mat.id}
+                      </span>
+                      {mat.fileUrl ? (
+                        <a
+                          href={mat.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10.5px] font-bold rounded-lg flex items-center gap-1 shrink-0 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download PDF</span>
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-red-655 font-bold">No file URL cataloged</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- COMMUNITY FEEDBACK TAB VIEW --- */}
+      {homeActiveTab === 'feedback' && (
+        <div className="space-y-6 animate-fade-in" id="public-feedback-block">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Left Column: Overall score and submit form */}
+            <div className="lg:col-span-5 space-y-6">
+              
+              {/* Score summary */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm text-center space-y-2">
+                <span className="text-xs uppercase tracking-widest text-slate-400 font-bold">Overall Student Satisfaction</span>
+                {liveStats.totalFeedbackCount === 0 ? (
+                  <>
+                    <div className="pt-2 flex justify-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star 
+                          key={i} 
+                          className="w-5 h-5 text-slate-200 dark:text-slate-850" 
+                        />
+                      ))}
+                    </div>
+                    <div className="text-4xl sm:text-5xl font-black text-amber-500 font-mono">
+                      0.0
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-800 dark:text-slate-200 font-bold">
+                        {currentLang === 'EN' ? "No student reviews yet." : "अभी तक कोई छात्र समीक्षा उपलब्ध नहीं है।"}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {currentLang === 'EN' ? "Be the first student to share your experience." : "अनुभव साझा करने वाले पहले छात्र बनें।"}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-4xl sm:text-5xl font-black text-amber-500 font-mono">
+                      ★ {liveStats.avgRating}
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Based on {liveStats.totalFeedbackCount} active, verified student reviews.
+                    </p>
+                    <div className="pt-2 flex justify-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star 
+                          key={i} 
+                          className={`w-5 h-5 ${i < Math.round(liveStats.avgRating) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-850'}`} 
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Submit Feedback Form */}
+              <div className="bg-white dark:bg-slate-900 border-2 border-slate-250 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm space-y-4">
+                <h4 className="font-black text-xs uppercase text-slate-900 dark:text-white tracking-wider border-b border-slate-100 pb-2">
+                  Share Your Feedback & Suggestion
+                </h4>
+
+                {isLoggedIn ? (
+                  <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+                    {feedbackSuccessMsg && (
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in">
+                        {feedbackSuccessMsg}
+                      </div>
+                    )}
+
+                    {existingUserReview && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-900 rounded-xl text-xs flex flex-col gap-1">
+                        <span className="font-extrabold flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                          📝 Existing Review Found
+                        </span>
+                        <span>
+                          Updating this form will edit your current verified rating and comments. 
+                          Your active status is: <span className="font-mono font-bold uppercase underline text-indigo-600 dark:text-indigo-400">{existingUserReview.status}</span>.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Rating star selector */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                        Your Rating
+                      </label>
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map((val) => (
+                          <button
+                            type="button"
+                            key={val}
+                            onClick={() => setNewFeedbackForm(f => ({ ...f, rating: val }))}
+                            className="p-1 cursor-pointer transition-transform hover:scale-110"
+                          >
+                            <Star 
+                              className={`w-7 h-7 ${val <= newFeedbackForm.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Feedback Type */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                        Feedback Category
+                      </label>
+                      <select
+                        value={newFeedbackForm.type}
+                        onChange={(e) => setNewFeedbackForm(f => ({ ...f, type: e.target.value }))}
+                        className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-300 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
+                      >
+                        <option value="General">General Suggestion</option>
+                        <option value="Book Request">Request New Books</option>
+                        <option value="Digital Notes">Digital Syllabus Suggestion</option>
+                        <option value="Bug Report">System Bug Report</option>
+                        <option value="Complain">Library Complaint</option>
+                      </select>
+                    </div>
+
+                    {/* Comment Area */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                        Details Comment
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={newFeedbackForm.comment}
+                        onChange={(e) => setNewFeedbackForm(f => ({ ...f, comment: e.target.value }))}
+                        placeholder={
+                          currentLang === 'EN'
+                            ? "Please write what books you need, system issues, or general remarks..."
+                            : "कृपया लिखें कि आपको किन पुस्तकों की आवश्यकता है, या पुस्तकालय संबंधी सुझाव..."
+                        }
+                        className="w-full text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={feedbackSubmitLoading}
+                      className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        {feedbackSubmitLoading 
+                          ? "Submitting..." 
+                          : existingUserReview 
+                            ? "Update My Verified Review" 
+                            : "Submit Feedback"}
+                      </span>
+                    </button>
+                  </form>
+                ) : (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl text-center space-y-3">
+                    <p className="text-xs text-slate-655 dark:text-slate-400 font-medium">
+                      Student security mandates authentication to submit suggestions or complaints.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setAuthError(null);
+                        setShowLoginModal(true);
+                      }}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Login to Give Feedback</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Right Column: Public Reviews list */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm space-y-4">
+              <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-850 pb-3 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-indigo-600" />
+                <span>Verified Public Feedbacks ({publicFeedbacks.length})</span>
+              </h4>
+
+              {feedbackLoading ? (
+                <div className="text-center py-10 font-mono text-xs text-slate-400">
+                  Retrieving community reports...
+                </div>
+              ) : publicFeedbacks.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  <p className="text-xs text-slate-500">No public feedback items approved yet.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[500px] overflow-y-auto pr-1 space-y-4">
+                  {publicFeedbacks.map((f) => (
+                    <div key={f.id} className="pt-4 first:pt-0 space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100">
+                            {f.studentName}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 block">
+                            {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded text-amber-800 dark:text-amber-400 font-bold text-[11px]">
+                          <span>★</span>
+                          <span>{f.rating}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-lg border border-slate-150 dark:border-slate-850">
+                        <span className="text-[10px] font-mono font-black uppercase text-indigo-650 block mb-1">
+                          [{f.type}]
+                        </span>
+                        {f.comment}
+                      </div>
+
+                      {f.reply && (
+                        <div className="ml-5 p-2.5 bg-indigo-50/50 dark:bg-slate-850 border-l-2 border-indigo-500 text-[11px] text-slate-800 dark:text-slate-200 rounded-r-lg space-y-1">
+                          <span className="text-[9px] font-black uppercase text-indigo-700 dark:text-indigo-400 block">
+                            Response from Chief Librarian:
+                          </span>
+                          <p className="italic">"{f.reply}"</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* About, Chief Librarian's Profile & Operational Workflow */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="about-section">
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-3">
-          <h3 className="text-sm font-extrabold uppercase text-slate-500 tracking-wider pb-1 border-b border-slate-100">
-            {t.aboutTitle}
-          </h3>
-          <p className="text-slate-700 dark:text-slate-350 text-xs sm:text-sm leading-relaxed">
-            {t.aboutContent}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-[11px] text-slate-600">
-            <p className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-slate-700" /> {t.locationText}</p>
-            <p className="flex items-center gap-1.5"><Phone className="w-4 h-4 text-slate-700" /> {t.contactPhone}</p>
+        
+        {/* Left Column: School Background & Library Workflow */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl space-y-4 shadow-sm">
+            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
+              {t.aboutTitle}
+            </h3>
+            <p className="text-slate-700 dark:text-slate-350 text-xs sm:text-sm leading-relaxed">
+              {t.aboutContent}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-[11px] text-slate-600 dark:text-slate-400">
+              <p className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-slate-700 shrink-0" /> {t.locationText}</p>
+              <p className="flex items-center gap-1.5"><Phone className="w-4 h-4 text-slate-700 shrink-0" /> {t.contactPhone}</p>
+            </div>
+          </div>
+
+          {/* Library Operational Workflow Illustration */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm space-y-4">
+            <h3 className="text-xs font-black uppercase text-indigo-650 dark:text-indigo-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
+              Library Operational Workflow & Access Guidelines
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">1</div>
+                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Search Catalog</h4>
+                <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                  Browse physical shelf registries or digital study material repository above.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">2</div>
+                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Verify Account</h4>
+                <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                  Login securely using Class, Section, Roll Number and verified Date of Birth.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">3</div>
+                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Lodge Request</h4>
+                <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                  Submit digital borrow requests. Collect books once approved by library desk.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="lg:col-span-4 bg-slate-100 p-6 rounded-xl border border-slate-200 flex flex-col justify-between">
-          <div className="space-y-2">
-            <span className="text-[10px] uppercase font-bold text-slate-700 tracking-widest block font-mono">Administrative Contact</span>
-            <p className="text-xs text-slate-700 italic">
-              "For student records update or new batch entries schedules, please coordinates directly with the Principal's Room."
-            </p>
+        {/* Right Column: Chief Librarian Profile & Verified School Info */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Chief Librarian's Desk */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+            <div className="space-y-4">
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1">
+                Librarian's Desk
+              </span>
+              
+              {/* Photo placeholder / Avatar styling */}
+              <div className="flex items-center gap-3">
+                {librarianProfile.profilePhoto ? (
+                  <img
+                    src={librarianProfile.profilePhoto}
+                    referrerPolicy="no-referrer"
+                    className="w-12 h-12 rounded-full object-cover border border-indigo-200 shadow-inner shrink-0"
+                    alt={librarianProfile.name}
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-indigo-600 border border-indigo-200 flex items-center justify-center text-white text-base font-black shadow-inner shrink-0 select-none">
+                    {librarianProfile.name
+                      ? librarianProfile.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                      : "SR"
+                    }
+                  </div>
+                )}
+                <div>
+                  <h4 className="font-black text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
+                    {librarianProfile.name}
+                  </h4>
+                  <p className="text-[10px] font-mono text-slate-400">
+                    {librarianProfile.designation}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
+                "{librarianProfile.biography}"
+              </p>
+            </div>
+            
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-3 mt-4 text-[10.5px] text-slate-600 dark:text-slate-400">
+              <p className="font-extrabold text-slate-800 dark:text-white">Library Resource Center</p>
+              <p className="font-sans text-slate-500">{t.contactPhone}</p>
+            </div>
           </div>
-          <div className="border-t border-slate-200 pt-3 mt-4 text-[10.5px] text-slate-600">
-            <p className="font-extrabold text-slate-800">School Library Support Desk</p>
-            <p className="font-mono">{t.contactMail}</p>
+
+          {/* Verified Official Location Info */}
+          <div className="bg-slate-950 text-white p-5 rounded-2xl space-y-3.5 border border-slate-850">
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase font-bold text-amber-400 tracking-widest block font-mono">Verified School Details</span>
+              <h4 className="font-extrabold text-xs">PM SHRI Senior Secondary School</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed font-sans font-light">
+                Ramdiri, Begusarai, Bihar — 851129. Recognized by Education Department, Government of Bihar.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-500 font-mono flex items-center justify-between">
+              <span>DLMS v3.0.0 Stable</span>
+              <span>© {new Date().getFullYear()} School IT Desk</span>
+            </div>
           </div>
+
+          {/* Verified Student Reviews & Ratings Module */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                Student Reviews & Ratings
+              </span>
+              <span className="text-xs font-bold text-amber-500 font-mono flex items-center gap-1">
+                ★ {liveStats.avgRating} / 5.0
+              </span>
+            </div>
+            
+            {liveStats.totalFeedbackCount === 0 ? (
+              <div className="text-center py-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl space-y-2">
+                <div className="flex justify-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star 
+                      key={i} 
+                      className="w-3.5 h-3.5 text-slate-200 dark:text-slate-800" 
+                    />
+                  ))}
+                </div>
+                <p className="text-2xl font-black text-amber-500 font-mono">
+                  0.0
+                </p>
+                <div className="space-y-0.5 px-3">
+                  <p className="text-[11px] text-slate-850 dark:text-slate-200 font-bold leading-tight">
+                    {currentLang === 'EN' ? "No student reviews yet." : "अभी तक कोई छात्र समीक्षा उपलब्ध नहीं है।"}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                    {currentLang === 'EN' ? "Be the first student to share your experience." : "अनुभव साझा करने वाले पहले छात्र बनें।"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-2 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1">
+                <p className="text-2xl font-black text-amber-500 font-mono">
+                  {liveStats.avgRating} ★
+                </p>
+                <p className="text-[10px] text-slate-500 font-medium">
+                  Based on {liveStats.totalFeedbackCount} approved reviews
+                </p>
+                <div className="flex justify-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star 
+                      key={i} 
+                      className={`w-3.5 h-3.5 ${i < Math.round(liveStats.avgRating) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
+                  />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                Selected Recent Reviews
+              </span>
+              {publicFeedbacks.length === 0 ? (
+                <p className="text-[11px] text-slate-400 italic text-center py-2">
+                  No verified reviews yet. Be the first to write one!
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                  {publicFeedbacks.slice(0, 3).map((fb) => (
+                    <div key={fb.id} className="p-2.5 bg-slate-50/60 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-lg space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-[11px] text-slate-950 dark:text-white truncate max-w-[120px]">
+                          {fb.studentName}
+                        </span>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, idx) => (
+                            <Star 
+                              key={idx} 
+                              className={`w-2.5 h-2.5 ${idx < fb.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-650 dark:text-slate-400 leading-normal line-clamp-2">
+                        "{fb.comment}"
+                      </p>
+                      <p className="text-[9px] text-slate-400 font-mono">
+                        {new Date(fb.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setHomeActiveTab('feedback');
+                const fbBlock = document.getElementById('public-feedback-block');
+                if (fbBlock) fbBlock.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full text-center py-2 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800/50 dark:hover:bg-indigo-950/20 text-slate-700 hover:text-indigo-650 dark:text-slate-350 dark:hover:text-indigo-400 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+            >
+              Write or Edit My Review →
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      {/* --- ACCORDION FREQUENTLY ASKED QUESTIONS --- */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-2xl shadow-sm space-y-4" id="home-faqs-section">
+        <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
+          Frequently Asked Questions (FAQ)
+        </h3>
+
+        <div className="divide-y divide-slate-150 dark:divide-slate-800 space-y-1">
+          {[
+            {
+              q: "Who is eligible to borrow books from this digital portal?",
+              a: "All active students from Grade 1 to 12 currently enrolled in PM SHRI Senior Secondary School, Ramdiri are eligible. Registration is pre-allocated by the school IT Desk using your class credentials and roll number."
+            },
+            {
+              q: "What is the standard borrow duration for physical books?",
+              a: "Books are issued for an initial study period of up to 14 days. If you require the textbook for further preparation, you can request an extension directly from Chief Librarian Shri Ramsharan Sharma at the desk."
+            },
+            {
+              q: "What should I do if a book is missing or damaged?",
+              a: "Report any damage or missing pages immediately to the library desk upon collection. Please avoid writing, marking, or staining physical textbooks so they can serve other scholars in the future."
+            },
+            {
+              q: "How are Digital Study materials and Syllabus notes accessed?",
+              a: "Syllabus summaries, chapter-wise notes, and reference PDFs are listed under the 'Digital Notes' tab above. Anyone can view resources, and verified PDF copies can be downloaded directly for home study."
+            },
+            {
+              q: "How can I suggest a new book title or report a portal bug?",
+              a: "Switch to the 'Community Reviews' tab above. Log in with your school credentials and submit your title request or system feedback form. The Chief Librarian will review all student suggestions weekly."
+            }
+          ].map((faq, idx) => {
+            const isOpen = openFaqIndex === idx;
+            return (
+              <div key={idx} className="pt-3 first:pt-0">
+                <button
+                  type="button"
+                  onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                  className="w-full flex justify-between items-center text-left py-2 hover:text-indigo-600 transition-all cursor-pointer font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100"
+                >
+                  <span>{faq.q}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180 text-indigo-650' : 'text-slate-400'}`} />
+                </button>
+                {isOpen && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950/40 text-[11px] sm:text-xs text-slate-600 dark:text-slate-355 rounded-lg leading-relaxed mt-1 animate-fade-in border border-slate-100 dark:border-slate-850">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
