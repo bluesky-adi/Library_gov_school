@@ -317,7 +317,7 @@ export default function LibrarianModule({
   const [studClass, setStudClass] = useState('10');
   const [studSection, setStudSection] = useState('A');
   const [studRoll, setStudRoll] = useState<string>('');
-  const [studDOB, setStudDOB] = useState('2010-01-01');
+  const [studDOB, setStudDOB] = useState('');
 
   // Student list quick filtering selectors
   const [filterClass, setFilterClass] = useState<string>('');
@@ -1236,8 +1236,8 @@ export default function LibrarianModule({
 
   const handleStudentFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studName.trim() || !studRoll.trim() || !studClass.trim() || !studSection.trim() || !studDOB.trim()) {
-      alert("Please fill all required student parameters.");
+    if (!studName.trim() || !studRoll.trim() || !studClass.trim() || !studSection.trim()) {
+      alert("Please fill all required student parameters (Name, Roll Number, Class, Section).");
       return;
     }
 
@@ -1275,7 +1275,7 @@ export default function LibrarianModule({
       setStudClass('10');
       setStudSection('A');
       setStudRoll('');
-      setStudDOB('2010-01-01');
+      setStudDOB('');
       setShowStudentForm(false);
       setEditingStudent(null);
     }
@@ -1287,7 +1287,7 @@ export default function LibrarianModule({
     setStudClass(stud.class || '10');
     setStudSection(stud.section || 'A');
     setStudRoll(stud.rollNumber ? stud.rollNumber.toString() : '');
-    setStudDOB(stud.dob || '2010-01-01');
+    setStudDOB(stud.dob || '');
     setShowStudentForm(true);
   };
 
@@ -1508,7 +1508,7 @@ export default function LibrarianModule({
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="librarian-metrics-bar">
         {/* Metric 1: Books Available */}
         <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl shadow-xs hover:border-slate-400 transition-all select-none">
-          <span className="text-slate-400 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase block">
+          <span className="text-slate-500 dark:text-slate-400 font-bold tracking-wider text-[10px] uppercase block">
             Books Available / उपलब्ध पुस्तकें
           </span>
           <span className="text-xl sm:text-2xl font-extrabold text-emerald-600 block mt-1">
@@ -1524,7 +1524,7 @@ export default function LibrarianModule({
           id="kpi-issued-books-clickable"
           title="Click to view detailed Issued Books index"
         >
-          <span className="text-slate-400 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase block flex items-center justify-between">
+          <span className="text-slate-500 dark:text-slate-400 font-bold tracking-wider text-[10px] uppercase block flex items-center justify-between">
             <span>Books Issued / जारी पुस्तकें 👆</span>
             <span className="text-[9px] bg-slate-900 text-white px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-all">View</span>
           </span>
@@ -1538,7 +1538,7 @@ export default function LibrarianModule({
 
         {/* Metric 3: Pending Requests */}
         <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl shadow-xs hover:border-slate-400 transition-all select-none">
-          <span className="text-slate-400 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase block">
+          <span className="text-slate-500 dark:text-slate-400 font-bold tracking-wider text-[10px] uppercase block">
             Pending Requests / लंबित अनुरोध
           </span>
           <span className="text-xl sm:text-2xl font-extrabold text-amber-600 block mt-1">
@@ -1557,7 +1557,7 @@ export default function LibrarianModule({
           }`}
           title="Click to view overdues in Issuance logs"
         >
-          <span className="text-slate-400 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase block">
+          <span className="text-slate-500 dark:text-slate-400 font-bold tracking-wider text-[10px] uppercase block">
             Overdue Books / देय तिथि पार
           </span>
           <span className={`text-xl sm:text-2xl font-extrabold block mt-1 ${overdueLogs.length > 0 ? 'text-red-600' : 'text-slate-500'}`}>
@@ -1568,7 +1568,7 @@ export default function LibrarianModule({
 
         {/* Metric 5: Registered Students */}
         <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-4 rounded-xl shadow-xs hover:border-slate-400 transition-all select-none font-[sans]">
-          <span className="text-slate-400 dark:text-slate-500 font-bold tracking-wider text-[10px] uppercase block">
+          <span className="text-slate-500 dark:text-slate-400 font-bold tracking-wider text-[10px] uppercase block">
             Registered Students / नामांकित छात्र
           </span>
           <span className="text-xl sm:text-2xl font-extrabold text-blue-650 dark:text-blue-400 block mt-1">
@@ -2237,7 +2237,7 @@ export default function LibrarianModule({
                 setStudClass('10');
                 setStudSection('A');
                 setStudRoll('');
-                setStudDOB('2010-01-01');
+                setStudDOB('');
                 setShowStudentForm(true);
               }}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs select-none"
@@ -2394,85 +2394,94 @@ export default function LibrarianModule({
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs animate-fade-in">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 uppercase font-black text-slate-500 text-[10px]">
-                  <th className="p-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={paginatedStudents.length > 0 && paginatedStudents.every(s => {
-                        const targetId = s.studentId || `${s.class}-${s.section}-${s.rollNumber}`;
-                        return selectedStudentIds.includes(targetId);
-                      })}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                          setSelectedStudentIds(prev => Array.from(new Set([...prev, ...paginatedIds])));
-                        } else {
-                          const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                          setSelectedStudentIds(prev => prev.filter(id => !paginatedIds.includes(id)));
-                        }
-                      }}
-                      className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                  </th>
-                  <th className="p-3">#</th>
-                  <th className="p-3">Student Full Name</th>
-                  <th className="p-3 text-center">Class / Section</th>
-                  <th className="p-3 text-center">Roll Number</th>
-                  <th className="p-3">Date of Birth (DOB)</th>
-                  <th className="p-3 text-center">Active Loans</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {paginatedStudents.map((stud, idx) => {
-                  const checkoutsCount = issueLogs.filter(log => log.rollNumber === stud.rollNumber && log.status === 'Issued').length;
-                  const itemIndex = (studentsPage - 1) * 15 + idx + 1;
-                  const displayStudentId = stud.studentId || `${stud.class || "10"}-${(stud.section || "A").toUpperCase()}-${stud.rollNumber}`;
-                  return (
-                    <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${selectedStudentIds.includes(displayStudentId) ? 'bg-indigo-50/10' : ''}`}>
-                      <td className="p-3 w-8 col-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedStudentIds.includes(displayStudentId)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedStudentIds(prev => [...prev, displayStudentId]);
-                            } else {
-                              setSelectedStudentIds(prev => prev.filter(id => id !== displayStudentId));
-                            }
-                          }}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
-                      </td>
-                      <td className="p-3 text-slate-400 font-mono">{itemIndex < 10 ? `0${itemIndex}` : itemIndex}</td>
-                      <td className="p-3 font-semibold text-slate-900 dark:text-slate-100 font-sans">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedProfileStudent(stud)}
-                          className="hover:underline text-indigo-700 hover:text-indigo-905 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer focus:outline-none focus:ring-0 select-none"
-                          title="Click to view full academic library profile history"
-                        >
-                          {stud.name}
-                        </button>
-                      </td>
-                      <td className="p-3 text-center font-bold">Class {stud.class || "10"}-{stud.section || "A"}</td>
-                      <td className="p-3 text-center font-bold font-mono text-indigo-600">#{stud.rollNumber}</td>
-                      <td className="p-3 font-mono">{stud.dob}</td>
-                      <td className="p-3 text-center font-extrabold text-amber-700 font-mono">
-                        {checkoutsCount}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex gap-2 justify-end">
+            <div className="overflow-x-auto max-h-[650px] overflow-y-auto">
+              <table className="w-full text-xs text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-850 uppercase font-black text-slate-500 dark:text-slate-450 text-[10px] sticky top-0 z-10 shadow-xs">
+                    <th className="p-3 w-8 bg-slate-50 dark:bg-slate-950">
+                      <input
+                        type="checkbox"
+                        checked={paginatedStudents.length > 0 && paginatedStudents.every(s => {
+                          const targetId = s.studentId || `${s.class}-${s.section}-${s.rollNumber}`;
+                          return selectedStudentIds.includes(targetId);
+                        })}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
+                            setSelectedStudentIds(prev => Array.from(new Set([...prev, ...paginatedIds])));
+                          } else {
+                            const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
+                            setSelectedStudentIds(prev => prev.filter(id => !paginatedIds.includes(id)));
+                          }
+                        }}
+                        className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </th>
+                    <th className="p-3 bg-slate-50 dark:bg-slate-950">#</th>
+                    <th className="p-3 bg-slate-50 dark:bg-slate-950 sticky left-0 z-20 shadow-xs">Student Full Name</th>
+                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Class / Section</th>
+                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Roll Number</th>
+                    <th className="p-3 bg-slate-50 dark:bg-slate-950">Date of Birth (DOB)</th>
+                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Active Loans</th>
+                    <th className="p-3 text-right bg-slate-50 dark:bg-slate-950">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {paginatedStudents.map((stud, idx) => {
+                    const checkoutsCount = issueLogs.filter(log => log.rollNumber === stud.rollNumber && log.status === 'Issued').length;
+                    const itemIndex = (studentsPage - 1) * 15 + idx + 1;
+                    const displayStudentId = stud.studentId || `${stud.class || "10"}-${(stud.section || "A").toUpperCase()}-${stud.rollNumber}`;
+                    return (
+                      <tr key={idx} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all ${selectedStudentIds.includes(displayStudentId) ? 'bg-indigo-50/10 dark:bg-indigo-950/20' : ''}`}>
+                        <td className="p-3 w-8 col-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.includes(displayStudentId)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedStudentIds(prev => [...prev, displayStudentId]);
+                              } else {
+                                setSelectedStudentIds(prev => prev.filter(id => id !== displayStudentId));
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3 text-slate-400 dark:text-slate-500 font-mono">{itemIndex < 10 ? `0${itemIndex}` : itemIndex}</td>
+                        <td className="p-3 font-semibold text-slate-900 dark:text-slate-100 font-sans sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
                           <button
-                            onClick={() => openStudentEdit(stud)}
-                            className="p-1 rounded hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
-                            title="Edit Student Information"
                             type="button"
+                            onClick={() => setSelectedProfileStudent(stud)}
+                            className="hover:underline text-indigo-700 hover:text-indigo-905 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer focus:outline-none focus:ring-0 select-none"
+                            title="Click to view full academic library profile history"
                           >
-                            <Edit className="w-3.5 h-3.5" />
+                            {stud.name}
                           </button>
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300">Class {stud.class || "10"}-{stud.section || "A"}</td>
+                        <td className="p-3 text-center font-bold font-mono text-indigo-600 dark:text-indigo-450">#{stud.rollNumber}</td>
+                        <td className="p-3 font-mono text-slate-650 dark:text-slate-350">
+                          {stud.dob ? (
+                            stud.dob
+                          ) : (
+                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider">
+                              No DOB (Optional)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-extrabold text-amber-700 dark:text-amber-500 font-mono">
+                          {checkoutsCount}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => openStudentEdit(stud)}
+                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-405 transition-all cursor-pointer"
+                              title="Edit Student Information"
+                              type="button"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
                            <button
                              onClick={() => {
                                const targetId = stud.studentId || `${stud.class}-${stud.section}-${stud.rollNumber}`;
@@ -2504,6 +2513,7 @@ export default function LibrarianModule({
                </tbody>
              </table>
            </div>
+         </div>
  
            {renderPagination(studentsPage, filteredStudents.length, 15, setStudentsPage)}
  
@@ -2674,13 +2684,13 @@ export default function LibrarianModule({
                 </h4>
               </div>
 
-              <div className="space-y-3 font-sans text-xs text-slate-305 leading-relaxed">
+              <div className="space-y-3 font-sans text-xs text-slate-200 leading-relaxed">
                 <p>
                   {currentLang === 'HI' 
                     ? "यह विद्यालय का केंद्रीय वितरण काउंटर है जहाँ से विद्यार्थियों को सीधे भौतिक पुस्तकें जारी की जाती हैं। उपयुक्त फ़ॉन्ट आकार में विवरण देखने के लिए यहाँ क्लिक करें।" 
                     : "This central desk operates direct in-person checkouts for verified library books. Use this portal on the counter desk to:"}
                 </p>
-                <ul className="list-disc list-inside space-y-1.5 pl-1 text-[11px] text-slate-400">
+                <ul className="list-disc list-inside space-y-1.5 pl-1 text-[11px] text-slate-200">
                   <li>{currentLang === 'HI' ? "दाखिला संख्या या रॉल नंबर जांचें" : "Match against Student Roster"}</li>
                   <li>{currentLang === 'HI' ? "बहु-पुस्तक (एक साथ कई पुस्तकें) आवंटन" : "Distribute multiple books at once"}</li>
                   <li>{currentLang === 'HI' ? "देवनागरी, हिंग्लिश और विशेष शेल्फ खोजें" : "Search in Hindi, Hinglish & Accession #"}</li>
@@ -2700,7 +2710,7 @@ export default function LibrarianModule({
                 </span>
               </button>
               
-              <p className="text-[10px] text-slate-500 font-mono text-center">
+              <p className="text-[10px] text-slate-300 font-mono text-center">
                 Recommended for Librarians 45+ for maximum visual size & clarity.
               </p>
             </div>
@@ -3471,10 +3481,9 @@ export default function LibrarianModule({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Date of Birth (DOB) *</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Date of Birth (DOB) (Optional)</label>
                   <input
                     type="date"
-                    required
                     value={studDOB}
                     onChange={(e) => setStudDOB(e.target.value)}
                     className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-mono"

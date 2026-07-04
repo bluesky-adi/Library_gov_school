@@ -167,7 +167,7 @@ const StudentSchema = new mongoose.Schema({
   studentId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   rollNumber: { type: Number, required: true },
-  dob: { type: String, required: true }, // YYYY-MM-DD
+  dob: { type: String, default: "" }, // YYYY-MM-DD
   class: { type: String, required: true },
   section: { type: String, required: true }
 });
@@ -736,12 +736,13 @@ export const dbService = {
 
   async saveStudent(student: Student, isEdit?: boolean): Promise<Student> {
     // Generate/Validate unique Student ID
-    if (!student.name || !student.rollNumber || !student.dob || !student.class || !student.section) {
-      throw new Error("Validation Error: Student Name, Roll Number, Date of Birth, Class, and Section are absolutely required.");
+    if (!student.name || !student.rollNumber || !student.class || !student.section) {
+      throw new Error("Validation Error: Student Name, Roll Number, Class, and Section are absolutely required.");
     }
     if (student.rollNumber <= 0) {
       throw new Error("Validation Error: Roll Number must be a positive integer.");
     }
+    student.dob = student.dob || "";
 
     const genId = `${student.class.trim().toUpperCase()}-${student.section.trim().toUpperCase()}-${student.rollNumber}`;
     student.studentId = genId;
@@ -816,9 +817,10 @@ export const dbService = {
     const existingIds = new Set<string>((await this.getStudents()).map(s => s.studentId));
 
     for (const stud of students) {
-      if (!stud.name || !stud.rollNumber || !stud.dob || !stud.class || !stud.section) {
+      if (!stud.name || !stud.rollNumber || !stud.class || !stud.section) {
         continue; // skip incomplete rows gracefully
       }
+      stud.dob = stud.dob || "";
       const genId = `${stud.class.trim().toUpperCase()}-${stud.section.trim().toUpperCase()}-${stud.rollNumber}`;
       stud.studentId = genId;
 

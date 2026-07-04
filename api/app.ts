@@ -286,7 +286,7 @@ app.post('/api/auth/login', async (req, res) => {
       const matched = studentsList.find((s: Student) => {
         const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
         const searchId = `${inputClass}-${inputSection}-${roll}`;
-        return sId === searchId && toStandardDate(s.dob) === inputDobStandard;
+        return sId === searchId && (!s.dob || toStandardDate(s.dob) === inputDobStandard);
       });
 
       if (matched) {

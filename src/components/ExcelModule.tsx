@@ -92,7 +92,6 @@ export const detectStudentColumnsInSheet = (headers: string[]): SheetColumnMappi
   if (!rollCol) missing.push("Roll Number");
   if (!classCol) missing.push("Class");
   if (!sectionCol) missing.push("Section");
-  if (!dobCol) missing.push("Date of Birth");
 
   return {
     sheetName: "",
@@ -151,10 +150,12 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
   }, [sheetsAvailable, selectedSheetNames, activePreset]);
 
   const [successReport, setSuccessReport] = useState<{
-    booksImported: number;
-    booksSkipped: number;
-    duplicateBooks: number;
-    databaseTotalBooks: number;
+    booksImported?: number;
+    booksSkipped?: number;
+    duplicateBooks?: number;
+    databaseTotalBooks?: number;
+    studentsImported?: number;
+    studentsMissingDob?: number;
   } | null>(null);
 
   const t = {
@@ -437,24 +438,22 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
               validationWarnings.push(`Row ${index + 2} in [${sheet.name}]: Student '${name}' is missing a valid manually-assigned Roll Number. Skipping.`);
               return;
             }
-            if (dobRaw === undefined || dobRaw === null) {
-              validationWarnings.push(`Row ${index + 2} in [${sheet.name}]: Student '${name}' is missing Date of Birth (DOB). Skipping.`);
-              return;
-            }
-
-            let dob = "2010-01-01";
-            if (dobRaw) {
-              if (typeof dobRaw === 'number' && dobRaw > 1000) {
-                try {
-                  const dateObj = XLSX.SSF.parse_date_code(dobRaw);
-                  const m = dateObj.m < 10 ? '0' + dateObj.m : dateObj.m;
-                  const d = dateObj.d < 10 ? '0' + dateObj.d : dateObj.d;
-                  dob = `${dateObj.y}-${m}-${d}`;
-                } catch (err) {
-                  dob = "2010-01-01";
+            let dob = "";
+            if (dobRaw !== undefined && dobRaw !== null) {
+              const dobStr = String(dobRaw).trim();
+              if (dobStr !== "") {
+                if (typeof dobRaw === 'number' && dobRaw > 1000) {
+                  try {
+                    const dateObj = XLSX.SSF.parse_date_code(dobRaw);
+                    const m = dateObj.m < 10 ? '0' + dateObj.m : dateObj.m;
+                    const d = dateObj.d < 10 ? '0' + dateObj.d : dateObj.d;
+                    dob = `${dateObj.y}-${m}-${d}`;
+                  } catch (err) {
+                    dob = "";
+                  }
+                } else {
+                  dob = dobStr;
                 }
-              } else {
-                dob = dobRaw.toString().trim();
               }
             }
 
@@ -658,12 +657,16 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       setIsValidated(false);
       setLogs([]);
     } else if (activePreset === 'students' && studentsParsed.length > 0) {
+      const missingDobCount = studentsParsed.filter(s => !s.dob || s.dob.trim() === "").length;
+      setSuccessReport({
+        studentsImported: studentsParsed.length,
+        studentsMissingDob: missingDobCount
+      });
       onImportStudents(studentsParsed);
       setStudentsParsed([]);
       setWarnings([]);
       setIsValidated(false);
       setLogs([]);
-      setSuccessReport(null);
     }
   };
 
@@ -684,42 +687,86 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
           >
             ✕
           </button>
-          <div className="flex items-center gap-2 select-none">
-            <CheckCircle className="w-5 h-5 text-emerald-600" />
-            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
-              Bulk Books Import Success Report
-            </h4>
-          </div>
+          
+          {successReport.booksImported !== undefined ? (
+            <>
+              <div className="flex items-center gap-2 select-none">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                  Bulk Books Import Success Report
+                </h4>
+              </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
-            <div className="bg-white dark:bg-slate-950 border border-emerald-200 dark:border-slate-800 p-3 rounded-lg text-center">
-              <span className="text-[10px] text-slate-400 uppercase block font-bold">Books Imported</span>
-              <span className="text-base font-black text-slate-900 dark:text-white mt-1 block">
-                {successReport.booksImported}
-              </span>
-            </div>
-            <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-center">
-              <span className="text-[10px] text-slate-400 uppercase block font-bold">Books Skipped</span>
-              <span className="text-base font-black text-slate-900 dark:text-white mt-1 block">
-                {successReport.booksSkipped}
-              </span>
-            </div>
-            <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-center">
-              <span className="text-[10px] text-slate-400 uppercase block font-bold">Duplicate Overwrites</span>
-              <span className="text-base font-black text-amber-600 mt-1 block">
-                {successReport.duplicateBooks}
-              </span>
-            </div>
-            <div className="bg-white dark:bg-slate-950 border border-emerald-250 dark:border-slate-850 p-3 rounded-lg text-center">
-              <span className="text-[10px] text-slate-400 uppercase block font-bold">Database Total Books</span>
-              <span className="text-base font-black text-emerald-700 dark:text-emerald-400 mt-1 block">
-                {successReport.databaseTotalBooks}
-              </span>
-            </div>
-          </div>
-          <p className="text-[10.5px] text-slate-500 text-center leading-normal select-none">
-            All spreadsheet accession rows have been successfully committed to the database ledger inventory.
-          </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
+                <div className="bg-white dark:bg-slate-950 border border-emerald-200 dark:border-slate-800 p-3 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Books Imported</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white mt-1 block">
+                    {successReport.booksImported}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Books Skipped</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white mt-1 block">
+                    {successReport.booksSkipped}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Duplicate Overwrites</span>
+                  <span className="text-base font-black text-amber-600 mt-1 block">
+                    {successReport.duplicateBooks}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-slate-950 border border-emerald-250 dark:border-slate-850 p-3 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">Database Total Books</span>
+                  <span className="text-base font-black text-emerald-700 dark:text-emerald-400 mt-1 block">
+                    {successReport.databaseTotalBooks}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10.5px] text-slate-500 text-center leading-normal select-none">
+                All spreadsheet accession rows have been successfully committed to the database ledger inventory.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 select-none">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                  {currentLang === 'EN' ? "Imported Successfully" : "सफलतापूर्वक आयात किया गया"}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div className="bg-white dark:bg-slate-950 border border-emerald-250 p-4 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">
+                    {currentLang === 'EN' ? "Students Imported" : "आयातित छात्र"}
+                  </span>
+                  <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 mt-1 block">
+                    {successReport.studentsImported} {currentLang === 'EN' ? "students imported" : "छात्र आयात किए गए"}
+                  </span>
+                </div>
+                <div className={`bg-white dark:bg-slate-950 border p-4 rounded-lg text-center ${
+                  (successReport.studentsMissingDob || 0) > 0 
+                    ? 'border-amber-300 dark:border-amber-900/50' 
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}>
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">
+                    {currentLang === 'EN' ? "Missing Date of Birth" : "जन्म तिथि गायब"}
+                  </span>
+                  <span className={`text-lg font-black mt-1 block ${
+                    (successReport.studentsMissingDob || 0) > 0 ? 'text-amber-600 dark:text-amber-450' : 'text-slate-500'
+                  }`}>
+                    {successReport.studentsMissingDob} {currentLang === 'EN' ? "students missing Date of Birth" : "छात्रों की जन्म तिथि गायब है"}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 text-center leading-normal select-none">
+                {currentLang === 'EN' 
+                  ? "Those students can be updated later by the librarian."
+                  : "उन छात्रों को बाद में पुस्तकालयाध्यक्ष द्वारा अपडेट किया जा सकता है।"}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -986,6 +1033,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
               { key: 'section', label: currentLang === 'EN' ? 'Section' : 'वर्ग', desc: 'Section / Division' },
               { key: 'dateOfBirth', label: currentLang === 'EN' ? 'Date of Birth' : 'जन्म तिथि', desc: 'DOB / Birth Date' }
             ].map(field => {
+              const isRequired = field.key !== 'dateOfBirth';
               const isMapped = studentMappings.some(m => m[field.key as keyof SheetColumnMapping + 'Col'] !== null);
               const matchedNames = studentMappings
                 .filter(m => m[field.key as keyof SheetColumnMapping + 'Col'] !== null)
@@ -998,7 +1046,9 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                   className={`border rounded-lg p-3 flex flex-col justify-between transition-all ${
                     isMapped 
                       ? 'border-emerald-200 bg-emerald-50/20 dark:border-emerald-950/20 dark:bg-emerald-950/10' 
-                      : 'border-red-200 bg-red-50/20 dark:border-red-950/20 dark:bg-red-950/10'
+                      : isRequired
+                        ? 'border-red-200 bg-red-50/20 dark:border-red-950/20 dark:bg-red-950/10'
+                        : 'border-amber-200 bg-amber-50/10 dark:border-amber-950/20 dark:bg-amber-950/5'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -1007,8 +1057,10 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                     </span>
                     {isMapped ? (
                       <span className="text-emerald-600 dark:text-emerald-400 text-xs font-black">✓</span>
-                    ) : (
+                    ) : isRequired ? (
                       <span className="text-red-600 dark:text-red-450 text-xs font-black">✕</span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-450 text-[10px] font-bold uppercase tracking-wider">Optional</span>
                     )}
                   </div>
                   <div className="mt-2 text-[10px] font-mono leading-tight">
@@ -1022,7 +1074,9 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                     ) : (
                       <div className="space-y-0.5">
                         <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Status:</span>
-                        <span className="text-red-655 dark:text-red-400 font-extrabold uppercase tracking-wide text-[9.5px]">Missing Required</span>
+                        <span className={`${isRequired ? 'text-red-600 dark:text-red-400 font-extrabold' : 'text-amber-600 dark:text-amber-450 font-semibold'} uppercase tracking-wide text-[9.5px]`}>
+                          {isRequired ? "Missing Required" : "Optional / Empty"}
+                        </span>
                       </div>
                     )}
                   </div>
