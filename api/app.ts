@@ -262,14 +262,7 @@ app.post('/api/auth/login', async (req, res) => {
           error: "Please enter a valid positive Roll Number." 
         });
       }
-      if (!dob) {
-        return res.status(400).json({ 
-          success: false, 
-          error: "Please select / specify your Date of Birth." 
-        });
-      }
 
-      const inputDobStandard = toStandardDate(dob);
       const inputClass = classValue ? classValue.toString().trim() : '';
       const inputSection = sectionValue ? sectionValue.toString().trim().toUpperCase() : '';
 
@@ -282,14 +275,31 @@ app.post('/api/auth/login', async (req, res) => {
 
       console.log(`[API ROUTE] Fetching students list for Student validation...`);
       const studentsList = await dbService.getStudents();
-      console.log(`[API ROUTE] Loaded ${studentsList.length} total students. Matching against Class: ${inputClass}, Section: ${inputSection}, Roll: ${roll}, DOB: ${inputDobStandard}`);
+      const searchId = `${inputClass}-${inputSection}-${roll}`;
+      
       const matched = studentsList.find((s: Student) => {
         const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
-        const searchId = `${inputClass}-${inputSection}-${roll}`;
-        return sId === searchId && (!s.dob || toStandardDate(s.dob) === inputDobStandard);
+        return sId.toUpperCase() === searchId.toUpperCase();
       });
 
       if (matched) {
+        // Only validate DOB if student record in database has a non-empty DOB
+        if (matched.dob && matched.dob.trim() !== "") {
+          if (!dob) {
+            return res.status(400).json({
+              success: false,
+              error: "This student has a registered Date of Birth. Please select your Date of Birth to log in."
+            });
+          }
+          const inputDobStandard = toStandardDate(dob);
+          if (toStandardDate(matched.dob) !== inputDobStandard) {
+            return res.status(401).json({
+              success: false,
+              error: "Authentication Failed: Incorrect Date of Birth."
+            });
+          }
+        }
+
         const token = jwt.sign(
           { 
             role: 'Student', 
@@ -312,7 +322,7 @@ app.post('/api/auth/login', async (req, res) => {
         console.warn(`[API ROUTE] Student login FAILED. No matching record in ${studentsList.length} students.`);
         return res.status(401).json({ 
           success: false, 
-          error: "Authentication Failed: Roll Number and DOB do not match school records." 
+          error: "Authentication Failed: Student roll number, class, or section not found in school records." 
         });
       }
     }
