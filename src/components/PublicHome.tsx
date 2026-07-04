@@ -12,6 +12,53 @@ import {
 } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
+interface InfiniteScrollSentinelProps {
+  onVisible: () => void;
+  hasMore: boolean;
+}
+
+function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelProps) {
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!hasMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        onVisible();
+      }
+    }, {
+      rootMargin: '200px',
+    });
+
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [onVisible, hasMore]);
+
+  if (!hasMore) {
+    return (
+      <div className="py-6 text-center text-xs text-slate-400 font-mono select-none border-t border-slate-100 dark:border-slate-800 mt-4">
+        ✓ Loaded all books in school library catalogue
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      ref={sentinelRef} 
+      className="py-8 flex items-center justify-center gap-2 text-xs text-indigo-600 font-mono select-none animate-pulse border-t border-slate-100 dark:border-slate-800 mt-4"
+    >
+      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+      <span>Browsing dynamic shelf stacks...</span>
+    </div>
+  );
+}
+
 // Google Books on-the-fly fetcher component
 export function GoogleBookCover({ bookName, author, coverImage }: { bookName: string; author: string; coverImage?: string }) {
   const [imgUrl, setImgUrl] = useState<string | null>(coverImage || null);
@@ -87,6 +134,7 @@ interface PublicHomeProps {
   loggedInUserLabel: string;
   onLogout: () => void;
   onNavigatePortal: () => void;
+  loggedInRole?: 'Guest' | 'Student' | 'Librarian';
 }
 
 export default function PublicHome({
@@ -98,7 +146,8 @@ export default function PublicHome({
   isLoggedIn,
   loggedInUserLabel,
   onLogout,
-  onNavigatePortal
+  onNavigatePortal,
+  loggedInRole = 'Guest'
 }: PublicHomeProps) {
   // New Layout & Feature States
   const [homeActiveTab, setHomeActiveTab] = useState<'catalog' | 'resources' | 'feedback'>('catalog');
@@ -371,21 +420,17 @@ export default function PublicHome({
 
   const featuredBooks = filteredFeaturedBooks;
 
-  // Optimizing and paginating the book list for immediate under-100ms response on over 2605+ books
-  const [currentPage, setCurrentPage] = React.useState<number>(1);
-  const itemsPerPage = 16;
+  // Infinite scroll book count state
+  const [visibleBooksCount, setVisibleBooksCount] = React.useState<number>(24);
 
   // Reset page when any filter parameters change
   React.useEffect(() => {
-    setCurrentPage(1);
+    setVisibleBooksCount(24);
   }, [selectedCategory, homeSearchQuery, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
-  const totalPages = Math.ceil(featuredBooks.length / itemsPerPage);
-
   const paginatedBooks = React.useMemo(() => {
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    return featuredBooks.slice(startIdx, startIdx + itemsPerPage);
-  }, [featuredBooks, currentPage]);
+    return featuredBooks.slice(0, visibleBooksCount);
+  }, [featuredBooks, visibleBooksCount]);
 
   const t = {
     EN: {
@@ -1029,59 +1074,11 @@ export default function PublicHome({
           </div>
         )}
 
-        {/* PAGINATION CONTROLS */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-4 mt-4 gap-4">
-            <span className="text-xs text-slate-600 dark:text-slate-400 font-mono">
-              Page {currentPage} of {totalPages} ({featuredBooks.length} books total)
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border-2 border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors dark:border-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
-              >
-                ◀ Previous
-              </button>
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = currentPage;
-                  if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  if (pageNum < 1 || pageNum > totalPages) return null;
-                  return (
-                    <button
-                      key={pageNum}
-                      type="button"
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-xs font-mono font-bold border-2 transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900 shadow-sm'
-                          : 'bg-white border-slate-200 hover:bg-slate-105 text-slate-700 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-300 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border-2 border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors dark:border-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
-              >
-                Next ▶
-              </button>
-            </div>
-          </div>
-        )}
+        {/* INFINITE SCROLL CONTROLS */}
+        <InfiniteScrollSentinel 
+          onVisible={() => setVisibleBooksCount(prev => prev + 24)}
+          hasMore={paginatedBooks.length < featuredBooks.length}
+        />
       </div>
       )}
 
@@ -1217,7 +1214,7 @@ export default function PublicHome({
                   Share Your Feedback & Suggestion
                 </h4>
 
-                {isLoggedIn ? (
+                {isLoggedIn && loggedInRole === 'Student' ? (
                   <form onSubmit={handleFeedbackSubmit} className="space-y-4">
                     {feedbackSuccessMsg && (
                       <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in">
@@ -1310,6 +1307,12 @@ export default function PublicHome({
                       </span>
                     </button>
                   </form>
+                ) : isLoggedIn ? (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl text-center space-y-3">
+                    <p className="text-xs text-slate-655 dark:text-slate-400 font-medium">
+                      You are logged in as a Librarian. Feedback and reviews can only be submitted by students.
+                    </p>
+                  </div>
                 ) : (
                   <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl text-center space-y-3">
                     <p className="text-xs text-slate-655 dark:text-slate-400 font-medium">

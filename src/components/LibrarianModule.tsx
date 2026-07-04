@@ -9,6 +9,53 @@ import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMater
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
 import { searchBooksSmart, getDdcCategoryName } from '../lib/searchUtils';
+
+interface InfiniteScrollSentinelProps {
+  onVisible: () => void;
+  hasMore: boolean;
+}
+
+function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelProps) {
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!hasMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        onVisible();
+      }
+    }, {
+      rootMargin: '200px',
+    });
+
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [onVisible, hasMore]);
+
+  if (!hasMore) {
+    return (
+      <div className="py-4 text-center text-[11px] text-slate-400 font-mono select-none border-t border-slate-200 dark:border-slate-800 mt-2">
+        ✓ All matched records fully loaded in view
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      ref={sentinelRef} 
+      className="py-4 flex items-center justify-center gap-2 text-[11px] text-indigo-600 font-mono select-none animate-pulse border-t border-slate-200 dark:border-slate-800 mt-2"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>
+      <span>Fetching additional dynamic ledger entries...</span>
+    </div>
+  );
+}
 import { 
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
@@ -118,6 +165,10 @@ export default function LibrarianModule({
   const [booksPage, setBooksPage] = useState<number>(1);
   const [studentsPage, setStudentsPage] = useState<number>(1);
   const [activeLoansPage, setActiveLoansPage] = useState<number>(1);
+
+  // Infinite scroll dynamic row limits for performance with very large datasets
+  const [visibleBooksCount, setVisibleBooksCount] = useState<number>(30);
+  const [visibleStudentsCount, setVisibleStudentsCount] = useState<number>(40);
 
   // Performance Profiling Metrics
   const [bookSearchElapsed, setBookSearchElapsed] = useState<number>(0.15);
@@ -323,6 +374,7 @@ export default function LibrarianModule({
     const handler = setTimeout(() => {
       setBookSearch(bookSearchInput);
       setBooksPage(1);
+      setVisibleBooksCount(30);
     }, 250);
     return () => clearTimeout(handler);
   }, [bookSearchInput]);
@@ -331,6 +383,7 @@ export default function LibrarianModule({
     const handler = setTimeout(() => {
       setStudentSearch(studentSearchInput);
       setStudentsPage(1);
+      setVisibleStudentsCount(40);
     }, 250);
     return () => clearTimeout(handler);
   }, [studentSearchInput]);
@@ -1029,14 +1082,25 @@ export default function LibrarianModule({
   const filteredStudents = useMemo(() => {
     let result = students;
 
-    if (studentSearch.trim()) {
-      const query = studentSearch.trim().toLowerCase();
-      const numMatch = parseInt(query, 10);
-      if (!isNaN(numMatch)) {
-        result = students.filter(s => s.rollNumber === numMatch || (s.studentId && s.studentId.includes(query)));
-      } else {
-        result = fuseStudents.search(studentSearch).map(res => res.item);
-      }
+    const query = studentSearchInput.trim().toLowerCase();
+    if (query) {
+      result = result.filter(s => {
+        const studentIdStr = String(s.studentId || '').toLowerCase();
+        const nameStr = String(s.name || '').toLowerCase();
+        const rollStr = String(s.rollNumber || '').toLowerCase();
+        const classStr = String(s.class || '').toLowerCase();
+        const sectionStr = String(s.section || '').toLowerCase();
+        const admissionStr = String((s as any).admissionNumber || '').toLowerCase();
+
+        return (
+          studentIdStr.includes(query) ||
+          nameStr.includes(query) ||
+          rollStr.includes(query) ||
+          classStr.includes(query) ||
+          sectionStr.includes(query) ||
+          admissionStr.includes(query)
+        );
+      });
     }
 
     if (filterClass) {
@@ -1048,18 +1112,16 @@ export default function LibrarianModule({
     }
 
     return result;
-  }, [students, studentSearch, fuseStudents, filterClass, filterSection]);
+  }, [students, studentSearchInput, filterClass, filterSection]);
 
-  // Pagination lists for superb UI rendering performance under load
+  // Infinite scroll lists for superb UI rendering performance under load
   const paginatedBooks = useMemo(() => {
-    const startIdx = (booksPage - 1) * 12;
-    return filteredBooks.slice(startIdx, startIdx + 12);
-  }, [filteredBooks, booksPage]);
+    return filteredBooks.slice(0, visibleBooksCount);
+  }, [filteredBooks, visibleBooksCount]);
 
   const paginatedStudents = useMemo(() => {
-    const startIdx = (studentsPage - 1) * 15;
-    return filteredStudents.slice(startIdx, startIdx + 15);
-  }, [filteredStudents, studentsPage]);
+    return filteredStudents.slice(0, visibleStudentsCount);
+  }, [filteredStudents, visibleStudentsCount]);
 
   const paginatedLoans = useMemo(() => {
     const startIdx = (activeLoansPage - 1) * 15;
@@ -2369,7 +2431,11 @@ export default function LibrarianModule({
             <p className="py-12 bg-white dark:bg-slate-900 text-center rounded-xl border text-slate-400 text-xs">No matching title or category found in library index.</p>
           )}
 
-          {renderPagination(booksPage, filteredBooks.length, 12, setBooksPage)}
+          {/* INFINITE SCROLL SENTINEL FOR BOOKS */}
+          <InfiniteScrollSentinel 
+            onVisible={() => setVisibleBooksCount(prev => prev + 30)}
+            hasMore={paginatedBooks.length < filteredBooks.length}
+          />
 
           {/* Excel Importer segment specifically for books */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-4">
@@ -2689,7 +2755,11 @@ export default function LibrarianModule({
            </div>
          </div>
  
-           {renderPagination(studentsPage, filteredStudents.length, 15, setStudentsPage)}
+          {/* INFINITE SCROLL SENTINEL FOR STUDENTS */}
+          <InfiniteScrollSentinel 
+            onVisible={() => setVisibleStudentsCount(prev => prev + 40)}
+            hasMore={paginatedStudents.length < filteredStudents.length}
+          />
  
            {/* Excel Importer segment specifically for student data */}
            <div className="bg-white p-6 border border-slate-200 rounded-xl space-y-4">

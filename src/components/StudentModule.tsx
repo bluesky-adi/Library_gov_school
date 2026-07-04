@@ -9,6 +9,53 @@ import { GoogleBookCover } from './PublicHome';
 import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
+interface InfiniteScrollSentinelProps {
+  onVisible: () => void;
+  hasMore: boolean;
+}
+
+function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelProps) {
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!hasMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        onVisible();
+      }
+    }, {
+      rootMargin: '200px',
+    });
+
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [onVisible, hasMore]);
+
+  if (!hasMore) {
+    return (
+      <div className="py-6 text-center text-xs text-slate-400 font-mono select-none border-t border-slate-100 dark:border-slate-800 mt-4">
+        ✓ Loaded all books in school library catalogue
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      ref={sentinelRef} 
+      className="py-8 flex items-center justify-center gap-2 text-xs text-indigo-600 font-mono select-none animate-pulse border-t border-slate-100 dark:border-slate-800 mt-4"
+    >
+      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+      <span>Browsing dynamic shelf stacks...</span>
+    </div>
+  );
+}
+
 interface StudentModuleProps {
   books: Book[];
   requests: BorrowRequest[];
@@ -221,20 +268,16 @@ export default function StudentModule({
     return result;
   }, [books, searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
-  // Client-side pagination hooks to speed up rendering with zero freezing
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 16;
+  // Infinite scroll book count state
+  const [visibleBooksCount, setVisibleBooksCount] = useState<number>(24);
 
   React.useEffect(() => {
-    setCurrentPage(1);
+    setVisibleBooksCount(24);
   }, [searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter]);
 
-  const totalPages = Math.ceil(filteredBooks.length / itemsPerPage);
-
   const paginatedBooks = useMemo(() => {
-    const startIdx = (currentPage - 1) * itemsPerPage;
-    return filteredBooks.slice(startIdx, startIdx + itemsPerPage);
-  }, [filteredBooks, currentPage]);
+    return filteredBooks.slice(0, visibleBooksCount);
+  }, [filteredBooks, visibleBooksCount]);
 
   const bookCategories = useMemo(() => {
     return ['All', ...Array.from(new Set(books.map(b => b.category)))];
@@ -242,17 +285,31 @@ export default function StudentModule({
 
   // Request logs specifically for the active student instance
   const studentRequests = useMemo(() => {
-    return requests.filter(r => r.rollNumber === loggedInStudent.rollNumber);
+    const sId = loggedInStudent.studentId || `${loggedInStudent.class}-${loggedInStudent.section}-${loggedInStudent.rollNumber}`;
+    return requests.filter(r => {
+      const rId = r.studentId || (r.class && r.section ? `${r.class}-${r.section}-${r.rollNumber}` : null);
+      if (rId) return rId.toUpperCase() === sId.toUpperCase();
+      return r.rollNumber === loggedInStudent.rollNumber && r.studentName === loggedInStudent.name;
+    });
   }, [requests, loggedInStudent]);
 
   // Active Loans for the student instance
   const studentLoans = useMemo(() => {
-    return issueLogs.filter(log => log.rollNumber === loggedInStudent.rollNumber && log.status === 'Issued');
+    const sId = loggedInStudent.studentId || `${loggedInStudent.class}-${loggedInStudent.section}-${loggedInStudent.rollNumber}`;
+    return issueLogs.filter(log => {
+      const logSId = log.studentId || (log.class && log.section ? `${log.class}-${log.section}-${log.rollNumber}` : null);
+      const isMyLog = logSId ? logSId.toUpperCase() === sId.toUpperCase() : (log.rollNumber === loggedInStudent.rollNumber && log.studentName === loggedInStudent.name);
+      return isMyLog && log.status === 'Issued';
+    });
   }, [issueLogs, loggedInStudent]);
 
   // Reading History (completed checkouts) for the student instance
   const studentHistoryOutputFiles = useMemo(() => {
-    return issueLogs.filter(log => log.rollNumber === loggedInStudent.rollNumber);
+    const sId = loggedInStudent.studentId || `${loggedInStudent.class}-${loggedInStudent.section}-${loggedInStudent.rollNumber}`;
+    return issueLogs.filter(log => {
+      const logSId = log.studentId || (log.class && log.section ? `${log.class}-${log.section}-${log.rollNumber}` : null);
+      return logSId ? logSId.toUpperCase() === sId.toUpperCase() : (log.rollNumber === loggedInStudent.rollNumber && log.studentName === loggedInStudent.name);
+    });
   }, [issueLogs, loggedInStudent]);
 
   const studentLoansReturnedOnly = useMemo(() => {
@@ -296,6 +353,9 @@ export default function StudentModule({
       id: `RQ-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
       studentName: loggedInStudent.name,
       rollNumber: loggedInStudent.rollNumber,
+      class: loggedInStudent.class,
+      section: loggedInStudent.section,
+      studentId: loggedInStudent.studentId || `${loggedInStudent.class}-${loggedInStudent.section}-${loggedInStudent.rollNumber}`,
       bookId: requestingBook.bookId,
       bookName: requestingBook.bookName,
       requestDate: new Date().toISOString().split('T')[0],
@@ -528,121 +588,73 @@ export default function StudentModule({
               </div>
             ) : (
               <div>
-                /* RENDER HIGH CONTRAST SIMPLIFIED GRID CARDS FOR STUDENTS */
+                {/* RENDER HIGH CONTRAST SIMPLIFIED GRID CARDS FOR STUDENTS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {paginatedBooks.map(book => {
-                  const isAvailable = book.availableCopies > 0;
-                  return (
-                    <div 
-                      key={book.bookId}
-                      className="bg-white dark:bg-slate-900 border-2 border-slate-205 dark:border-slate-800 rounded-xl p-4 flex gap-4 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition-colors"
-                    >
-                      <div className="w-24 shrink-0">
-                        <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
-                      </div>
-                      
-                      <div className="flex-1 flex flex-col justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] bg-indigo-50 dark:bg-slate-800 text-indigo-850 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase">
-                              {book.category}
-                            </span>
+                    const isAvailable = book.availableCopies > 0;
+                    return (
+                      <div 
+                        key={book.bookId}
+                        className="bg-white dark:bg-slate-900 border-2 border-slate-205 dark:border-slate-800 rounded-xl p-4 flex gap-4 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition-colors"
+                      >
+                        <div className="w-24 shrink-0">
+                          <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
+                        </div>
+                        
+                        <div className="flex-1 flex flex-col justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] bg-indigo-50 dark:bg-slate-800 text-indigo-850 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase">
+                                {book.category}
+                              </span>
+                            </div>
+                            
+                            <h3 className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2">
+                               {book.bookName}
+                            </h3>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-450 italic font-medium line-clamp-1">
+                              by {book.author}
+                            </p>
+                            
+                            <div className="pt-2 flex items-center gap-1.5">
+                              <span className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
+                              <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-350">
+                                {isAvailable ? `${t.copiesAvailable} ${book.availableCopies} / ${book.totalCopies}` : t.unavailable}
+                              </span>
+                            </div>
                           </div>
-                          
-                          <h3 className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2">
-                             {book.bookName}
-                          </h3>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-450 italic font-medium line-clamp-1">
-                            by {book.author}
-                          </p>
-                          
-                          <div className="pt-2 flex items-center gap-1.5">
-                            <span className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
-                            <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-350">
-                              {isAvailable ? `${t.copiesAvailable} ${book.availableCopies} / ${book.totalCopies}` : t.unavailable}
-                            </span>
+
+                          <div className="flex gap-1.5 pt-2.5 border-t border-slate-150 dark:border-slate-800 mt-2">
+                            <button
+                              onClick={() => setSelectedBook(book)}
+                              className="px-2.5 py-1.5 border-2 border-slate-250 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10.5px] font-bold text-slate-755 dark:text-slate-300 rounded transition-all cursor-pointer"
+                            >
+                              {t.bookDetails}
+                            </button>
+                            <button
+                              onClick={() => handleRequestClick(book)}
+                              disabled={!isAvailable}
+                              className={`flex-1 px-2.5 py-1.5 text-[10.5px] font-black rounded border-2 transition-all cursor-pointer text-center ${
+                                isAvailable
+                                  ? 'bg-[#0f172a] hover:bg-slate-800 text-white border-[#0f172a] shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 border-slate-205 cursor-not-allowed'
+                              }`}
+                            >
+                              {t.requestBook}
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex gap-1.5 pt-2.5 border-t border-slate-150 dark:border-slate-800 mt-2">
-                          <button
-                            onClick={() => setSelectedBook(book)}
-                            className="px-2.5 py-1.5 border-2 border-slate-250 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10.5px] font-bold text-slate-755 dark:text-slate-300 rounded transition-all cursor-pointer"
-                          >
-                            {t.bookDetails}
-                          </button>
-                          <button
-                            onClick={() => handleRequestClick(book)}
-                            disabled={!isAvailable}
-                            className={`flex-1 px-2.5 py-1.5 text-[10.5px] font-black rounded border-2 transition-all cursor-pointer text-center ${
-                              isAvailable
-                                ? 'bg-[#0f172a] hover:bg-slate-800 text-white border-[#0f172a] shadow-xs'
-                                : 'bg-slate-100 text-slate-400 border-slate-205 cursor-not-allowed'
-                            }`}
-                          >
-                            {t.requestBook}
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* PAGINATION CONTROLS */}
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-250 dark:border-slate-800 pt-4 mt-4 gap-4">
-                  <span className="text-xs text-slate-600 dark:text-slate-400 font-mono">
-                    Page {currentPage} of {totalPages} ({filteredBooks.length} books total)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      className="px-3.5 py-1.5 border-2 border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors text-slate-800 dark:text-slate-200 font-bold text-xs cursor-pointer"
-                    >
-                      ◀ Previous
-                    </button>
-                    <div className="flex gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum = currentPage;
-                        if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        if (pageNum < 1 || pageNum > totalPages) return null;
-                        return (
-                          <button
-                            key={pageNum}
-                            type="button"
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`w-8 h-8 rounded-lg text-xs font-mono font-bold border-2 transition-colors cursor-pointer ${
-                              currentPage === pageNum
-                                ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900 shadow-md'
-                                : 'bg-white border-slate-200 hover:bg-slate-55 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      className="px-3.5 py-1.5 border-2 border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none select-none transition-colors text-slate-800 dark:text-slate-200 font-bold text-xs cursor-pointer"
-                    >
-                      Next ▶
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+
+                {/* INFINITE SCROLL CONTROLS */}
+                <InfiniteScrollSentinel 
+                  onVisible={() => setVisibleBooksCount(prev => prev + 24)}
+                  hasMore={paginatedBooks.length < filteredBooks.length}
+                />
+              </div>
           )}
           </div>
 

@@ -335,12 +335,12 @@ app.post('/api/auth/login', async (req, res) => {
         });
       }
     } else {
-      // Student authentication
+      // Student authentication - Strictly exact matches on Roll Number, Class, Section, and Date of Birth
       const roll = parseInt(rollNumber);
       if (!rollNumber || isNaN(roll)) {
         return res.status(400).json({ 
           success: false, 
-          error: "Please enter a valid positive Roll Number." 
+          error: "Authentication Failed: Please enter a valid positive Roll Number." 
         });
       }
 
@@ -350,40 +350,33 @@ app.post('/api/auth/login', async (req, res) => {
       if (!inputClass || !inputSection) {
         return res.status(400).json({
           success: false,
-          error: "Student login requires Class and Section specification for ID uniqueness."
+          error: "Authentication Failed: Student login requires Class and Section specification."
         });
       }
 
-      console.log(`[API ROUTE] Fetching students list for Student validation...`);
+      if (!dob) {
+        return res.status(400).json({
+          success: false,
+          error: "Authentication Failed: Student login requires Date of Birth verification."
+        });
+      }
+
+      console.log(`[API ROUTE] Fetching students list for exact Student validation...`);
       const studentsList = await dbService.getStudents();
-      const searchId = `${inputClass}-${inputSection}-${roll}`;
       
       const matched = studentsList.find((s: Student) => {
-        const sId = s.studentId || `${s.class || "10"}-${(s.section || "A").toUpperCase()}-${s.rollNumber}`;
-        return sId.toUpperCase() === searchId.toUpperCase();
+        const classMatch = s.class?.toString().trim().toLowerCase() === inputClass.toLowerCase();
+        const sectionMatch = s.section?.toString().trim().toUpperCase() === inputSection;
+        const rollMatch = parseInt(s.rollNumber?.toString()) === roll;
+        const dobMatch = toStandardDate(s.dob) === toStandardDate(dob);
+        return classMatch && sectionMatch && rollMatch && dobMatch;
       });
 
       if (matched) {
-        // Only validate DOB if student record in database has a non-empty DOB
-        if (matched.dob && matched.dob.trim() !== "") {
-          if (!dob) {
-            return res.status(400).json({
-              success: false,
-              error: "This student has a registered Date of Birth. Please select your Date of Birth to log in."
-            });
-          }
-          const inputDobStandard = toStandardDate(dob);
-          if (toStandardDate(matched.dob) !== inputDobStandard) {
-            return res.status(401).json({
-              success: false,
-              error: "Authentication Failed: Incorrect Date of Birth."
-            });
-          }
-        }
-
         const token = jwt.sign(
           { 
             role: 'Student', 
+            studentId: matched.studentId || `${matched.class}-${matched.section}-${matched.rollNumber}`,
             rollNumber: roll, 
             name: matched.name,
             class: matched.class,
@@ -392,7 +385,7 @@ app.post('/api/auth/login', async (req, res) => {
           JWT_SECRET,
           { expiresIn: '1d' }
         );
-        console.log(`[API ROUTE] Student login SUCCESSFUL for student: ${matched.name}`);
+        console.log(`[API ROUTE] Student login SUCCESSFUL for student: ${matched.name} (${matched.studentId})`);
         return res.json({
           success: true,
           token,
@@ -400,10 +393,10 @@ app.post('/api/auth/login', async (req, res) => {
           student: matched
         });
       } else {
-        console.warn(`[API ROUTE] Student login FAILED. No matching record in ${studentsList.length} students.`);
+        console.warn(`[API ROUTE] Student login FAILED. No matching record found for the provided credentials.`);
         return res.status(401).json({ 
           success: false, 
-          error: "Authentication Failed: Student roll number, class, or section not found in school records." 
+          error: "Authentication Failed: Student record not found or credentials (Roll Number, Class, Section, or Date of Birth) are incorrect." 
         });
       }
     }
@@ -728,7 +721,14 @@ app.get('/api/requests', authenticateToken, async (req, res) => {
     const reqUser = (req as any).user;
     // Filter requests if it is a student
     if (reqUser?.role === 'Student') {
-      const studentRequests = requests.filter((r: BorrowRequest) => r.rollNumber === reqUser.rollNumber);
+      const studentRequests = requests.filter((r: BorrowRequest) => {
+        const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
+        const reqSId = r.studentId || (r.class && r.section ? `${r.class}-${r.section}-${r.rollNumber}` : null);
+        if (reqSId) {
+          return reqSId.toUpperCase() === userSId.toUpperCase();
+        }
+        return r.rollNumber === reqUser.rollNumber && r.studentName?.toLowerCase() === reqUser.name?.toLowerCase();
+      });
       return res.json(studentRequests);
     }
     res.json(requests);
@@ -743,8 +743,19 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
     const reqUser = (req as any).user;
     
     // Prevent unauthenticated students from making requests for other students
-    if (reqUser?.role === 'Student' && reqUser.rollNumber !== reqBody.rollNumber) {
-      return res.status(403).json({ error: "Security Guard: Student cannot request books for other roll numbers." });
+    if (reqUser?.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
+      const reqSId = reqBody.studentId || `${reqBody.class || reqUser.class}-${reqBody.section || reqUser.section}-${reqBody.rollNumber}`;
+      if (userSId.toUpperCase() !== reqSId.toUpperCase()) {
+        return res.status(403).json({ error: "Access Denied: You can only make borrow requests for your own student record." });
+      }
+      
+      // Override or enforce these fields from the authenticated user token to prevent injection
+      reqBody.studentId = reqUser.studentId || userSId;
+      reqBody.class = reqUser.class;
+      reqBody.section = reqUser.section;
+      reqBody.rollNumber = reqUser.rollNumber;
+      reqBody.studentName = reqUser.name;
     }
 
     // Validate if book exists and has copies
@@ -759,16 +770,30 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
 
     // Prevent duplicate pending borrow requests
     const requests = await dbService.getBorrowRequests();
-    const duplicate = requests.some(r => r.rollNumber === reqBody.rollNumber && r.bookId === reqBody.bookId && r.status === 'Pending');
+    const duplicate = requests.some(r => {
+      const userSId = reqBody.studentId || `${reqBody.class || ''}-${reqBody.section || ''}-${reqBody.rollNumber}`;
+      const rId = r.studentId || (r.class && r.section ? `${r.class}-${r.section}-${r.rollNumber}` : null);
+      if (rId) {
+        return rId.toUpperCase() === userSId.toUpperCase() && r.bookId === reqBody.bookId && r.status === 'Pending';
+      }
+      return r.rollNumber === reqBody.rollNumber && r.bookId === reqBody.bookId && r.status === 'Pending';
+    });
     if (duplicate) {
       return res.status(400).json({ error: "Active requests guard: You already have a pending borrow request for this title." });
     }
 
     // Prevent borrow of already issued titles
     const logs = await dbService.getIssueLogs();
-    const alreadyIssued = logs.some(l => l.rollNumber === reqBody.rollNumber && l.bookId === reqBody.bookId && l.status === 'Issued');
+    const alreadyIssued = logs.some(l => {
+      const userSId = reqBody.studentId || `${reqBody.class || ''}-${reqBody.section || ''}-${reqBody.rollNumber}`;
+      const lId = l.studentId || (l.class && l.section ? `${l.class}-${l.section}-${l.rollNumber}` : null);
+      if (lId) {
+        return lId.toUpperCase() === userSId.toUpperCase() && l.bookId === reqBody.bookId && l.status === 'Issued';
+      }
+      return l.rollNumber === reqBody.rollNumber && l.bookId === reqBody.bookId && l.status === 'Issued';
+    });
     if (alreadyIssued) {
-      return res.status(400).json({ error: "Active outstanding loans guard: This books is currently issued to you." });
+      return res.status(400).json({ error: "Active outstanding loans guard: This book is currently issued to you." });
     }
 
     const created = await dbService.saveBorrowRequest(reqBody);
@@ -801,11 +826,20 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
       return res.status(400).json({ error: "Resource Guard: All copies have been checked out." });
     }
 
-    // Get student details to obtain class/section
+    // Get student details to obtain class/section using studentId if available
     const students = await dbService.getStudents();
-    const student = students.find(s => s.rollNumber === borrowReq.rollNumber);
-    const studClass = student?.class || "10";
-    const studSection = student?.section || "A";
+    const student = students.find(s => {
+      if (borrowReq.studentId) {
+        return s.studentId === borrowReq.studentId;
+      }
+      if (borrowReq.class && borrowReq.section) {
+        return s.rollNumber === borrowReq.rollNumber && s.class === borrowReq.class && s.section === borrowReq.section;
+      }
+      return s.rollNumber === borrowReq.rollNumber;
+    });
+    const studClass = student?.class || borrowReq.class || "10";
+    const studSection = student?.section || borrowReq.section || "A";
+    const studentIdVal = student?.studentId || borrowReq.studentId || `${studClass}-${studSection}-${borrowReq.rollNumber}`;
 
     // Set request as Approved
     await dbService.updateBorrowRequestStatus(requestId, 'Approved');
@@ -830,6 +864,7 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
       rollNumber: borrowReq.rollNumber,
       class: studClass,
       section: studSection,
+      studentId: studentIdVal,
       bookId: borrowReq.bookId,
       bookName: borrowReq.bookName,
       issueDate: issueDateStr,
@@ -939,6 +974,9 @@ app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, asyn
         id: `RQ-DIR-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
         studentName: matchedStudent.name,
         rollNumber: matchedStudent.rollNumber,
+        class: matchedStudent.class,
+        section: matchedStudent.section,
+        studentId: matchedStudent.studentId || `${matchedStudent.class}-${matchedStudent.section}-${matchedStudent.rollNumber}`,
         bookId: bk.bookId,
         bookName: bk.bookName,
         requestDate: issueDateStr,
@@ -957,6 +995,7 @@ app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, asyn
         rollNumber: matchedStudent.rollNumber,
         class: matchedStudent.class,
         section: matchedStudent.section,
+        studentId: matchedStudent.studentId || `${matchedStudent.class}-${matchedStudent.section}-${matchedStudent.rollNumber}`,
         bookId: bk.bookId,
         bookName: bk.bookName,
         issueDate: issueDateStr,
@@ -985,7 +1024,14 @@ app.get('/api/issue-logs', authenticateToken, async (req, res) => {
     const logs = await dbService.getIssueLogs();
     const reqUser = (req as any).user;
     if (reqUser?.role === 'Student') {
-      const studentLogs = logs.filter((l: BookIssueLog) => l.rollNumber === reqUser.rollNumber);
+      const studentLogs = logs.filter((l: BookIssueLog) => {
+        const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
+        const logSId = l.studentId || (l.class && l.section ? `${l.class}-${l.section}-${l.rollNumber}` : null);
+        if (logSId) {
+          return logSId.toUpperCase() === userSId.toUpperCase();
+        }
+        return l.rollNumber === reqUser.rollNumber && l.studentName?.toLowerCase() === reqUser.name?.toLowerCase();
+      });
       return res.json(studentLogs);
     }
     res.json(logs);
@@ -1113,6 +1159,9 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
     if (!reqUser) {
       return res.status(401).json({ error: "Unauthorized access context." });
     }
+    if (reqUser.role !== 'Student') {
+      return res.status(403).json({ error: "Access Denied: Only authenticated student accounts can submit feedback reviews." });
+    }
     const { rating, type, comment } = req.body;
     if (!rating || !type || !comment) {
       return res.status(400).json({ error: "Missing required feedback fields. Rating, Type, and Comment are mandatory." });
@@ -1139,7 +1188,7 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
       existingFeedback.type = type;
       existingFeedback.comment = comment;
       existingFeedback.status = computedStatus;
-      existingFeedback.createdAt = new Date().toISOString();
+      existingFeedback.updatedAt = new Date().toISOString();
       
       savedFeedback = await dbService.saveFeedback(existingFeedback);
       console.log(`Updated feedback for studentId ${studentId}. Moderation result: ${moderation.classification}. Status set to: ${computedStatus}`);
@@ -1155,7 +1204,8 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
         comment,
         reply: "",
         status: computedStatus,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       savedFeedback = await dbService.saveFeedback(newFeedback);

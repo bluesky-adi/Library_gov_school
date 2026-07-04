@@ -58,6 +58,9 @@ export interface BorrowRequest {
   id: string;
   studentName: string;
   rollNumber: number;
+  class?: string;
+  section?: string;
+  studentId?: string;
   bookId: string;
   bookName: string;
   requestDate: string;
@@ -71,6 +74,7 @@ export interface BookIssueLog {
   rollNumber: number;
   class?: string;
   section?: string;
+  studentId?: string;
   bookId: string;
   bookName: string;
   issueDate: string;
@@ -99,6 +103,7 @@ export interface Feedback {
   reply?: string;
   status: 'Pending' | 'Approved' | 'Resolved' | 'Spam';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AppState {

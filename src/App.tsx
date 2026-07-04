@@ -149,6 +149,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [books.length]);
 
+  // Real-time synchronization poll for students and librarians (Critical Issue 5)
+  useEffect(() => {
+    // Poll every 3000ms to ensure real-time synchronization of state without stale data or manual refreshes
+    const interval = setInterval(() => {
+      refreshData();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Try to restore session on boot
   useEffect(() => {
     const checkToken = localStorage.getItem("ramdiri_library_token");
@@ -1112,6 +1122,7 @@ export default function App() {
                 onLoginSuccess={handleLoginSuccess}
                 isLoggedIn={loggedInRole !== 'Guest'}
                 loggedInUserLabel={loggedInName}
+                loggedInRole={loggedInRole}
                 onLogout={handleLogout}
                 onNavigatePortal={() => setActiveTab('portal')}
               />
