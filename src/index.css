@@ -60,3 +60,39 @@
   --color-red-655: #dc2626;
   --color-red-750: #b91c1c;
 }
+
+/* Dark Mode Global Overrides for inputs/textareas/selects to resolve color contrast */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #020617 !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+.dark input:disabled,
+.dark textarea:disabled,
+.dark select:disabled {
+  opacity: 0.5 !important;
+  background-color: #1e293b !important;
+}
+.dark select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+.dark .bg-slate-50 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+}
+.dark .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+.dark .text-indigo-900 {
+  color: #a5b4fc !important;
+}
+.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+

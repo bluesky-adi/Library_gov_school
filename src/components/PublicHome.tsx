@@ -1263,7 +1263,7 @@ export default function PublicHome({
                       <select
                         value={newFeedbackForm.type}
                         onChange={(e) => setNewFeedbackForm(f => ({ ...f, type: e.target.value }))}
-                        className="w-full text-xs font-bold text-slate-900 bg-white border border-slate-300 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
+                        className="w-full text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
                       >
                         <option value="General">General Suggestion</option>
                         <option value="Book Request">Request New Books</option>
@@ -1288,7 +1288,7 @@ export default function PublicHome({
                             ? "Please write what books you need, system issues, or general remarks..."
                             : "कृपया लिखें कि आपको किन पुस्तकों की आवश्यकता है, या पुस्तकालय संबंधी सुझाव..."
                         }
-                        className="w-full text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
+                        className="w-full text-xs font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
                       />
                     </div>
 

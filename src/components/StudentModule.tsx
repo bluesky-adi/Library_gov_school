@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial } from '../types';
 import { GoogleBookCover } from './PublicHome';
-import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table } from 'lucide-react';
+import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
@@ -88,6 +88,75 @@ export default function StudentModule({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [requestingBook, setRequestingBook] = useState<Book | null>(null);
   const [requestComment, setRequestComment] = useState<string>('');
+
+  // Student Feedback States inside StudentModule Dashboard
+  const [myReview, setMyReview] = useState<any | null>(null);
+  const [myReviewLoading, setMyReviewLoading] = useState<boolean>(false);
+  const [feedbackForm, setFeedbackForm] = useState({ rating: 5, type: 'General', comment: '' });
+  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState<boolean>(false);
+
+  const fetchMyReview = () => {
+    setMyReviewLoading(true);
+    fetch('/api/feedback/my-review')
+      .then(res => res.json())
+      .then(data => {
+        if (data.feedback) {
+          setMyReview(data.feedback);
+          setFeedbackForm({
+            rating: data.feedback.rating || 5,
+            type: data.feedback.type || 'General',
+            comment: data.feedback.comment || ''
+          });
+        } else {
+          setMyReview(null);
+        }
+      })
+      .catch(err => console.error("Error loading my-review inside student panel:", err))
+      .finally(() => setMyReviewLoading(false));
+  };
+
+  // Fetch student review on mount and when active tab changes to profile
+  React.useEffect(() => {
+    if (activeSubTab === 'profile') {
+      fetchMyReview();
+    }
+  }, [activeSubTab]);
+
+  const handleFeedbackSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackForm.comment.trim()) {
+      setFeedbackError("Please provide some feedback comments.");
+      return;
+    }
+    setFeedbackSubmitting(true);
+    setFeedbackSuccess(null);
+    setFeedbackError(null);
+
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedbackForm)
+    })
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to submit feedback.");
+        }
+        setFeedbackSuccess("Your feedback/suggestion was successfully saved in the database!");
+        if (data.moderation?.classification === 'SPAM_OR_ABUSE') {
+          setFeedbackSuccess(`Auto-moderated classification flag: potentially spam (Reason: ${data.moderation.reason}). Submitting for Librarian check.`);
+        }
+        fetchMyReview();
+      })
+      .catch(err => {
+        setFeedbackError(err.message || "Network error submitting feedback.");
+      })
+      .finally(() => {
+        setFeedbackSubmitting(false);
+      });
+  };
 
   const translations = {
     EN: {
@@ -497,7 +566,7 @@ export default function StudentModule({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder={currentLang === 'EN' ? "🔍 Search english/हिन्दी/hinglish terms (e.g., vigyan, ganit)..." : "हिंदी / अंग्रेजी संकलन खोजें..."}
-                    className="w-full text-xs font-bold text-slate-900 dark:text-white pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-350 focus:border-slate-900 rounded-lg outline-none"
+                    className="w-full text-xs font-bold text-slate-900 dark:text-white pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-350 dark:border-slate-800 focus:border-slate-900 dark:focus:border-indigo-500 rounded-lg outline-none"
                   />
                 </div>
                 
@@ -506,7 +575,7 @@ export default function StudentModule({
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="text-xs font-bold p-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:ring-1 focus:ring-slate-800"
+                    className="text-xs font-bold p-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-indigo-650"
                   >
                     <option value="All">{t.allCategories}</option>
                     {bookCategories.filter(cat => cat !== 'All').map(cat => (
@@ -812,29 +881,201 @@ export default function StudentModule({
               </h3>
               
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="bg-[#fcfdfc] p-3 rounded-lg border border-slate-100 space-y-1">
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800/80 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block leading-tight">{t.totReq}</span>
-                  <span className="text-xl font-black text-slate-900 block">{studentRequests.length}</span>
+                  <span className="text-xl font-black text-slate-900 dark:text-white block">{studentRequests.length}</span>
                 </div>
-                <div className="bg-[#fcfdfc] p-3 rounded-lg border border-slate-100 space-y-1">
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800/80 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block leading-tight">{t.totIssued}</span>
-                  <span className="text-xl font-black text-slate-900 block">{studentHistoryOutputFiles.length}</span>
+                  <span className="text-xl font-black text-slate-900 dark:text-white block">{studentHistoryOutputFiles.length}</span>
                 </div>
-                <div className="bg-[#fcfdfc] p-3 rounded-lg border border-slate-100 space-y-1">
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800/80 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block leading-tight">{t.totReturned}</span>
                   <span className="text-xl font-black text-emerald-600 block">{studentLoansReturnedOnly.length}</span>
                 </div>
-                <div className="bg-[#fcfdfc] p-3 rounded-lg border border-slate-100 space-y-1">
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800/80 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block leading-tight">{t.totCurrent}</span>
                   <span className="text-xl font-black text-amber-600 block">{studentLoansIssuedOnly.length}</span>
                 </div>
-                <div className="bg-[#fcfdfc] p-3 rounded-lg border border-slate-100 space-y-1">
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800/80 space-y-1">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block leading-tight">{t.totOverdue}</span>
                   <span className="text-xl font-black text-red-655 block">{studentOverdueLoansList.length}</span>
                 </div>
               </div>
             </div>
 
+          </div>
+
+          {/* Feedback & Suggestions Registry Submodule */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl space-y-4 shadow-xs animate-fade-in" id="student-dashboard-feedback-card">
+            <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100 dark:border-slate-800 font-sans">
+              <MessageSquare className="w-5.5 h-5.5 text-indigo-600 shrink-0" />
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm select-none">
+                  {currentLang === 'EN' ? "📝 My Feedback, Book Requests & Suggestions" : "📝 मेरी प्रतिक्रिया, पुस्तक अनुरोध और सुझाव"}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {currentLang === 'EN' 
+                    ? "Direct communication channel with school librarian database" 
+                    : "पुस्तकालय अध्यक्ष के साथ सीधा संपर्क माध्यम"}
+                </p>
+              </div>
+            </div>
+
+            {myReviewLoading ? (
+              <div className="text-center py-6 text-xs text-slate-400 font-mono animate-pulse">
+                Syncing with MongoDB Feedback database...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* Form column */}
+                <div className="md:col-span-7 space-y-3.5">
+                  <form onSubmit={handleFeedbackSubmit} className="space-y-3">
+                    {feedbackSuccess && (
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in font-medium">
+                        {feedbackSuccess}
+                      </div>
+                    )}
+                    {feedbackError && (
+                      <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-100 border border-red-200 dark:border-red-800 rounded-xl text-xs animate-fade-in font-medium">
+                        {feedbackError}
+                      </div>
+                    )}
+
+                    {/* Star Rating Selectors */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block select-none">
+                        {currentLang === 'EN' ? "Your Rating (1 to 5 Stars)" : "आपका मूल्यांकन (1 से 5 सितारे)"}
+                      </label>
+                      <div className="flex gap-1.5">
+                        {[1, 2, 3, 4, 5].map((val) => (
+                          <button
+                            type="button"
+                            key={val}
+                            onClick={() => setFeedbackForm(f => ({ ...f, rating: val }))}
+                            className="p-1 cursor-pointer transition-transform hover:scale-110"
+                          >
+                            <Star 
+                              className={`w-6 h-6 ${val <= feedbackForm.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Category Type */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block select-none">
+                        {currentLang === 'EN' ? "Category Filter" : "श्रेणी चुनें"}
+                      </label>
+                      <select
+                        value={feedbackForm.type}
+                        onChange={(e) => setFeedbackForm(f => ({ ...f, type: e.target.value }))}
+                        className="w-full text-xs font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
+                      >
+                        <option value="General">General Suggestion</option>
+                        <option value="Book Request">Request New Books</option>
+                        <option value="Digital Notes">Digital Syllabus Suggestion</option>
+                        <option value="Bug Report">System Bug Report</option>
+                        <option value="Complain">Library Complaint</option>
+                      </select>
+                    </div>
+
+                    {/* Feedback comment description */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block select-none">
+                        {currentLang === 'EN' ? "Detail Comments" : "विस्तृत टिप्पणी"}
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={feedbackForm.comment}
+                        onChange={(e) => setFeedbackForm(f => ({ ...f, comment: e.target.value }))}
+                        placeholder={
+                          currentLang === 'EN'
+                            ? "Provide book names you need, describe suggestions, or file bug complaints..."
+                            : "कृपया उन पुस्तकों के नाम लिखें जिनकी आपको आवश्यकता है, या पुस्तकालय संबंधी शिकायतें..."
+                        }
+                        className="w-full text-xs font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={feedbackSubmitting}
+                      className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5 animate-pulse" />
+                      <span>
+                        {feedbackSubmitting 
+                          ? (currentLang === 'EN' ? "Saving Suggestion..." : "सुरक्षित किया जा रहा है...") 
+                          : myReview 
+                            ? (currentLang === 'EN' ? "Update My Verified Feedback" : "मेरी प्रतिक्रिया संशोधित करें") 
+                            : (currentLang === 'EN' ? "Submit Suggestion" : "सुझाव दर्ज करें")}
+                      </span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Status/Display Column */}
+                <div className="md:col-span-5 bg-slate-50 dark:bg-slate-950/45 p-4 border border-slate-150 dark:border-slate-800/85 rounded-xl flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block select-none">
+                      {currentLang === 'EN' ? "Active Review Record" : "सक्रिय समीक्षा रिकॉर्ड"}
+                    </span>
+
+                    {myReview ? (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800 dark:text-white">Rating:</span>
+                          <span className="text-xs font-extrabold text-amber-500">★ {myReview.rating} / 5</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800 dark:text-white">Status:</span>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                            myReview.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
+                            myReview.status === 'Pending' ? 'bg-amber-100 text-amber-800' :
+                            myReview.status === 'Resolved' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {myReview.status}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase">My Comments:</span>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 italic font-medium bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-100 dark:border-slate-800 leading-relaxed">
+                            "{myReview.comment}"
+                          </p>
+                        </div>
+
+                        {myReview.reply && (
+                          <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border-l-2 border-indigo-550 rounded-r space-y-1">
+                            <span className="text-[9.5px] font-black uppercase text-indigo-700 dark:text-indigo-450 block">Librarian Response:</span>
+                            <p className="text-xs text-slate-750 dark:text-slate-300 font-extrabold">
+                              "{myReview.reply}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                        <MessageSquare className="w-8 h-8 text-slate-300 stroke-[1.5]" />
+                        <p className="font-bold leading-normal">
+                          {currentLang === 'EN' 
+                            ? "No feedback or suggestions submitted yet for your student profile." 
+                            : "आपके छात्र प्रोफाइल के लिए अभी तक कोई प्रतिक्रिया दर्ज नहीं की गई है।"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] text-slate-400 leading-snug border-t border-slate-100 dark:border-slate-800 pt-2 font-mono">
+                    {currentLang === 'EN' 
+                      ? "✍️ You can edit your submitted reviews at any time. Updating will trigger automatic spam filtering classification checks." 
+                      : "✍️ आप किसी भी समय सबमिट समीक्षाओं को संपादित कर सकते हैं।"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 3. Detailed Checking History Table Grid */}
@@ -1092,7 +1333,7 @@ export default function StudentModule({
                     ? "e.g., I will need this book for 25 days to prepare for science exams." 
                     : "उदा. मुझे विज्ञान परीक्षा की तैयारी के लिए यह पुस्तक 25 दिनों के लिए चाहिए।"
                   }
-                  className="w-full text-xs font-bold text-slate-900 dark:text-white p-3 bg-slate-50 border border-slate-350 focus:border-[#0f172a] rounded-lg outline-none min-h-[90px] h-[90px] resize-none"
+                  className="w-full text-xs font-bold text-slate-900 dark:text-white p-3 bg-slate-50 dark:bg-slate-950 border border-slate-350 dark:border-slate-800 focus:border-[#0f172a] dark:focus:border-indigo-500 rounded-lg outline-none min-h-[90px] h-[90px] resize-none"
                 />
                 <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono font-bold">
                   <span>{currentLang === 'EN' ? "Use to justify period or return needs" : "अवधि या पाठन उद्देश्यों को स्पष्ट करें"}</span>

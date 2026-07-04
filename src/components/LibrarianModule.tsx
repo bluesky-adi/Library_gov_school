@@ -1593,7 +1593,7 @@ export default function LibrarianModule({
                     value={confirmInput}
                     onChange={(e) => setConfirmInput(e.target.value)}
                     placeholder={`Type ${confirmModal.requireInput} here`}
-                    className="w-full text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-250 outline-none text-slate-900 font-mono uppercase font-black tracking-widest text-center focus:ring-1 focus:ring-red-500"
+                    className="w-full text-xs p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 outline-none text-slate-900 dark:text-white font-mono uppercase font-black tracking-widest text-center focus:ring-1 focus:ring-red-500"
                   />
                 </div>
               )}
@@ -1917,7 +1917,7 @@ export default function LibrarianModule({
                   value={bookSearchInput}
                   onChange={(e) => setBookSearchInput(e.target.value)}
                   placeholder={t.bookSearchPlaceholder}
-                  className="w-full text-xs pl-9 pr-3 py-2.5 bg-white border border-slate-205 rounded-lg outline-none focus:ring-1 focus:focus:ring-slate-805 animate-fade-in text-slate-900"
+                  className="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:focus:ring-slate-805 animate-fade-in text-slate-900 dark:text-white"
                 />
               </div>
 
@@ -2466,7 +2466,7 @@ export default function LibrarianModule({
                 value={studentSearchInput}
                 onChange={(e) => setStudentSearchInput(e.target.value)}
                 placeholder={t.studentSearchPlaceholder}
-                className="w-full text-xs pl-9 pr-3 py-2.5 bg-white border border-slate-205 rounded-lg outline-none focus:ring-1 focus:ring-slate-800 text-slate-900"
+                className="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-slate-800 text-slate-900 dark:text-white"
               />
             </div>
             
@@ -4695,7 +4695,7 @@ export default function LibrarianModule({
                                     value={replyText}
                                     onChange={(e) => setReplyText(e.target.value)}
                                     placeholder="Write administrative response..."
-                                    className="w-full text-xs p-2 border border-slate-300 dark:border-slate-800 rounded outline-none"
+                                    className="w-full text-xs p-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded outline-none text-slate-900 dark:text-white"
                                     rows={2}
                                   />
                                   <div className="flex gap-1.5 justify-end">
