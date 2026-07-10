@@ -364,41 +364,110 @@ app.post('/api/auth/login', async (req, res) => {
       console.log(`[API ROUTE] Fetching students list for exact Student validation...`);
       const studentsList = await dbService.getStudents();
       
-      const matched = studentsList.find((s: Student) => {
+      // 1. Exact match on Class, Section, and Roll Number
+      const matches = studentsList.filter((s: Student) => {
         const classMatch = s.class?.toString().trim().toLowerCase() === inputClass.toLowerCase();
         const sectionMatch = s.section?.toString().trim().toUpperCase() === inputSection;
-        const rollMatch = parseInt(s.rollNumber?.toString()) === roll;
-        const dobMatch = toStandardDate(s.dob) === toStandardDate(dob);
-        return classMatch && sectionMatch && rollMatch && dobMatch;
+        const rollMatch = Number(s.rollNumber) === roll;
+        return classMatch && sectionMatch && rollMatch;
       });
 
-      if (matched) {
-        const token = jwt.sign(
-          { 
-            role: 'Student', 
-            studentId: matched.studentId || `${matched.class}-${matched.section}-${matched.rollNumber}`,
-            rollNumber: roll, 
-            name: matched.name,
-            class: matched.class,
-            section: matched.section
-          },
-          JWT_SECRET,
-          { expiresIn: '1d' }
-        );
-        console.log(`[API ROUTE] Student login SUCCESSFUL for student: ${matched.name} (${matched.studentId})`);
-        return res.json({
-          success: true,
-          token,
-          role: 'Student',
-          student: matched
-        });
-      } else {
-        console.warn(`[API ROUTE] Student login FAILED. No matching record found for the provided credentials.`);
-        return res.status(401).json({ 
-          success: false, 
-          error: "Authentication Failed: Student record not found or credentials (Roll Number, Class, Section, or Date of Birth) are incorrect." 
+      // 2. If multiple records match on Class, Section, and Roll, fail authentication immediately to prevent any leakage or guessing.
+      if (matches.length > 1) {
+        console.error(`[API ROUTE] Student login FAILED: Multiple student records (${matches.length}) found for Class: ${inputClass}, Section: ${inputSection}, Roll: ${roll}.`);
+        return res.status(401).json({
+          success: false,
+          error: "Authentication Failed: Data integrity anomaly. Multiple students matched this profile. Please contact the librarian."
         });
       }
+
+      // 3. If zero records match, fail authentication
+      if (matches.length === 0) {
+        console.warn(`[API ROUTE] Student login FAILED: No record found for Class: ${inputClass}, Section: ${inputSection}, Roll: ${roll}.`);
+        return res.status(401).json({
+          success: false,
+          error: "Authentication Failed: Student record not found or credentials (Roll Number, Class, Section, or Date of Birth) are incorrect."
+        });
+      }
+
+      const matched = matches[0];
+
+      // 4. DOB Verification Gate: DB and Entered DOB must be non-empty and must match exactly.
+      const dbDobTrimmed = matched.dob ? matched.dob.toString().trim() : "";
+      const inputDobTrimmed = dob ? dob.toString().trim() : "";
+
+      if (dbDobTrimmed === "") {
+        console.warn(`[API ROUTE] Student login BLOCKED: Student '${matched.name}' has a blank/missing Date of Birth in the registry.`);
+        return res.status(400).json({
+          success: false,
+          error: "Your profile is incomplete. Please contact the librarian."
+        });
+      }
+
+      if (inputDobTrimmed === "") {
+        return res.status(400).json({
+          success: false,
+          error: "Authentication Failed: Student login requires Date of Birth verification."
+        });
+      }
+
+      // Compare standard normalized dates
+      const dbDobStandard = toStandardDate(dbDobTrimmed);
+      const inputDobStandard = toStandardDate(inputDobTrimmed);
+
+      if (dbDobStandard !== inputDobStandard) {
+        console.warn(`[API ROUTE] Student login FAILED: Date of Birth mismatch for '${matched.name}'. DB: ${dbDobStandard}, Entered: ${inputDobStandard}`);
+        return res.status(401).json({
+          success: false,
+          error: "Authentication Failed: Student record not found or credentials (Roll Number, Class, Section, or Date of Birth) are incorrect."
+        });
+      }
+
+      const jwtStudentId = matched.studentId || `${matched.class.toString().trim().toUpperCase()}-${matched.section.toString().trim().toUpperCase()}-${matched.rollNumber}`;
+
+      console.log(`
+========================================================================
+🕵️‍♂️ STUDENT AUTHENTICATION IDENTITY TRACE & PROOF
+========================================================================
+- Submitted Roll:    [${roll}]
+- Matched Roll:      [${matched.rollNumber}]
+
+- Submitted Class:   [${inputClass}]
+- Matched Class:     [${matched.class}]
+
+- Submitted Section: [${inputSection}]
+- Matched Section:   [${matched.section}]
+
+- Submitted DOB:     [${dob}]
+- Normalized Sub:    [${inputDobStandard}]
+- Matched DOB:       [${matched.dob}]
+- Normalized Match:  [${dbDobStandard}]
+
+- Returned Student ID:  [${matched.studentId}]
+- JWT Student ID:       [${jwtStudentId}]
+- Dashboard Student ID: [${jwtStudentId}]
+========================================================================
+      `);
+
+      const token = jwt.sign(
+        { 
+          role: 'Student', 
+          studentId: jwtStudentId,
+          rollNumber: Number(matched.rollNumber), 
+          name: matched.name,
+          class: matched.class.toString().trim().toUpperCase(),
+          section: matched.section.toString().trim().toUpperCase()
+        },
+        JWT_SECRET,
+        { expiresIn: '1d' }
+      );
+      console.log(`[API ROUTE] Student login SUCCESSFUL for student: ${matched.name} (${matched.studentId})`);
+      return res.json({
+        success: true,
+        token,
+        role: 'Student',
+        student: matched
+      });
     }
   } catch (error: any) {
     console.error(`[API ROUTE ERROR] POST /api/auth/login crash encountered:`, error);
@@ -721,13 +790,10 @@ app.get('/api/requests', authenticateToken, async (req, res) => {
     const reqUser = (req as any).user;
     // Filter requests if it is a student
     if (reqUser?.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
       const studentRequests = requests.filter((r: BorrowRequest) => {
-        const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
-        const reqSId = r.studentId || (r.class && r.section ? `${r.class}-${r.section}-${r.rollNumber}` : null);
-        if (reqSId) {
-          return reqSId.toUpperCase() === userSId.toUpperCase();
-        }
-        return r.rollNumber === reqUser.rollNumber && r.studentName?.toLowerCase() === reqUser.name?.toLowerCase();
+        const reqSId = r.studentId || `${(r.class || '').toString().trim().toUpperCase()}-${(r.section || '').toString().trim().toUpperCase()}-${r.rollNumber}`;
+        return reqSId.toUpperCase() === userSId.toUpperCase();
       });
       return res.json(studentRequests);
     }
@@ -744,17 +810,12 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
     
     // Prevent unauthenticated students from making requests for other students
     if (reqUser?.role === 'Student') {
-      const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
-      const reqSId = reqBody.studentId || `${reqBody.class || reqUser.class}-${reqBody.section || reqUser.section}-${reqBody.rollNumber}`;
-      if (userSId.toUpperCase() !== reqSId.toUpperCase()) {
-        return res.status(403).json({ error: "Access Denied: You can only make borrow requests for your own student record." });
-      }
-      
-      // Override or enforce these fields from the authenticated user token to prevent injection
-      reqBody.studentId = reqUser.studentId || userSId;
-      reqBody.class = reqUser.class;
-      reqBody.section = reqUser.section;
-      reqBody.rollNumber = reqUser.rollNumber;
+      // Force user coordinates from verified token
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+      reqBody.studentId = userSId;
+      reqBody.class = reqUser.class.toString().trim().toUpperCase();
+      reqBody.section = reqUser.section.toString().trim().toUpperCase();
+      reqBody.rollNumber = Number(reqUser.rollNumber);
       reqBody.studentName = reqUser.name;
     }
 
@@ -771,12 +832,9 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
     // Prevent duplicate pending borrow requests
     const requests = await dbService.getBorrowRequests();
     const duplicate = requests.some(r => {
-      const userSId = reqBody.studentId || `${reqBody.class || ''}-${reqBody.section || ''}-${reqBody.rollNumber}`;
-      const rId = r.studentId || (r.class && r.section ? `${r.class}-${r.section}-${r.rollNumber}` : null);
-      if (rId) {
-        return rId.toUpperCase() === userSId.toUpperCase() && r.bookId === reqBody.bookId && r.status === 'Pending';
-      }
-      return r.rollNumber === reqBody.rollNumber && r.bookId === reqBody.bookId && r.status === 'Pending';
+      const userSId = reqBody.studentId || `${(reqBody.class || '').toString().trim().toUpperCase()}-${(reqBody.section || '').toString().trim().toUpperCase()}-${reqBody.rollNumber}`;
+      const rId = r.studentId || `${(r.class || '').toString().trim().toUpperCase()}-${(r.section || '').toString().trim().toUpperCase()}-${r.rollNumber}`;
+      return rId.toUpperCase() === userSId.toUpperCase() && r.bookId === reqBody.bookId && r.status === 'Pending';
     });
     if (duplicate) {
       return res.status(400).json({ error: "Active requests guard: You already have a pending borrow request for this title." });
@@ -785,12 +843,9 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
     // Prevent borrow of already issued titles
     const logs = await dbService.getIssueLogs();
     const alreadyIssued = logs.some(l => {
-      const userSId = reqBody.studentId || `${reqBody.class || ''}-${reqBody.section || ''}-${reqBody.rollNumber}`;
-      const lId = l.studentId || (l.class && l.section ? `${l.class}-${l.section}-${l.rollNumber}` : null);
-      if (lId) {
-        return lId.toUpperCase() === userSId.toUpperCase() && l.bookId === reqBody.bookId && l.status === 'Issued';
-      }
-      return l.rollNumber === reqBody.rollNumber && l.bookId === reqBody.bookId && l.status === 'Issued';
+      const userSId = reqBody.studentId || `${(reqBody.class || '').toString().trim().toUpperCase()}-${(reqBody.section || '').toString().trim().toUpperCase()}-${reqBody.rollNumber}`;
+      const lId = l.studentId || `${(l.class || '').toString().trim().toUpperCase()}-${(l.section || '').toString().trim().toUpperCase()}-${l.rollNumber}`;
+      return lId.toUpperCase() === userSId.toUpperCase() && l.bookId === reqBody.bookId && l.status === 'Issued';
     });
     if (alreadyIssued) {
       return res.status(400).json({ error: "Active outstanding loans guard: This book is currently issued to you." });
@@ -915,8 +970,12 @@ app.post('/api/requests/:id/cancel', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Borrow request code not discovered." });
     }
     const reqUser = (req as any).user;
-    if (reqUser?.role === 'Student' && reqUser.rollNumber !== borrowReq.rollNumber) {
-      return res.status(403).json({ error: "Request cancel shield: You cannot cancel another student's request." });
+    if (reqUser?.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+      const reqSId = borrowReq.studentId || `${(borrowReq.class || '').toString().trim().toUpperCase()}-${(borrowReq.section || '').toString().trim().toUpperCase()}-${borrowReq.rollNumber}`;
+      if (userSId.toUpperCase() !== reqSId.toUpperCase()) {
+        return res.status(403).json({ error: "Request cancel shield: You cannot cancel another student's request." });
+      }
     }
     if (borrowReq.status !== 'Pending') {
       return res.status(400).json({ error: "Only outstanding pending requests can be cancelled." });
@@ -1024,13 +1083,10 @@ app.get('/api/issue-logs', authenticateToken, async (req, res) => {
     const logs = await dbService.getIssueLogs();
     const reqUser = (req as any).user;
     if (reqUser?.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
       const studentLogs = logs.filter((l: BookIssueLog) => {
-        const userSId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
-        const logSId = l.studentId || (l.class && l.section ? `${l.class}-${l.section}-${l.rollNumber}` : null);
-        if (logSId) {
-          return logSId.toUpperCase() === userSId.toUpperCase();
-        }
-        return l.rollNumber === reqUser.rollNumber && l.studentName?.toLowerCase() === reqUser.name?.toLowerCase();
+        const logSId = l.studentId || `${(l.class || '').toString().trim().toUpperCase()}-${(l.section || '').toString().trim().toUpperCase()}-${l.rollNumber}`;
+        return logSId.toUpperCase() === userSId.toUpperCase();
       });
       return res.json(studentLogs);
     }
