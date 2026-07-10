@@ -742,6 +742,8 @@ export default function LibrarianModule({
 
   const [showCategoryModal, setShowCategoryModal] = useState<boolean>(false);
   const [newCategoryName, setNewCategoryName] = useState<string>('');
+  const [showExcelBooksModal, setShowExcelBooksModal] = useState<boolean>(false);
+  const [showExcelStudentsModal, setShowExcelStudentsModal] = useState<boolean>(false);
 
   // Issued Details Modal state
   const [showIssuedModal, setShowIssuedModal] = useState<boolean>(false);
@@ -1971,6 +1973,15 @@ export default function LibrarianModule({
 
             <div className="flex gap-2">
               <button
+                onClick={() => setShowExcelBooksModal(true)}
+                className="px-4 py-2.5 bg-emerald-650 hover:bg-emerald-750 text-white font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs select-none"
+                id="btn-upload-excel-books-shortcut"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Upload Excel</span>
+              </button>
+
+              <button
                 onClick={() => setShowCategoryModal(true)}
                 className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer select-none"
               >
@@ -2470,22 +2481,34 @@ export default function LibrarianModule({
               />
             </div>
             
-            <button
-              onClick={() => {
-                setEditingStudent(null);
-                setStudName('');
-                setStudClass('10');
-                setStudSection('A');
-                setStudRoll('');
-                setStudDOB('');
-                setShowStudentForm(true);
-              }}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs select-none"
-              type="button"
-            >
-              <PlusCircle className="w-4.5 h-4.5" />
-              <span>Enroll Student Manually</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowExcelStudentsModal(true)}
+                className="px-4 py-2.5 bg-emerald-650 hover:bg-emerald-750 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs select-none"
+                type="button"
+                id="btn-upload-excel-students-shortcut"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Upload Excel</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingStudent(null);
+                  setStudName('');
+                  setStudClass('10');
+                  setStudSection('A');
+                  setStudRoll('');
+                  setStudDOB('');
+                  setShowStudentForm(true);
+                }}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs select-none"
+                type="button"
+              >
+                <PlusCircle className="w-4.5 h-4.5" />
+                <span>Enroll Student Manually</span>
+              </button>
+            </div>
           </div>
 
           {/* QUICK CHANNELS CLASS & SECTION SELECTORS */}
@@ -5087,6 +5110,76 @@ export default function LibrarianModule({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* EXCEL BOOKS IMPORT MODAL */}
+      {showExcelBooksModal && (
+        <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 z-100 select-none animate-fade-in" id="excel-books-modal-container">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col">
+            
+            <div className="bg-slate-950 text-white p-4.5 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="font-extrabold text-[10px] uppercase tracking-wider block text-emerald-450">Excel Spreadsheet Ingress Console</span>
+                <h3 className="text-sm font-black uppercase text-slate-100">Bulk Upload Books via Excel Spreadsheet</h3>
+              </div>
+              <button 
+                onClick={() => setShowExcelBooksModal(false)}
+                className="w-7 h-7 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer font-bold text-sm animate-fade-in"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[75vh]">
+              <ExcelModule
+                onImportBooks={(imported) => {
+                  handleExcelBooksImported(imported);
+                  setShowExcelBooksModal(false);
+                }}
+                onImportStudents={handleExcelStudentsImported}
+                currentLang={currentLang}
+                existingBooks={books}
+                existingStudents={students}
+                initialPreset="books"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXCEL STUDENTS IMPORT MODAL */}
+      {showExcelStudentsModal && (
+        <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 z-100 select-none animate-fade-in" id="excel-students-modal-container">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col">
+            
+            <div className="bg-slate-950 text-white p-4.5 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="font-extrabold text-[10px] uppercase tracking-wider block text-emerald-450">Excel Spreadsheet Ingress Console</span>
+                <h3 className="text-sm font-black uppercase text-slate-100">Bulk Upload Students via Excel Spreadsheet</h3>
+              </div>
+              <button 
+                onClick={() => setShowExcelStudentsModal(false)}
+                className="w-7 h-7 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer font-bold text-sm animate-fade-in"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[75vh]">
+              <ExcelModule
+                onImportBooks={handleExcelBooksImported}
+                onImportStudents={(imported) => {
+                  handleExcelStudentsImported(imported);
+                  setShowExcelStudentsModal(false);
+                }}
+                currentLang={currentLang}
+                existingBooks={books}
+                existingStudents={students}
+                initialPreset="students"
+              />
+            </div>
           </div>
         </div>
       )}

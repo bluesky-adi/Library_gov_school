@@ -110,10 +110,11 @@ interface ExcelModuleProps {
   currentLang: 'EN' | 'HI';
   existingBooks?: Book[];
   existingStudents?: Student[];
+  initialPreset?: 'books' | 'students';
 }
 
-export default function ExcelModule({ onImportBooks, onImportStudents, currentLang, existingBooks, existingStudents }: ExcelModuleProps) {
-  const [activePreset, setActivePreset] = useState<'books' | 'students'>('books');
+export default function ExcelModule({ onImportBooks, onImportStudents, currentLang, existingBooks, existingStudents, initialPreset = 'books' }: ExcelModuleProps) {
+  const [activePreset, setActivePreset] = useState<'books' | 'students'>(initialPreset);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [booksParsed, setBooksParsed] = useState<Book[]>([]);
   const [studentsParsed, setStudentsParsed] = useState<Student[]>([]);
@@ -121,6 +122,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
   const [isValidated, setIsValidated] = useState<boolean>(false);
   const [detectedFormat, setDetectedFormat] = useState<'school' | 'template' | 'custom' | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [reservedSkippedCount, setReservedSkippedCount] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // States to facilitate sheet selection, expectation calculations and previews
@@ -156,6 +158,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
     databaseTotalBooks?: number;
     studentsImported?: number;
     studentsMissingDob?: number;
+    studentsSkippedReserved?: number;
   } | null>(null);
 
   const t = {
@@ -399,6 +402,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
         return;
       }
 
+      let reservedCount = 0;
       const studentsList: Student[] = [];
       sheetsAvailable.forEach(sheet => {
         if (selectedSheetNames.includes(sheet.name)) {
@@ -421,6 +425,16 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
             
             const sectionRaw = mapping.sectionCol ? row[mapping.sectionCol] : undefined;
             const section = sectionRaw ? sectionRaw.toString().trim().toUpperCase() : "";
+
+            const isNameEmpty = !name;
+            const isDobEmpty = !dobRaw || String(dobRaw).trim() === "";
+            const hasRoll = !isNaN(rollNumber) && rollNumber > 0;
+
+            if (hasRoll && isNameEmpty && isDobEmpty) {
+              reservedCount++;
+              validationWarnings.push(`Row ${index + 2} in [${sheet.name}] (Roll #${rollNumber}): Reserved Roll Number (Missing student information). Preserving sequence by skipping.`);
+              return;
+            }
 
             if (!name) {
               validationWarnings.push(`Row ${index + 2} in [${sheet.name}]: Student name is missing. Skipping.`);
@@ -482,6 +496,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       setStudentsParsed(studentsList);
       setBooksParsed([]);
       setWarnings(validationWarnings);
+      setReservedSkippedCount(reservedCount);
       setIsValidated(true);
       setLogs(validationLogs);
     }
@@ -660,7 +675,8 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       const missingDobCount = studentsParsed.filter(s => !s.dob || s.dob.trim() === "").length;
       setSuccessReport({
         studentsImported: studentsParsed.length,
-        studentsMissingDob: missingDobCount
+        studentsMissingDob: missingDobCount,
+        studentsSkippedReserved: reservedSkippedCount
       });
       onImportStudents(studentsParsed);
       setStudentsParsed([]);
@@ -736,13 +752,13 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                 </h4>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
                 <div className="bg-white dark:bg-slate-950 border border-emerald-250 p-4 rounded-lg text-center">
                   <span className="text-[10px] text-slate-400 uppercase block font-bold">
                     {currentLang === 'EN' ? "Students Imported" : "आयातित छात्र"}
                   </span>
                   <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 mt-1 block">
-                    {successReport.studentsImported} {currentLang === 'EN' ? "students imported" : "छात्र आयात किए गए"}
+                    {successReport.studentsImported}
                   </span>
                 </div>
                 <div className={`bg-white dark:bg-slate-950 border p-4 rounded-lg text-center ${
@@ -756,7 +772,15 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
                   <span className={`text-lg font-black mt-1 block ${
                     (successReport.studentsMissingDob || 0) > 0 ? 'text-amber-600 dark:text-amber-450' : 'text-slate-500'
                   }`}>
-                    {successReport.studentsMissingDob} {currentLang === 'EN' ? "students missing Date of Birth" : "छात्रों की जन्म तिथि गायब है"}
+                    {successReport.studentsMissingDob}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-lg text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block font-bold">
+                    {currentLang === 'EN' ? "Reserved Rolls Skipped" : "आरक्षित रोल छोड़े गए"}
+                  </span>
+                  <span className="text-lg font-black text-amber-500 mt-1 block">
+                    {successReport.studentsSkippedReserved || 0}
                   </span>
                 </div>
               </div>
