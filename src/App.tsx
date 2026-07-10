@@ -221,10 +221,21 @@ export default function App() {
     }
   }, []);
 
-  // Update dynamic logged-in student profile if student database changes
+  // Update dynamic logged-in student profile if student database changes with strict multi-coordinate isolation mapping
   useEffect(() => {
     if (loggedInRole === 'Student' && loggedInStudent) {
-      const live = students.find(s => s.rollNumber === loggedInStudent.rollNumber);
+      const live = students.find(s => {
+        const idA = (s.studentId || `${s.class}-${s.section}-${s.rollNumber}`).trim().toLowerCase();
+        const idB = (loggedInStudent.studentId || `${loggedInStudent.class}-${loggedInStudent.section}-${loggedInStudent.rollNumber}`).trim().toLowerCase();
+        
+        // Exact match coordinates
+        const matchId = idA === idB;
+        const matchCoords = s.class?.toString().trim().toLowerCase() === loggedInStudent.class?.toString().trim().toLowerCase() &&
+                            s.section?.toString().trim().toUpperCase() === loggedInStudent.section?.toString().trim().toUpperCase() &&
+                            Number(s.rollNumber) === Number(loggedInStudent.rollNumber);
+        
+        return matchId || matchCoords;
+      });
       if (live) {
         setLoggedInStudent(live);
       }
