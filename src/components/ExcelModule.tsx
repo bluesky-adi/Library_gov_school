@@ -431,8 +431,17 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
             const hasRoll = !isNaN(rollNumber) && rollNumber > 0;
 
             if (hasRoll && isNameEmpty && isDobEmpty) {
-              reservedCount++;
-              validationWarnings.push(`Row ${index + 2} in [${sheet.name}] (Roll #${rollNumber}): Reserved Roll Number (Missing student information). Preserving sequence by skipping.`);
+              const finalId = `${(studClass || "10").toUpperCase()}-${(section || "A").toUpperCase()}-${rollNumber}`;
+              studentsList.push({
+                studentId: finalId,
+                name: "",
+                rollNumber,
+                dob: "",
+                class: studClass || "10",
+                section: section || "A",
+                status: "VACANT"
+              });
+              validationLogs.push(`[${sheet.name}] Vacant Student slot created at Roll #${rollNumber}`);
               return;
             }
 

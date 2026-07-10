@@ -52,6 +52,7 @@ export interface Student {
   class: string; // e.g. "10", "11", "9"
   section: string; // e.g. "A", "B", "C"
   pin?: string;
+  status?: string;
 }
 
 export interface BorrowRequest {

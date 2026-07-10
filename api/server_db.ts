@@ -174,11 +174,12 @@ const StudyMaterialSchema = new mongoose.Schema({
 
 const StudentSchema = new mongoose.Schema({
   studentId: { type: String, required: true, unique: true },
-  name: { type: String, required: true },
+  name: { type: String, default: "" },
   rollNumber: { type: Number, required: true },
   dob: { type: String, default: "" }, // YYYY-MM-DD
   class: { type: String, required: true },
-  section: { type: String, required: true }
+  section: { type: String, required: true },
+  status: { type: String, default: "" }
 });
 
 const BorrowRequestSchema = new mongoose.Schema({
@@ -819,7 +820,7 @@ export const dbService = {
 
   async saveStudent(student: Student, isEdit?: boolean): Promise<Student> {
     // Generate/Validate unique Student ID
-    if (!student.name || !student.rollNumber || !student.class || !student.section) {
+    if ((!student.name && student.status !== "VACANT") || !student.rollNumber || !student.class || !student.section) {
       throw new Error("Validation Error: Student Name, Roll Number, Class, and Section are absolutely required.");
     }
     if (student.rollNumber <= 0) {
@@ -910,7 +911,7 @@ export const dbService = {
     }
 
     for (const stud of students) {
-      if (!stud.name || !stud.rollNumber || !stud.class || !stud.section) {
+      if ((!stud.name && stud.status !== "VACANT") || !stud.rollNumber || !stud.class || !stud.section) {
         errorCount++;
         errors.push(`Row missing required fields for student: ${stud.name || 'Unknown'}`);
         continue;

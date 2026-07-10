@@ -2718,7 +2718,7 @@ export default function LibrarianModule({
                             className="hover:underline text-indigo-700 hover:text-indigo-905 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer focus:outline-none focus:ring-0 select-none"
                             title="Click to view full academic library profile history"
                           >
-                            {stud.name}
+                            {stud.status === "VACANT" || !stud.name ? (currentLang === 'EN' ? "Vacant" : "रिक्त") : stud.name}
                           </button>
                         </td>
                         <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300">Class {stud.class || "10"}-{stud.section || "A"}</td>
@@ -3197,7 +3197,7 @@ export default function LibrarianModule({
                   <tbody className="divide-y divide-slate-150">
                     {students.map(s => (
                       <tr key={s.studentId || `${s.class}-${s.section}-${s.rollNumber}`}>
-                        <td className="py-2 font-bold text-slate-950">{s.name}</td>
+                        <td className="py-2 font-bold text-slate-950">{s.status === "VACANT" || !s.name ? (currentLang === 'EN' ? "Vacant" : "रिक्त") : s.name}</td>
                         <td className="py-2 text-center">Grade {s.class || '10'}-{s.section || 'A'}</td>
                         <td className="py-2 font-mono">#{s.rollNumber}</td>
                         <td className="py-2 text-right font-mono">{s.dob}</td>
@@ -5347,7 +5347,7 @@ export default function LibrarianModule({
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-555 mr-2">{currentLang === 'HI' ? "पूरा नाम" : "Full Name"}:</span>
-                        <span className="font-extrabold text-slate-900 dark:text-slate-100 text-right">{stud.name}</span>
+                        <span className="font-extrabold text-slate-900 dark:text-slate-100 text-right">{stud.status === "VACANT" || !stud.name ? (currentLang === 'EN' ? "Vacant" : "रिक्त") : stud.name}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-555 mr-2">{currentLang === 'HI' ? "रॉल नंबर" : "Roll Call Number"}:</span>
