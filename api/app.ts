@@ -552,6 +552,7 @@ app.post('/api/auth/change-credentials', authenticateToken, requireLibrarian, as
 
 app.get('/api/librarian/profile', async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     const config = await getLibrarianConfig();
     res.json({
       success: true,
@@ -559,7 +560,7 @@ app.get('/api/librarian/profile', async (req, res) => {
       designation: config.designation || "Senior Chief Librarian",
       biography: config.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
       profilePhoto: config.profilePhoto || "",
-      yearsOfService: config.yearsOfService || "25+ Years of Service"
+      yearsOfService: config.yearsOfService || ""
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -576,7 +577,7 @@ app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (r
       designation: (designation !== undefined) ? designation.trim() : (config.designation || "Senior Chief Librarian"),
       biography: (biography !== undefined) ? biography.trim() : (config.biography || ""),
       profilePhoto: (profilePhoto !== undefined) ? profilePhoto.trim() : (config.profilePhoto || ""),
-      yearsOfService: (yearsOfService !== undefined) ? yearsOfService.trim() : (config.yearsOfService || "25+ Years of Service")
+      yearsOfService: (yearsOfService !== undefined) ? yearsOfService.trim() : (config.yearsOfService || "")
     };
 
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
@@ -656,6 +657,7 @@ app.get('/api/database/stats', authenticateToken, requireLibrarian, async (req, 
 
 app.get('/api/public-stats', async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     const stats = await dbService.getDbStats();
     const materials = await dbService.getStudyMaterials();
     const feedbacks = await dbService.getFeedbacks();

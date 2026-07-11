@@ -9,8 +9,9 @@ import {
   BookOpen, Award, GraduationCap, MapPin, 
   Phone, Mail, Calendar, Key, Shield, User, X, CheckCircle, AlertCircle, Eye, EyeOff,
   Search, LayoutGrid, Table, Info, FileText, MessageSquare, Download, Star, Send, ChevronDown,
-  TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight
+  TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight, ZoomIn, ZoomOut, RotateCcw
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
@@ -182,8 +183,40 @@ export default function PublicHome({
     designation: "Senior Chief Librarian",
     biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
     profilePhoto: "",
-    yearsOfService: "25+ Years of Service"
+    yearsOfService: ""
   });
+
+  const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
+  const [initialScale, setInitialScale] = useState<number>(1);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setTouchStartDist(dist);
+      setInitialScale(zoomScale);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartDist !== null) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scaleFactor = dist / touchStartDist;
+      const nextScale = Math.min(Math.max(initialScale * scaleFactor, 0.5), 3);
+      setZoomScale(nextScale);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setTouchStartDist(null);
+  };
 
   useEffect(() => {
     fetch('/api/librarian/profile')
@@ -195,7 +228,7 @@ export default function PublicHome({
             designation: data.designation || "Senior Chief Librarian",
             biography: data.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
             profilePhoto: data.profilePhoto || "",
-            yearsOfService: data.yearsOfService || "25+ Years of Service"
+            yearsOfService: data.yearsOfService || ""
           });
         }
       })
@@ -684,8 +717,12 @@ export default function PublicHome({
               <img
                 src={librarianProfile.profilePhoto}
                 referrerPolicy="no-referrer"
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-indigo-100 dark:border-slate-800 shadow-md"
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-indigo-100 dark:border-slate-800 shadow-md cursor-zoom-in hover:opacity-95 hover:scale-105 active:scale-95 transition-all"
                 alt={librarianProfile.name}
+                onClick={() => {
+                  setZoomScale(1);
+                  setIsPhotoViewerOpen(true);
+                }}
               />
             ) : (
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-indigo-600 border-2 border-indigo-100 dark:border-slate-800 flex items-center justify-center text-white text-2xl font-black shadow-md">
@@ -759,17 +796,6 @@ export default function PublicHome({
         >
           <TrendingUp className="w-4 h-4" />
           <span>{currentLang === 'EN' ? "Impact & Story" : "प्रभाव एवं कहानी (Vision)"}</span>
-        </button>
-        <button
-          onClick={() => setHomeActiveTab('docs')}
-          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-4 transition-all shrink-0 flex items-center gap-2 ${
-            homeActiveTab === 'docs'
-              ? 'border-indigo-600 text-indigo-650 dark:text-indigo-400 font-black'
-              : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-          }`}
-        >
-          <Info className="w-4 h-4" />
-          <span>{currentLang === 'EN' ? "User & Project Docs" : "दस्तावेज़ (Documentation)"}</span>
         </button>
         <button
           onClick={() => setHomeActiveTab('health')}
@@ -1452,24 +1478,36 @@ export default function PublicHome({
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">2,895</div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400">📚 Books Digitized</div>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                  {liveStats.booksCount || 0}
+                </div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📚 Books Digitized</div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">520</div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400">👨‍🎓 Students Served</div>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                  {liveStats.studentsCount || 0}
+                </div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">👨‍🎓 Enrolled Students</div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-amber-500 font-mono">0.4 sec</div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400">⚡ Average Search</div>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                  {liveStats.digitalMaterialsCount || 0}
+                </div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📖 Digital Resources</div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">300+</div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400">📖 Requests Handled</div>
+                <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
+                  {liveStats.activeIssuedCount || 0}
+                </div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📑 Active Loans</div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center col-span-2 sm:col-span-1 shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-pink-600 font-mono">4.8 / 5</div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400">⭐ Satisfaction</div>
+                <div className="text-2xl sm:text-3xl font-black text-pink-600 font-mono">
+                  {liveStats.totalFeedbackCount === 0 ? "0.0/5" : `${liveStats.avgRating}/5`}
+                </div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">
+                  {liveStats.totalFeedbackCount === 0 ? "★ No Reviews" : "⭐ Avg Rating"}
+                </div>
               </div>
             </div>
           </div>
@@ -1568,68 +1606,7 @@ export default function PublicHome({
         </div>
       )}
 
-      {/* --- USER & PROJECT DOCUMENTATION TAB VIEW --- */}
-      {homeActiveTab === 'docs' && (
-        <div className="space-y-6 animate-fade-in" id="public-project-documentation-block">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 rounded-2xl space-y-4">
-            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white pb-2.5 border-b border-slate-100 dark:border-slate-800">
-              📖 Official System Operational Manuals & Project Docs
-            </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Student Guide */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-xl space-y-1.5">
-                <span className="text-[9px] font-black text-indigo-650 uppercase font-mono tracking-wider">[01] USER GUIDE FOR STUDENTS</span>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">How Students Browse & Borrow</h4>
-                <p className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed">
-                  Students log in using Class, Section, Roll Number, and Date of Birth credentials. Once logged in, search titles instantly. Click <strong>"Request Borrow"</strong> to place an authorization hold on a book. Once approved by S. K. Roy, collect the physical title. Keep track of due dates inside the dashboard to ensure you return them within 14 days.
-                </p>
-              </div>
-
-              {/* Librarian Guide */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-xl space-y-1.5">
-                <span className="text-[9px] font-black text-indigo-650 uppercase font-mono tracking-wider">[02] ADMINISTRATIVE COMMANDS FOR LIBRARIANS</span>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Librarian Operations & Audits</h4>
-                <p className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed">
-                  Librarians can navigate to the administrative section to approve borrow requests, log manual checkouts for walk-in students, search and add new textbook volumes, upload syllabus resources, and moderate student review reports. Use the bulk student uploader with Excel to populate the student database at the start of each semester.
-                </p>
-              </div>
-
-              {/* Architecture Diagram Info */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-xl space-y-1.5">
-                <span className="text-[9px] font-black text-indigo-650 uppercase font-mono tracking-wider">[03] SYSTEM ARCHITECTURE</span>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Full-Stack Modular Architecture Diagram</h4>
-                <p className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed">
-                  Built as a resilient, single-server multi-process package. React 18 with Vite renders the lightweight, high-contrast, fully localized client layer. The Node.js Express framework runs the secure REST API layer, issuing JSON Web Tokens (JWT) with strict cryptographic signatures to isolate user roles. The data engine securely persistent files into the MongoDB database.
-                </p>
-              </div>
-
-              {/* Future Roadmap */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 rounded-xl space-y-1.5">
-                <span className="text-[9px] font-black text-indigo-650 uppercase font-mono tracking-wider">[04] SYSTEM UPGRADES & ROADMAP</span>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Phase II & III Implementation</h4>
-                <p className="text-[11px] text-slate-550 dark:text-slate-400 leading-relaxed">
-                  Future expansions include barcode/QR scanner integration for high-speed scanning of library items, automated school SMS/WhatsApp integration for overdue loan reminders, and multi-school network clustering support.
-                </p>
-              </div>
-            </div>
-
-            {/* Document download mimic */}
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-wrap gap-2.5 justify-between items-center">
-              <div className="text-[10px] text-slate-400 font-mono">
-                ✓ Full System Project Manuals generated on {new Date().toLocaleDateString()}
-              </div>
-              <button 
-                onClick={() => alert("Digital copy of Project Report, Guides and Architecture Blueprint downloaded to local terminal!")}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Download className="w-4 h-4" />
-                <span>Export System Documentation Kit (ZIP)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* --- SYSTEM HEALTH & CONFIDENCE TAB VIEW --- */}
       {homeActiveTab === 'health' && (
@@ -2281,6 +2258,107 @@ export default function PublicHome({
           </div>
         </div>
       )}
+
+      {/* SECURE LIBRARIAN PROFILE PHOTO VIEW LIGHTBOX */}
+      <AnimatePresence>
+        {isPhotoViewerOpen && librarianProfile.profilePhoto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-lg z-[9999] flex flex-col items-center justify-between p-4 select-none touch-none"
+            onClick={() => setIsPhotoViewerOpen(false)}
+          >
+            {/* Top Toolbar */}
+            <div 
+              className="w-full max-w-4xl flex items-center justify-between text-white z-50 pt-2 pb-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col">
+                <span className="text-xs uppercase tracking-widest text-slate-400 font-bold font-mono">
+                  PM SHRI Ramdiri School Library
+                </span>
+                <span className="text-[10px] text-indigo-400 font-mono">
+                  Secure Profile Viewer • Dedicated Workspace
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setZoomScale(s => Math.min(s + 0.25, 3))}
+                  className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all text-slate-300 hover:text-white cursor-pointer"
+                  title="Zoom In"
+                  type="button"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setZoomScale(s => Math.max(s - 0.25, 0.5))}
+                  className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all text-slate-300 hover:text-white cursor-pointer"
+                  title="Zoom Out"
+                  type="button"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setZoomScale(1)}
+                  className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all text-slate-300 hover:text-white cursor-pointer"
+                  title="Reset Zoom"
+                  type="button"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setIsPhotoViewerOpen(false)}
+                  className="p-2.5 bg-red-600/80 hover:bg-red-600 border border-red-500/20 rounded-full transition-all text-white cursor-pointer"
+                  title="Close Viewer"
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main Stage */}
+            <div 
+              className="flex-1 w-full flex items-center justify-center relative overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <motion.img
+                key={librarianProfile.profilePhoto}
+                src={librarianProfile.profilePhoto}
+                referrerPolicy="no-referrer"
+                style={{ scale: zoomScale }}
+                initial={{ scale: 0.9, y: 10 }}
+                animate={{ scale: zoomScale, y: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                className="max-h-[75vh] max-w-[90vw] md:max-w-xl object-contain rounded-2xl shadow-2xl border border-white/10 select-none"
+                alt={librarianProfile.name}
+                draggable="false"
+                onDragStart={(e) => e.preventDefault()}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Bottom Status Panel */}
+            <div 
+              className="w-full text-center text-[10px] text-slate-400 font-mono py-4 z-50 border-t border-white/5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="font-sans font-bold text-white text-xs">{librarianProfile.name}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{librarianProfile.designation}</p>
+              <div className="mt-2 flex items-center justify-center gap-4 text-[9px] text-slate-500">
+                <span>Zoom: {Math.round(zoomScale * 100)}%</span>
+                <span>•</span>
+                <span>Pinch/Scroll to Zoom enabled</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

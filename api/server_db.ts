@@ -1104,7 +1104,8 @@ export const dbService = {
             passwordHash: config.passwordHash,
             designation: config.designation || "",
             biography: config.biography || "",
-            profilePhoto: config.profilePhoto || ""
+            profilePhoto: config.profilePhoto || "",
+            yearsOfService: config.yearsOfService || ""
           },
           { upsert: true, new: true }
         );

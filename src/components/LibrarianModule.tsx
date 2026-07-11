@@ -573,7 +573,7 @@ export default function LibrarianModule({
             setProfileDesignation(data.designation || "Senior Chief Librarian");
             setProfileBiography(data.biography || "");
             setProfilePhoto(data.profilePhoto || "");
-            setProfileYearsOfService(data.yearsOfService || "25+ Years of Service");
+            setProfileYearsOfService(data.yearsOfService || "");
           }
         })
         .catch(err => console.error("Could not load librarian profile settings:", err));
