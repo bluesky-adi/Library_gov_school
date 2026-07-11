@@ -558,7 +558,8 @@ app.get('/api/librarian/profile', async (req, res) => {
       name: config.name || "S. K. Roy (Chief Librarian)",
       designation: config.designation || "Senior Chief Librarian",
       biography: config.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
-      profilePhoto: config.profilePhoto || ""
+      profilePhoto: config.profilePhoto || "",
+      yearsOfService: config.yearsOfService || "25+ Years of Service"
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -566,7 +567,7 @@ app.get('/api/librarian/profile', async (req, res) => {
 });
 
 app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (req, res) => {
-  const { name, designation, biography, profilePhoto } = req.body;
+  const { name, designation, biography, profilePhoto, yearsOfService } = req.body;
   try {
     const config = await getLibrarianConfig();
     const updatedConfig = {
@@ -574,7 +575,8 @@ app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (r
       name: (name !== undefined) ? name.trim() : (config.name || "S. K. Roy (Chief Librarian)"),
       designation: (designation !== undefined) ? designation.trim() : (config.designation || "Senior Chief Librarian"),
       biography: (biography !== undefined) ? biography.trim() : (config.biography || ""),
-      profilePhoto: (profilePhoto !== undefined) ? profilePhoto.trim() : (config.profilePhoto || "")
+      profilePhoto: (profilePhoto !== undefined) ? profilePhoto.trim() : (config.profilePhoto || ""),
+      yearsOfService: (yearsOfService !== undefined) ? yearsOfService.trim() : (config.yearsOfService || "25+ Years of Service")
     };
 
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(updatedConfig, null, 2));
@@ -596,7 +598,8 @@ app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (r
         name: updatedConfig.name,
         designation: updatedConfig.designation,
         biography: updatedConfig.biography,
-        profilePhoto: updatedConfig.profilePhoto
+        profilePhoto: updatedConfig.profilePhoto,
+        yearsOfService: updatedConfig.yearsOfService
       }
     });
   } catch (error: any) {

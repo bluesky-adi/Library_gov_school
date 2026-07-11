@@ -181,7 +181,8 @@ export default function PublicHome({
     name: "S. K. Roy (Chief Librarian)",
     designation: "Senior Chief Librarian",
     biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
-    profilePhoto: ""
+    profilePhoto: "",
+    yearsOfService: "25+ Years of Service"
   });
 
   useEffect(() => {
@@ -193,7 +194,8 @@ export default function PublicHome({
             name: data.name || "S. K. Roy (Chief Librarian)",
             designation: data.designation || "Senior Chief Librarian",
             biography: data.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
-            profilePhoto: data.profilePhoto || ""
+            profilePhoto: data.profilePhoto || "",
+            yearsOfService: data.yearsOfService || "25+ Years of Service"
           });
         }
       })
@@ -671,41 +673,54 @@ export default function PublicHome({
         </div>
       </div>
 
-      {/* Dynamic Real-Time Statistics Panel */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statTotalBooks}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{liveStats.booksCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitUnits}</span>
+      {/* FEATURE 1 — LIBRARIAN PROFILE CARD */}
+      <div className="bg-white dark:bg-slate-900 border-2 border-indigo-50 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm relative overflow-hidden" id="librarian-profile-homepage">
+        <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full pointer-events-none transform translate-x-12 -translate-y-12"></div>
+        <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10">
+          
+          {/* Headshot / Avatar */}
+          <div className="shrink-0 select-none">
+            {librarianProfile.profilePhoto ? (
+              <img
+                src={librarianProfile.profilePhoto}
+                referrerPolicy="no-referrer"
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-indigo-100 dark:border-slate-800 shadow-md"
+                alt={librarianProfile.name}
+              />
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-indigo-600 border-2 border-indigo-100 dark:border-slate-800 flex items-center justify-center text-white text-2xl font-black shadow-md">
+                {librarianProfile.name
+                  ? librarianProfile.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                  : "SR"
+                }
+              </div>
+            )}
           </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statIssuedBooks}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono">{liveStats.activeIssuedCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitActive}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statRegisteredStudents}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-emerald-650 dark:text-emerald-400 font-mono">{liveStats.studentsCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitScholars}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statDigitalResources}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-amber-600 font-mono">{liveStats.digitalMaterialsCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitPdfs}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs col-span-2 md:col-span-1">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statCommunityRating}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-amber-500 font-mono">★ {liveStats.avgRating}</span>
-            <span className="text-[10px] text-slate-500">({liveStats.totalFeedbackCount} {t.unitReviews})</span>
+
+          {/* Profile details */}
+          <div className="flex-1 text-center md:text-left space-y-2">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <span className="text-[10px] bg-indigo-100 text-indigo-805 dark:bg-indigo-950/50 dark:text-indigo-400 font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
+                  Librarian's Desk
+                </span>
+                {librarianProfile.yearsOfService && (
+                  <span className="text-[10px] bg-amber-100 text-amber-855 dark:bg-amber-950/50 dark:text-amber-400 font-extrabold px-2 py-0.5 rounded-full tracking-wider">
+                    ★ {librarianProfile.yearsOfService}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 leading-tight">
+                {librarianProfile.name}
+              </h2>
+              <p className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                {librarianProfile.designation}
+              </p>
+            </div>
+
+            <p className="text-xs text-slate-650 dark:text-slate-300 leading-relaxed font-sans font-medium italic">
+              "{librarianProfile.biography}"
+            </p>
           </div>
         </div>
       </div>
@@ -1685,188 +1700,136 @@ export default function PublicHome({
           </div>
         </div>
       )}
-        
-      {/* About, Chief Librarian's Profile & Operational Workflow */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="about-section">
-        
-        {/* Left Column: School Background & Library Workflow */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl space-y-4 shadow-sm">
-            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
-              {t.aboutTitle}
-            </h3>
-            <p className="text-slate-700 dark:text-slate-350 text-xs sm:text-sm leading-relaxed">
-              {t.aboutContent}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-[11px] text-slate-600 dark:text-slate-400">
-              <p className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-slate-700 shrink-0" /> {t.locationText}</p>
-              <p className="flex items-center gap-1.5"><Phone className="w-4 h-4 text-slate-700 shrink-0" /> {t.contactPhone}</p>
-            </div>
-          </div>
 
-          {/* Library Operational Workflow Illustration */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm space-y-4">
-            <h3 className="text-xs font-black uppercase text-indigo-650 dark:text-indigo-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
-              Library Operational Workflow & Access Guidelines
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">1</div>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Search Catalog</h4>
-                <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                  Browse physical shelf registries or digital study material repository above.
-                </p>
-              </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">2</div>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Verify Account</h4>
-                <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                  Login securely using Class, Section, Roll Number and verified Date of Birth.
-                </p>
-              </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">3</div>
-                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Lodge Request</h4>
-                <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                  Submit digital borrow requests. Collect books once approved by library desk.
-                </p>
-              </div>
-            </div>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-2xl space-y-4 shadow-sm" id="about-section">
+        <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
+          {t.aboutTitle}
+        </h3>
+        <p className="text-slate-700 dark:text-slate-350 text-xs sm:text-sm leading-relaxed">
+          {t.aboutContent}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-[11px] text-slate-600 dark:text-slate-400">
+          <p className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-slate-700 shrink-0" /> {t.locationText}</p>
+          <p className="flex items-center gap-1.5"><Phone className="w-4 h-4 text-slate-700 shrink-0" /> {t.contactPhone}</p>
+        </div>
+      </div>
+
+      {/* 6. FEATURES (Operational Workflow & Access Guidelines) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm space-y-4">
+        <h3 className="text-xs font-black uppercase text-indigo-650 dark:text-indigo-400 tracking-wider pb-1 border-b border-slate-100 dark:border-slate-800">
+          Library Operational Workflow & Access Guidelines
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">1</div>
+            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Search Catalog</h4>
+            <p className="text-[10.5px] text-slate-500 leading-relaxed">
+              Browse physical shelf registries or digital study material repository above.
+            </p>
+          </div>
+          <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">2</div>
+            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Verify Account</h4>
+            <p className="text-[10.5px] text-slate-500 leading-relaxed">
+              Login securely using Class, Section, Roll Number and verified Date of Birth.
+            </p>
+          </div>
+          <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400 font-black text-xs flex items-center justify-center">3</div>
+            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Lodge Request</h4>
+            <p className="text-[10.5px] text-slate-500 leading-relaxed">
+              Submit digital borrow requests. Collect books once approved by library desk.
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Right Column: Chief Librarian Profile & Verified School Info */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* Chief Librarian's Desk */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
-            <div className="space-y-4">
-              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1">
-                Librarian's Desk
-              </span>
-              
-              {/* Photo placeholder / Avatar styling */}
-              <div className="flex items-center gap-3">
-                {librarianProfile.profilePhoto ? (
-                  <img
-                    src={librarianProfile.profilePhoto}
-                    referrerPolicy="no-referrer"
-                    className="w-12 h-12 rounded-full object-cover border border-indigo-200 shadow-inner shrink-0"
-                    alt={librarianProfile.name}
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-indigo-600 border border-indigo-200 flex items-center justify-center text-white text-base font-black shadow-inner shrink-0 select-none">
-                    {librarianProfile.name
-                      ? librarianProfile.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-                      : "SR"
-                    }
-                  </div>
-                )}
-                <div>
-                  <h4 className="font-black text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
-                    {librarianProfile.name}
-                  </h4>
-                  <p className="text-[10px] font-mono text-slate-400">
-                    {librarianProfile.designation}
-                  </p>
-                </div>
-              </div>
+      {/* 7. STATISTICS PANEL */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statTotalBooks}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{liveStats.booksCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitUnits}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statIssuedBooks}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono">{liveStats.activeIssuedCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitActive}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statRegisteredStudents}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-emerald-650 dark:text-emerald-400 font-mono">{liveStats.studentsCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitScholars}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statDigitalResources}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-amber-600 font-mono">{liveStats.digitalMaterialsCount}</span>
+            <span className="text-[10px] text-slate-500">{t.unitPdfs}</span>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs col-span-2 md:col-span-1">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statCommunityRating}</span>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className="text-2xl font-black text-amber-500 font-mono">★ {liveStats.avgRating}</span>
+            <span className="text-[10px] text-slate-500">({liveStats.totalFeedbackCount} {t.unitReviews})</span>
+          </div>
+        </div>
+      </div>
 
-              <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
-                "{librarianProfile.biography}"
-              </p>
+      {/* 8. STUDENT REVIEWS */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 sm:p-8 rounded-2xl shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <span className="text-xs font-black uppercase text-slate-450 tracking-wider">
+            Student Reviews & Ratings
+          </span>
+          <span className="text-xs font-bold text-amber-500 font-mono flex items-center gap-1">
+            ★ {liveStats.avgRating} / 5.0
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <div className="md:col-span-4 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-800/80 rounded-xl text-center space-y-3">
+            <p className="text-4xl font-black text-amber-500 font-mono">
+              {liveStats.avgRating} ★
+            </p>
+            <div className="flex justify-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star 
+                  key={i} 
+                  className={`w-4 h-4 ${i < Math.round(liveStats.avgRating) ? 'text-amber-400 fill-amber-400' : 'text-slate-250 dark:text-slate-800'}`} 
+                />
+              ))}
             </div>
-            
-            <div className="border-t border-slate-200 dark:border-slate-800 pt-3 mt-4 text-[10.5px] text-slate-600 dark:text-slate-400">
-              <p className="font-extrabold text-slate-800 dark:text-white">Library Resource Center</p>
-              <p className="font-sans text-slate-500">{t.contactPhone}</p>
-            </div>
+            <p className="text-[11px] text-slate-550 dark:text-slate-400 font-medium">
+              Based on {liveStats.totalFeedbackCount} verified student reviews
+            </p>
           </div>
 
-          {/* Verified Official Location Info */}
-          <div className="bg-slate-950 text-white p-5 rounded-2xl space-y-3.5 border border-slate-850">
-            <div className="space-y-1">
-              <span className="text-[9px] uppercase font-bold text-amber-400 tracking-widest block font-mono">Verified School Details</span>
-              <h4 className="font-extrabold text-xs">PM SHRI Senior Secondary School</h4>
-              <p className="text-[11px] text-slate-400 leading-relaxed font-sans font-light">
-                Ramdiri, Begusarai, Bihar — 851129. Recognized by Education Department, Government of Bihar.
+          <div className="md:col-span-8 space-y-4">
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+              Recent Scholar Testimonials
+            </span>
+            {publicFeedbacks.length === 0 ? (
+              <p className="text-xs text-slate-450 italic py-4 text-center">
+                No verified reviews yet. Be the first to write one under the "Community Reviews" tab above!
               </p>
-            </div>
-            <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-500 font-mono flex items-center justify-between">
-              <span>DLMS v3.0.0 Stable</span>
-              <span>© {new Date().getFullYear()} School IT Desk</span>
-            </div>
-          </div>
-
-          {/* Verified Student Reviews & Ratings Module */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-              <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
-                Student Reviews & Ratings
-              </span>
-              <span className="text-xs font-bold text-amber-500 font-mono flex items-center gap-1">
-                ★ {liveStats.avgRating} / 5.0
-              </span>
-            </div>
-            
-            {liveStats.totalFeedbackCount === 0 ? (
-              <div className="text-center py-4 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl space-y-2">
-                <div className="flex justify-center gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star 
-                      key={i} 
-                      className="w-3.5 h-3.5 text-slate-200 dark:text-slate-800" 
-                    />
-                  ))}
-                </div>
-                <p className="text-2xl font-black text-amber-500 font-mono">
-                  0.0
-                </p>
-                <div className="space-y-0.5 px-3">
-                  <p className="text-[11px] text-slate-850 dark:text-slate-200 font-bold leading-tight">
-                    {currentLang === 'EN' ? "No student reviews yet." : "अभी तक कोई छात्र समीक्षा उपलब्ध नहीं है।"}
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-medium leading-normal">
-                    {currentLang === 'EN' ? "Be the first student to share your experience." : "अनुभव साझा करने वाले पहले छात्र बनें।"}
-                  </p>
-                </div>
-              </div>
             ) : (
-              <div className="text-center py-2 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl space-y-1">
-                <p className="text-2xl font-black text-amber-500 font-mono">
-                  {liveStats.avgRating} ★
-                </p>
-                <p className="text-[10px] text-slate-500 font-medium">
-                  Based on {liveStats.totalFeedbackCount} approved reviews
-                </p>
-                <div className="flex justify-center gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star 
-                      key={i} 
-                      className={`w-3.5 h-3.5 ${i < Math.round(liveStats.avgRating) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
-                  />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
-                Selected Recent Reviews
-              </span>
-              {publicFeedbacks.length === 0 ? (
-                <p className="text-[11px] text-slate-400 italic text-center py-2">
-                  No verified reviews yet. Be the first to write one!
-                </p>
-              ) : (
-                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                  {publicFeedbacks.slice(0, 3).map((fb) => (
-                    <div key={fb.id} className="p-2.5 bg-slate-50/60 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-lg space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1">
+                {publicFeedbacks.slice(0, 4).map((fb) => (
+                  <div key={fb.id} className="p-3 bg-slate-50/60 dark:bg-slate-950/20 border border-slate-150 dark:border-slate-800/60 rounded-lg space-y-1.5 flex flex-col justify-between">
+                    <div>
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-[11px] text-slate-950 dark:text-white truncate max-w-[120px]">
+                        <span className="font-extrabold text-[11.5px] text-slate-950 dark:text-white truncate max-w-[140px]">
                           {fb.studentName}
                         </span>
-                        <div className="flex gap-0.5">
+                        <div className="flex gap-0.5 shrink-0">
                           {Array.from({ length: 5 }).map((_, idx) => (
                             <Star 
                               key={idx} 
@@ -1875,17 +1838,17 @@ export default function PublicHome({
                           ))}
                         </div>
                       </div>
-                      <p className="text-[11px] text-slate-650 dark:text-slate-400 leading-normal line-clamp-2">
+                      <p className="text-[11px] text-slate-650 dark:text-slate-405 leading-relaxed italic line-clamp-3 mt-1">
                         "{fb.comment}"
                       </p>
-                      <p className="text-[9px] text-slate-400 font-mono">
-                        {new Date(fb.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <p className="text-[9px] text-slate-400 font-mono mt-2">
+                      {new Date(fb.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button
               onClick={() => {
@@ -1893,12 +1856,11 @@ export default function PublicHome({
                 const fbBlock = document.getElementById('public-feedback-block');
                 if (fbBlock) fbBlock.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="w-full text-center py-2 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800/50 dark:hover:bg-indigo-950/20 text-slate-700 hover:text-indigo-650 dark:text-slate-350 dark:hover:text-indigo-400 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              className="w-full text-center py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg transition-colors cursor-pointer block"
             >
-              Write or Edit My Review →
+              Write or Edit My Review under "Community Reviews" →
             </button>
           </div>
-
         </div>
       </div>
 
@@ -1950,6 +1912,27 @@ export default function PublicHome({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* 10. OFFICIAL GOVERNMENT SCHOOL FOOTER */}
+      <div className="bg-slate-950 text-white rounded-2xl p-6 sm:p-8 space-y-4 border border-slate-850 text-center sm:text-left select-none">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-800 pb-4">
+          <div className="space-y-1">
+            <span className="text-[9px] uppercase font-bold text-amber-400 tracking-widest block font-mono">Government of Bihar — Secondary Education</span>
+            <h4 className="font-extrabold text-sm">PM SHRI Senior Secondary School</h4>
+            <p className="text-xs text-slate-400 leading-relaxed font-sans font-light">
+              Ramdiri, Begusarai, Bihar — 851129. Recognized by Education Department, Government of Bihar.
+            </p>
+          </div>
+          <div className="shrink-0 text-center sm:text-right font-mono text-[10px] text-slate-500">
+            <p>DLMS v3.0.0 Stable</p>
+            <p>© {new Date().getFullYear()} School IT Desk</p>
+          </div>
+        </div>
+        <div className="text-[10px] text-slate-500 font-sans leading-relaxed text-center sm:text-left flex flex-col sm:flex-row justify-between gap-2">
+          <span>Official Digital Ledger & Student Cataloging System</span>
+          <span>Designed with high contrast guidelines & modular structure</span>
         </div>
       </div>
 

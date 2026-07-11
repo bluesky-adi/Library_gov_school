@@ -223,7 +223,8 @@ const LibrarianConfigSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   designation: { type: String, default: "" },
   biography: { type: String, default: "" },
-  profilePhoto: { type: String, default: "" }
+  profilePhoto: { type: String, default: "" },
+  yearsOfService: { type: String, default: "" }
 });
 
 const FeedbackSchema = new mongoose.Schema({

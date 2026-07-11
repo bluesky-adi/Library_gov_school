@@ -403,11 +403,14 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       }
 
       let reservedCount = 0;
-      const studentsList: Student[] = [];
+      const rawStudentsList: Student[] = [];
       sheetsAvailable.forEach(sheet => {
         if (selectedSheetNames.includes(sheet.name)) {
           const mapping = studentMappings.find(m => m.sheetName === sheet.name);
           if (!mapping) return;
+
+          let lastClass = "";
+          let lastSection = "";
 
           sheet.rawData.forEach((row, index) => {
             const nameRaw = mapping.nameCol ? row[mapping.nameCol] : undefined;
@@ -420,11 +423,22 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
             }
             
             const dobRaw = mapping.dobCol ? row[mapping.dobCol] : undefined;
+            
             const classRaw = mapping.classCol ? row[mapping.classCol] : undefined;
-            const studClass = classRaw ? classRaw.toString().trim() : "";
+            let studClass = classRaw ? classRaw.toString().trim() : "";
+            if (!studClass && lastClass) {
+              studClass = lastClass;
+            } else if (studClass) {
+              lastClass = studClass;
+            }
             
             const sectionRaw = mapping.sectionCol ? row[mapping.sectionCol] : undefined;
-            const section = sectionRaw ? sectionRaw.toString().trim().toUpperCase() : "";
+            let section = sectionRaw ? sectionRaw.toString().trim().toUpperCase() : "";
+            if (!section && lastSection) {
+              section = lastSection;
+            } else if (section) {
+              lastSection = section;
+            }
 
             const isNameEmpty = !name;
             const isDobEmpty = !dobRaw || String(dobRaw).trim() === "";
@@ -432,7 +446,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
 
             if (hasRoll && isNameEmpty && isDobEmpty) {
               const finalId = `${(studClass || "10").toUpperCase()}-${(section || "A").toUpperCase()}-${rollNumber}`;
-              studentsList.push({
+              rawStudentsList.push({
                 studentId: finalId,
                 name: "",
                 rollNumber,
@@ -483,7 +497,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
             validationLogs.push(`[${sheet.name}] Verified student: '${name}' | Class Grade: ${studClass}-${section} | Roll: #${rollNumber}`);
             const finalId = `${studClass.toUpperCase()}-${section.toUpperCase()}-${rollNumber}`;
 
-            studentsList.push({
+            rawStudentsList.push({
               studentId: finalId,
               name,
               rollNumber,
@@ -493,6 +507,56 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
             });
           });
         }
+      });
+
+      // Group students by Class & Section to identify and fill gaps sequentially
+      const classGroups: { [key: string]: Student[] } = {};
+      rawStudentsList.forEach(st => {
+        const key = `${st.class.toUpperCase()}-${st.section.toUpperCase()}`;
+        if (!classGroups[key]) {
+          classGroups[key] = [];
+        }
+        classGroups[key].push(st);
+      });
+
+      const studentsList: Student[] = [];
+
+      Object.entries(classGroups).forEach(([key, group]) => {
+        const parts = key.split('-');
+        const grpClass = parts[0];
+        const grpSection = parts[1];
+
+        // Find all roll numbers currently present in this group
+        const existingRolls = new Set(group.map(st => st.rollNumber));
+        const maxRoll = Math.max(...group.map(st => st.rollNumber), 0);
+        const minRoll = Math.min(...group.map(st => st.rollNumber), 1);
+
+        // Fill any gaps from 1 (or minRoll) up to maxRoll
+        const startRoll = minRoll > 0 && minRoll < 100 ? minRoll : 1; 
+        for (let r = startRoll; r <= maxRoll; r++) {
+          if (!existingRolls.has(r)) {
+            const finalId = `${grpClass.toUpperCase()}-${grpSection.toUpperCase()}-${r}`;
+            studentsList.push({
+              studentId: finalId,
+              name: "",
+              rollNumber: r,
+              dob: "",
+              class: grpClass,
+              section: grpSection,
+              status: "VACANT"
+            });
+            validationLogs.push(`[Gap Filler] Vacant Student slot auto-created at Roll #${r} for Class ${grpClass}-${grpSection}`);
+          }
+        }
+        // Add all existing students
+        studentsList.push(...group);
+      });
+
+      // Sort final list by Class, Section, and Roll Number
+      studentsList.sort((a, b) => {
+        if (a.class !== b.class) return a.class.localeCompare(b.class);
+        if (a.section !== b.section) return a.section.localeCompare(b.section);
+        return a.rollNumber - b.rollNumber;
       });
 
       if (studentsList.length === 0) {
@@ -531,7 +595,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
         
         const loadedSheets = workbook.SheetNames.map(name => {
           const worksheet = workbook.Sheets[name];
-          const sheetData = XLSX.utils.sheet_to_json<any>(worksheet);
+          const sheetData = XLSX.utils.sheet_to_json<any>(worksheet, { defval: "" });
           return { name, rawData: sheetData };
         }).filter(sheet => sheet.rawData.length > 0);
 

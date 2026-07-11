@@ -488,6 +488,7 @@ export default function LibrarianModule({
   const [profileDesignation, setProfileDesignation] = useState<string>('');
   const [profileBiography, setProfileBiography] = useState<string>('');
   const [profilePhoto, setProfilePhoto] = useState<string>('');
+  const [profileYearsOfService, setProfileYearsOfService] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(false);
@@ -572,6 +573,7 @@ export default function LibrarianModule({
             setProfileDesignation(data.designation || "Senior Chief Librarian");
             setProfileBiography(data.biography || "");
             setProfilePhoto(data.profilePhoto || "");
+            setProfileYearsOfService(data.yearsOfService || "25+ Years of Service");
           }
         })
         .catch(err => console.error("Could not load librarian profile settings:", err));
@@ -844,7 +846,8 @@ export default function LibrarianModule({
         name: newName.trim(),
         designation: profileDesignation.trim(),
         biography: profileBiography.trim(),
-        profilePhoto: profilePhoto.trim()
+        profilePhoto: profilePhoto.trim(),
+        yearsOfService: profileYearsOfService.trim()
       })
     })
     .then(res => res.json())
@@ -4850,16 +4853,87 @@ export default function LibrarianModule({
 
                 <div className="space-y-1">
                   <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    Profile Photo URL
+                    Years of Service (Optional)
                   </label>
                   <input
-                    type="url"
-                    value={profilePhoto}
-                    onChange={(e) => setProfilePhoto(e.target.value)}
-                    placeholder="https://images.unsplash.com/photo-..."
+                    type="text"
+                    value={profileYearsOfService}
+                    onChange={(e) => setProfileYearsOfService(e.target.value)}
+                    placeholder="e.g., 25+ Years of Service"
                     className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
                   />
-                  <span className="text-[10px] text-slate-400 block font-sans select-none">Optionally provide a web link to a professional headshot. If empty, the system generates initials automatically.</span>
+                  <span className="text-[10px] text-slate-400 block font-sans select-none">Optional professional milestone displayed on the government portal.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
+                    📷 Upload Profile Photo
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg cursor-pointer border border-indigo-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors select-none">
+                      <Upload className="w-4 h-4" />
+                      <span>Choose Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (!file.type.startsWith('image/')) {
+                            setProfileError("Please select a valid image file.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                              const canvas = document.createElement('canvas');
+                              const maxDim = 300;
+                              let width = img.width;
+                              let height = img.height;
+                              if (width > height) {
+                                if (width > maxDim) {
+                                  height = Math.round((height * maxDim) / width);
+                                  width = maxDim;
+                                }
+                              } else {
+                                if (height > maxDim) {
+                                  width = Math.round((width * maxDim) / height);
+                                  height = maxDim;
+                                }
+                              }
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              if (ctx) {
+                                ctx.drawImage(img, 0, 0, width, height);
+                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                setProfilePhoto(dataUrl);
+                                setProfileError(null);
+                              } else {
+                                setProfilePhoto(event.target?.result as string);
+                              }
+                            };
+                            img.src = event.target?.result as string;
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {profilePhoto && (
+                      <button
+                        type="button"
+                        onClick={() => setProfilePhoto('')}
+                        className="text-xs font-bold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-350 cursor-pointer"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-sans select-none">
+                    Select a JPG or PNG photo directly from your computer/mobile. Image is automatically optimized. No URLs required.
+                  </p>
                 </div>
 
                 {profileError && (
