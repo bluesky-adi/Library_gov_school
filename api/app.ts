@@ -118,10 +118,10 @@ try {
   if (!fs.existsSync(CONFIG_PATH)) {
     const initialConfig = {
       username: "ramdiri_admin_roy",
-      name: "S. K. Roy (Chief Librarian)",
+      name: "Not configured",
       passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
-      designation: "Senior Chief Librarian",
-      biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+      designation: "Not configured",
+      biography: "No biography configured.",
       profilePhoto: ""
     };
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(initialConfig, null, 2));
@@ -134,10 +134,10 @@ try {
 async function getLibrarianConfig(): Promise<any> {
   const fallback = {
     username: "ramdiri_admin_roy",
-    name: "S. K. Roy (Chief Librarian)",
+    name: "Not configured",
     passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
-    designation: "Senior Chief Librarian",
-    biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+    designation: "Not configured",
+    biography: "No biography configured.",
     profilePhoto: ""
   };
 
@@ -180,7 +180,7 @@ async function getLibrarianConfig(): Promise<any> {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
       if (!config.name) {
-        config.name = "S. K. Roy (Chief Librarian)";
+        config.name = "Not configured";
       }
       memoryLibrarianConfig = config;
       return config;
@@ -317,7 +317,7 @@ app.post('/api/auth/login', async (req, res) => {
 
       if (isCorrectUser && isCorrectPass) {
         const token = jwt.sign(
-          { role: 'Librarian', username: activeConfig.username, name: activeConfig.name || "S. K. Roy (Chief Librarian)" },
+          { role: 'Librarian', username: activeConfig.username, name: activeConfig.name || "Not configured" },
           JWT_SECRET,
           { expiresIn: '1d' }
         );
@@ -556,9 +556,9 @@ app.get('/api/librarian/profile', async (req, res) => {
     const config = await getLibrarianConfig();
     res.json({
       success: true,
-      name: config.name || "S. K. Roy (Chief Librarian)",
-      designation: config.designation || "Senior Chief Librarian",
-      biography: config.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+      name: config.name || "Not configured",
+      designation: config.designation || "Not configured",
+      biography: config.biography || "No biography configured.",
       profilePhoto: config.profilePhoto || "",
       yearsOfService: config.yearsOfService || ""
     });
@@ -573,9 +573,9 @@ app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (r
     const config = await getLibrarianConfig();
     const updatedConfig = {
       ...config,
-      name: (name !== undefined) ? name.trim() : (config.name || "S. K. Roy (Chief Librarian)"),
-      designation: (designation !== undefined) ? designation.trim() : (config.designation || "Senior Chief Librarian"),
-      biography: (biography !== undefined) ? biography.trim() : (config.biography || ""),
+      name: (name !== undefined) ? name.trim() : (config.name || "Not configured"),
+      designation: (designation !== undefined) ? designation.trim() : (config.designation || "Not configured"),
+      biography: (biography !== undefined) ? biography.trim() : (config.biography || "No biography configured."),
       profilePhoto: (profilePhoto !== undefined) ? profilePhoto.trim() : (config.profilePhoto || ""),
       yearsOfService: (yearsOfService !== undefined) ? yearsOfService.trim() : (config.yearsOfService || "")
     };

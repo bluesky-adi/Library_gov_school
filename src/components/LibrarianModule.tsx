@@ -587,7 +587,7 @@ export default function LibrarianModule({
   // Prepopulate security config and benchmark elapsed search times
   useEffect(() => {
     if (activeTab === 'security') {
-      setNewName(loggedInName || "S. K. Roy (Chief Librarian)");
+      setNewName(loggedInName || "Not configured");
       const tok = localStorage.getItem("ramdiri_library_token");
       if (tok) {
         try {
@@ -809,7 +809,7 @@ export default function LibrarianModule({
 
     setSecLoading(true);
     const token = localStorage.getItem("ramdiri_library_token");
-    const previousName = loggedInName || "S. K. Roy (Chief Librarian)";
+    const previousName = loggedInName || "Not configured";
 
     fetch('/api/auth/change-credentials', {
       method: 'POST',
@@ -915,7 +915,7 @@ export default function LibrarianModule({
       tabStudents: "Students Database",
       tabRequests: "Requests & Returns",
       tabReports: "Printable Reports",
-      tabStudyMaterials: "Digital Study Notes",
+      tabStudyMaterials: "Digital Resources",
       addBookBtn: "Add Book Manually",
       editBookTitle: "Edit Book Specifications",
       addBookTitle: "Register New Library Book",
@@ -947,7 +947,7 @@ export default function LibrarianModule({
       tabStudents: "छात्र डेटाबेस",
       tabRequests: "अनुरोध एवं वापसी",
       tabReports: "रिपोर्ट प्रिंटर",
-      tabStudyMaterials: "डिजिटल अध्ययन नोट्स",
+      tabStudyMaterials: "डिजिटल संसाधन (Resources)",
       addBookBtn: "मैन्युअल पुस्तक जोड़ें",
       editBookTitle: "पुस्तक विवरण संशोधित करें",
       addBookTitle: "नई पुस्तक दर्ज करें",
@@ -1914,7 +1914,7 @@ export default function LibrarianModule({
           }`}
         >
           <MessageSquare className="w-4 h-4 shrink-0" />
-          <span>Student Feedback</span>
+          <span>Student Reviews</span>
         </button>
 
         <button
@@ -4624,10 +4624,10 @@ export default function LibrarianModule({
             <div>
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-indigo-600" />
-                <span>Student Suggestions, Complaints & Reviews Registry</span>
+                <span>Student Reviews & Suggestions</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Moderate incoming student reviews. Approved feedbacks become immediately visible on the public portal homepage.
+                Approve or remove student reviews. Approved reviews will appear on the public homepage.
               </p>
             </div>
             
@@ -5166,10 +5166,10 @@ export default function LibrarianModule({
                 )}
                 <div>
                   <h5 className="font-black text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
-                    {newName || "S. K. Roy (Chief Librarian)"}
+                    {newName || "Not configured"}
                   </h5>
                   <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                    {profileDesignation || "Senior Chief Librarian"}
+                    {profileDesignation || "Not configured"}
                   </p>
                   <span className="text-[9.5px] text-slate-400 block font-sans mt-1">Live Display Preview Card</span>
                 </div>

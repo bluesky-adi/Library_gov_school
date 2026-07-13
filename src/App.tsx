@@ -193,7 +193,7 @@ export default function App() {
           } else {
             if (payload.role === 'Librarian') {
               setLoggedInRole('Librarian');
-              setLoggedInName(payload.name || "S. K. Roy (Chief Librarian)");
+              setLoggedInName(payload.name || "Not configured");
             } else if (payload.role === 'Student') {
               setLoggedInRole('Student');
               setLoggedInName(payload.name || "Scholar Reader");
@@ -253,7 +253,7 @@ export default function App() {
       setLoggedInRole('Librarian');
       setLoggedInStudent(null);
       const token = localStorage.getItem("ramdiri_library_token");
-      let dName = "S. K. Roy (Chief Librarian)";
+      let dName = "Not configured";
       if (token) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
