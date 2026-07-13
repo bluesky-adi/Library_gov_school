@@ -155,6 +155,31 @@ export default function PublicHome({
   const [homeActiveTab, setHomeActiveTab] = useState<'catalog' | 'resources' | 'feedback' | 'vision' | 'docs' | 'health'>('catalog');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
+  const formatName = (fullName: string) => {
+    if (!fullName) return "Anonymous";
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    const firstName = parts[0];
+    const lastInitial = parts[parts.length - 1][0].toUpperCase() + ".";
+    return `${firstName} ${lastInitial}`;
+  };
+
+  useEffect(() => {
+    let title = "PM SHRI Ramdiri +2 High School Library - Digital Catalog";
+    if (homeActiveTab === 'resources') {
+      title = "Digital Notes & Syllabus - PM SHRI Ramdiri +2 High School Library";
+    } else if (homeActiveTab === 'feedback') {
+      title = "Community Feedback - PM SHRI Ramdiri +2 High School Library";
+    } else if (homeActiveTab === 'vision') {
+      title = "Impact & Story - PM SHRI Ramdiri +2 High School Library";
+    } else if (homeActiveTab === 'docs') {
+      title = "System Documentation - PM SHRI Ramdiri +2 High School Library";
+    } else if (homeActiveTab === 'health') {
+      title = "System Health & Confidence - PM SHRI Ramdiri +2 High School Library";
+    }
+    document.title = title;
+  }, [homeActiveTab]);
+
   // Live Stats
   const [liveStats, setLiveStats] = useState({
     booksCount: books.length,
@@ -171,6 +196,8 @@ export default function PublicHome({
   const [feedbackSubmitLoading, setFeedbackSubmitLoading] = useState<boolean>(false);
   const [feedbackSuccessMsg, setFeedbackSuccessMsg] = useState<string | null>(null);
   const [newFeedbackForm, setNewFeedbackForm] = useState({
+    name: '',
+    role: 'Student',
     rating: 5,
     type: 'General',
     comment: ''
@@ -304,51 +331,75 @@ export default function PublicHome({
             if (data && data.feedback) {
               setExistingUserReview(data.feedback);
               setNewFeedbackForm({
+                name: data.feedback.studentName || loggedInUserLabel || '',
+                role: data.feedback.studentRole || 'Student',
                 rating: data.feedback.rating || 5,
                 type: data.feedback.type || 'General',
                 comment: data.feedback.comment || ''
               });
             } else {
-              setExistingUserReview(null);
+              setNewFeedbackForm(f => ({
+                ...f,
+                name: loggedInUserLabel || '',
+                role: loggedInRole === 'Student' ? 'Student' : 'Visitor'
+              }));
             }
           })
           .catch(err => console.warn("Could not fetch current student's review:", err));
+      } else {
+        setNewFeedbackForm(f => ({
+          ...f,
+          name: loggedInUserLabel || '',
+          role: loggedInRole === 'Student' ? 'Student' : 'Visitor'
+        }));
       }
-    } else if (!isLoggedIn) {
-      setExistingUserReview(null);
+    } else {
+      setNewFeedbackForm(f => ({
+        ...f,
+        name: isLoggedIn ? loggedInUserLabel : '',
+        role: isLoggedIn && loggedInRole === 'Student' ? 'Student' : 'Visitor'
+      }));
     }
-  }, [isLoggedIn, homeActiveTab, feedbackRefreshTrigger]);
+  }, [isLoggedIn, homeActiveTab, feedbackRefreshTrigger, loggedInUserLabel, loggedInRole]);
 
   const handleFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newFeedbackForm.name.trim()) {
+      alert(currentLang === 'EN' ? "Please enter your name." : "कृपया अपना नाम दर्ज करें।");
+      return;
+    }
     if (!newFeedbackForm.comment.trim()) {
       alert(currentLang === 'EN' ? "Please write some feedback comment." : "कृपया अपनी प्रतिक्रिया या टिप्पणी लिखें।");
       return;
     }
     setFeedbackSubmitLoading(true);
-    const token = localStorage.getItem("ramdiri_library_token");
     fetch('/api/feedback', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(newFeedbackForm)
+      body: JSON.stringify({
+        name: newFeedbackForm.name,
+        role: newFeedbackForm.role,
+        rating: newFeedbackForm.rating,
+        type: newFeedbackForm.type,
+        comment: newFeedbackForm.comment
+      })
     })
       .then(res => res.json().then(data => ({ status: res.status, data })))
       .then(({ status, data }) => {
         if (status === 201) {
-          const wasSpam = data.moderation?.isSpam;
-          const msg = wasSpam
-            ? (currentLang === 'EN'
-                ? "Review saved. Note: Our AI filter flagged the text as potential spam/abusive language. It will require physical librarian moderation before appearing publicly."
-                : "आपकी प्रतिक्रिया सुरक्षित की गई। नोट: हमारे AI फ़िल्टर ने इस पाठ को संभावित स्पैम या अनुचित भाषा के रूप में चिह्नित किया है। यह सार्वजनिक होने से पहले पुस्तकालयाध्यक्ष द्वारा समीक्षा के लिए लंबित रहेगा।")
-            : (currentLang === 'EN'
-                ? "Your verified review and rating was saved successfully!"
-                : "आपकी सत्यापित प्रतिक्रिया और रेटिंग सफलतापूर्वक सहेज ली गई है!");
+          const msg = currentLang === 'EN'
+            ? "Thank you! Your feedback has been submitted successfully and is currently pending librarian approval."
+            : "धन्यवाद! आपकी प्रतिक्रिया सफलतापूर्वक जमा हो गई है और वर्तमान में पुस्तकालयाध्यक्ष की स्वीकृति के लिए लंबित है।";
           
           setFeedbackSuccessMsg(msg);
           setFeedbackRefreshTrigger(prev => prev + 1);
+          setNewFeedbackForm(f => ({
+            ...f,
+            comment: '',
+            rating: 5
+          }));
           setTimeout(() => setFeedbackSuccessMsg(null), 10000);
         } else {
           alert(data.error || "Could not submit feedback.");
@@ -1365,7 +1416,9 @@ export default function PublicHome({
               
               {/* Score summary */}
               <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm text-center space-y-2">
-                <span className="text-xs uppercase tracking-widest text-slate-400 font-bold">Overall Student Satisfaction</span>
+                <span className="text-xs uppercase tracking-widest text-slate-400 font-bold">
+                  {currentLang === 'EN' ? "Overall Community Satisfaction" : "सामुदायिक समग्र संतुष्टि"}
+                </span>
                 {liveStats.totalFeedbackCount === 0 ? (
                   <>
                     <div className="pt-2 flex justify-center gap-1">
@@ -1381,10 +1434,10 @@ export default function PublicHome({
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-slate-800 dark:text-slate-200 font-bold">
-                        {currentLang === 'EN' ? "No student reviews yet." : "अभी तक कोई छात्र समीक्षा उपलब्ध नहीं है।"}
+                        {currentLang === 'EN' ? "No community feedback available yet." : "अभी तक कोई सामुदायिक प्रतिक्रिया उपलब्ध नहीं है।"}
                       </p>
                       <p className="text-[11px] text-slate-500 font-medium">
-                        {currentLang === 'EN' ? "Be the first student to share your experience." : "अनुभव साझा करने वाले पहले छात्र बनें।"}
+                        {currentLang === 'EN' ? "Be the first to share your experience." : "अनुभव साझा करने वाले पहले व्यक्ति बनें।"}
                       </p>
                     </div>
                   </>
@@ -1394,7 +1447,9 @@ export default function PublicHome({
                       ★ {liveStats.avgRating}
                     </div>
                     <p className="text-xs text-slate-500 font-medium">
-                      Based on {liveStats.totalFeedbackCount} active, verified student reviews.
+                      {currentLang === 'EN' 
+                        ? `Based on ${liveStats.totalFeedbackCount} active, verified community feedback reviews.`
+                        : `${liveStats.totalFeedbackCount} सक्रिय, सत्यापित सामुदायिक प्रतिक्रिया समीक्षाओं के आधार पर।`}
                     </p>
                     <div className="pt-2 flex justify-center gap-1">
                       {Array.from({ length: 5 }).map((_, i) => (
@@ -1408,128 +1463,135 @@ export default function PublicHome({
                 )}
               </div>
 
-              {/* Submit Feedback Form */}
+              {/* Submit Feedback Form - Unconditional Public Access */}
               <div className="bg-white dark:bg-slate-900 border-2 border-slate-250 dark:border-slate-800 p-5 sm:p-6 rounded-2xl shadow-sm space-y-4">
                 <h4 className="font-black text-xs uppercase text-slate-900 dark:text-white tracking-wider border-b border-slate-100 pb-2">
-                  Share Your Feedback & Suggestion
+                  {currentLang === 'EN' ? "Share Your Feedback & Suggestion" : "अपनी प्रतिक्रिया और सुझाव साझा करें"}
                 </h4>
 
-                {isLoggedIn && loggedInRole === 'Student' ? (
-                  <form onSubmit={handleFeedbackSubmit} className="space-y-4">
-                    {feedbackSuccessMsg && (
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in">
-                        {feedbackSuccessMsg}
-                      </div>
-                    )}
-
-                    {existingUserReview && (
-                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-900 rounded-xl text-xs flex flex-col gap-1">
-                        <span className="font-extrabold flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                          📝 Existing Review Found
-                        </span>
-                        <span>
-                          Updating this form will edit your current verified rating and comments. 
-                          Your active status is: <span className="font-mono font-bold uppercase underline text-indigo-600 dark:text-indigo-400">{existingUserReview.status}</span>.
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Rating star selector */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                        Your Rating
-                      </label>
-                      <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map((val) => (
-                          <button
-                            type="button"
-                            key={val}
-                            onClick={() => setNewFeedbackForm(f => ({ ...f, rating: val }))}
-                            className="p-1 cursor-pointer transition-transform hover:scale-110"
-                          >
-                            <Star 
-                              className={`w-7 h-7 ${val <= newFeedbackForm.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
-                            />
-                          </button>
-                        ))}
-                      </div>
+                <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+                  {feedbackSuccessMsg && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in">
+                      {feedbackSuccessMsg}
                     </div>
+                  )}
 
-                    {/* Feedback Type */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                        Feedback Category
-                      </label>
-                      <select
-                        value={newFeedbackForm.type}
-                        onChange={(e) => setNewFeedbackForm(f => ({ ...f, type: e.target.value }))}
-                        className="w-full text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
-                      >
-                        <option value="General">General Suggestion</option>
-                        <option value="Book Request">Request New Books</option>
-                        <option value="Digital Notes">Digital Syllabus Suggestion</option>
-                        <option value="Bug Report">System Bug Report</option>
-                        <option value="Complain">Library Complaint</option>
-                      </select>
-                    </div>
-
-                    {/* Comment Area */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                        Details Comment
-                      </label>
-                      <textarea
-                        rows={3}
-                        required
-                        value={newFeedbackForm.comment}
-                        onChange={(e) => setNewFeedbackForm(f => ({ ...f, comment: e.target.value }))}
-                        placeholder={
-                          currentLang === 'EN'
-                            ? "Please write what books you need, system issues, or general remarks..."
-                            : "कृपया लिखें कि आपको किन पुस्तकों की आवश्यकता है, या पुस्तकालय संबंधी सुझाव..."
-                        }
-                        className="w-full text-xs font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={feedbackSubmitLoading}
-                      className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>
-                        {feedbackSubmitLoading 
-                          ? "Submitting..." 
-                          : existingUserReview 
-                            ? "Update My Verified Review" 
-                            : "Submit Feedback"}
+                  {existingUserReview && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-900 rounded-xl text-xs flex flex-col gap-1">
+                      <span className="font-extrabold flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                        📝 Existing Review Found
                       </span>
-                    </button>
-                  </form>
-                ) : isLoggedIn ? (
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl text-center space-y-3">
-                    <p className="text-xs text-slate-655 dark:text-slate-400 font-medium">
-                      You are logged in as a Librarian. Feedback and reviews can only be submitted by students.
-                    </p>
+                      <span>
+                        Updating this form will edit your current verified rating and comments. 
+                        Your active status is: <span className="font-mono font-bold uppercase underline text-indigo-600 dark:text-indigo-400">{existingUserReview.status}</span>.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Name field */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      {currentLang === 'EN' ? "Your Name" : "आपका नाम"}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newFeedbackForm.name}
+                      onChange={(e) => setNewFeedbackForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder={currentLang === 'EN' ? "Enter your name" : "अपना नाम दर्ज करें"}
+                      className="w-full text-xs font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    />
                   </div>
-                ) : (
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl text-center space-y-3">
-                    <p className="text-xs text-slate-655 dark:text-slate-400 font-medium">
-                      Student security mandates authentication to submit suggestions or complaints.
-                    </p>
-                    <button
-                      onClick={() => {
-                        setAuthError(null);
-                        setShowLoginModal(true);
-                      }}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg cursor-pointer inline-flex items-center gap-1"
+
+                  {/* Role dropdown select */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      {currentLang === 'EN' ? "Your Role / Designation" : "आपकी भूमिका / पद"}
+                    </label>
+                    <select
+                      value={newFeedbackForm.role}
+                      onChange={(e) => setNewFeedbackForm(f => ({ ...f, role: e.target.value }))}
+                      className="w-full text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
                     >
-                      <Key className="w-3.5 h-3.5" />
-                      <span>Login to Give Feedback</span>
-                    </button>
+                      <option value="Student">{currentLang === 'EN' ? "Student" : "छात्र"}</option>
+                      <option value="Teacher">{currentLang === 'EN' ? "Teacher" : "शिक्षक"}</option>
+                      <option value="Parent">{currentLang === 'EN' ? "Parent" : "अभिभावक"}</option>
+                      <option value="Alumni">{currentLang === 'EN' ? "Alumni" : "पूर्व छात्र"}</option>
+                      <option value="Visitor">{currentLang === 'EN' ? "Visitor" : "आगंतुक"}</option>
+                    </select>
                   </div>
-                )}
+
+                  {/* Rating star selector */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      Your Rating
+                    </label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((val) => (
+                        <button
+                          type="button"
+                          key={val}
+                          onClick={() => setNewFeedbackForm(f => ({ ...f, rating: val }))}
+                          className="p-1 cursor-pointer transition-transform hover:scale-110"
+                        >
+                          <Star 
+                            className={`w-7 h-7 ${val <= newFeedbackForm.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-800'}`} 
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Feedback Type */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      Feedback Category
+                    </label>
+                    <select
+                      value={newFeedbackForm.type}
+                      onChange={(e) => setNewFeedbackForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    >
+                      <option value="General">General Suggestion</option>
+                      <option value="Book Request">Request New Books</option>
+                      <option value="Digital Notes">Digital Syllabus Suggestion</option>
+                      <option value="Bug Report">System Bug Report</option>
+                      <option value="Complain">Library Complaint</option>
+                    </select>
+                  </div>
+
+                  {/* Comment Area */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      Details Comment
+                    </label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={newFeedbackForm.comment}
+                      onChange={(e) => setNewFeedbackForm(f => ({ ...f, comment: e.target.value }))}
+                      placeholder={
+                        currentLang === 'EN'
+                          ? "Please write what books you need, system issues, or general remarks..."
+                          : "कृपया लिखें कि आपको किन पुस्तकों की आवश्यकता है, या पुस्तकालय संबंधी सुझाव..."
+                      }
+                      className="w-full text-xs font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={feedbackSubmitLoading}
+                    className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {feedbackSubmitLoading 
+                        ? "Submitting..." 
+                        : "Submit Community Feedback"}
+                    </span>
+                  </button>
+                </form>
               </div>
 
             </div>
@@ -1555,8 +1617,13 @@ export default function PublicHome({
                     <div key={f.id} className="pt-4 first:pt-0 space-y-2">
                       <div className="flex justify-between items-start gap-2">
                         <div>
-                          <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100">
-                            {f.studentName}
+                          <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
+                            <span>{formatName(f.studentName)}</span>
+                            {(f.studentRole || f.role) && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-655 dark:text-slate-400 rounded">
+                                {f.studentRole || f.role}
+                              </span>
+                            )}
                           </span>
                           <span className="text-[9px] font-mono text-slate-400 block">
                             {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}

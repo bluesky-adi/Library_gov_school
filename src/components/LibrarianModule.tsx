@@ -179,7 +179,7 @@ export default function LibrarianModule({
   const [feedbacksLoading, setFeedbacksLoading] = useState<boolean>(false);
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState<string>('');
-  const [feedbackFilter, setFeedbackFilter] = useState<'All' | 'Pending' | 'Approved' | 'Spam' | 'Resolved'>('All');
+  const [feedbackFilter, setFeedbackFilter] = useState<'All' | 'Pending' | 'Approved' | 'Spam' | 'Resolved' | 'Rejected' | 'Hidden'>('All');
 
   const fetchLibrarianFeedbacks = () => {
     setFeedbacksLoading(true);
@@ -4633,7 +4633,7 @@ export default function LibrarianModule({
             
             {/* Moderation Filter controls */}
             <div className="flex flex-wrap items-center gap-2">
-              {(['All', 'Pending', 'Approved', 'Resolved', 'Spam'] as const).map((filterOpt) => (
+              {(['All', 'Pending', 'Approved', 'Resolved', 'Spam', 'Rejected', 'Hidden'] as const).map((filterOpt) => (
                 <button
                   key={filterOpt}
                   onClick={() => setFeedbackFilter(filterOpt)}
@@ -4708,7 +4708,9 @@ export default function LibrarianModule({
                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
                                   f.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' :
                                   f.status === 'Pending' ? 'bg-amber-100 text-amber-800' :
-                                  f.status === 'Resolved' ? 'bg-blue-100 text-blue-805' : 'bg-red-100 text-red-800'
+                                  f.status === 'Resolved' ? 'bg-blue-100 text-blue-805' :
+                                  f.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                                  f.status === 'Hidden' ? 'bg-gray-100 text-gray-700' : 'bg-orange-100 text-orange-800'
                                 }`}>
                                   {f.status}
                                 </span>
@@ -4724,6 +4726,15 @@ export default function LibrarianModule({
                                     Approve
                                   </button>
                                 )}
+                                {f.status !== 'Rejected' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(f.id, 'Rejected')}
+                                    className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[10.5px] rounded cursor-pointer"
+                                    title="Reject feedback"
+                                  >
+                                    Reject
+                                  </button>
+                                )}
                                 {f.status !== 'Resolved' && (
                                   <button
                                     onClick={() => handleUpdateStatus(f.id, 'Resolved')}
@@ -4733,10 +4744,19 @@ export default function LibrarianModule({
                                     Resolve
                                   </button>
                                 )}
+                                {f.status !== 'Hidden' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(f.id, 'Hidden')}
+                                    className="px-2 py-1 bg-slate-550 hover:bg-slate-500 text-slate-700 hover:text-white font-bold text-[10.5px] border border-slate-300 rounded cursor-pointer"
+                                    title="Hide feedback"
+                                  >
+                                    Hide
+                                  </button>
+                                )}
                                 {f.status !== 'Spam' && (
                                   <button
                                     onClick={() => handleUpdateStatus(f.id, 'Spam')}
-                                    className="px-2 py-1 bg-slate-550 text-slate-700 hover:bg-slate-200 border border-slate-300 font-bold text-[10.5px] rounded cursor-pointer"
+                                    className="px-2 py-1 bg-orange-650 hover:bg-orange-500 text-white font-bold text-[10.5px] rounded cursor-pointer"
                                     title="Mark spam"
                                   >
                                     Spam

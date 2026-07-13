@@ -291,6 +291,33 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/robots.txt', (req, res) => {
+  const host = req.get('host') || 'ais-dev-hqyplmeoaue3n7s3akwzhm-969251645537.asia-southeast1.run.app';
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const robotsTxt = `User-agent: *
+Allow: /
+Sitemap: ${protocol}://${host}/sitemap.xml
+`;
+  res.type('text/plain');
+  res.send(robotsTxt);
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const host = req.get('host') || 'ais-dev-hqyplmeoaue3n7s3akwzhm-969251645537.asia-southeast1.run.app';
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${protocol}://${host}/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`;
+  res.type('application/xml');
+  res.send(sitemapXml);
+});
+
 app.get('/api/database/status', (req, res) => {
   const isConnected = dbService.getMongoConnectionState();
   const uri = process.env.MONGODB_URI || "";
@@ -1237,72 +1264,48 @@ app.delete('/api/study-materials/:id', authenticateToken, requireLibrarian, asyn
 
 
 // ---- FEEDBACK ENDPOINTS ----
-// 1. Submit feedback (Students only)
-app.post('/api/feedback', authenticateToken, async (req, res) => {
+// 1. Submit feedback (Public - Community Feedback)
+app.post('/api/feedback', async (req, res) => {
   try {
-    const reqUser = (req as any).user;
-    if (!reqUser) {
-      return res.status(401).json({ error: "Unauthorized access context." });
-    }
-    if (reqUser.role !== 'Student') {
-      return res.status(403).json({ error: "Access Denied: Only authenticated student accounts can submit feedback reviews." });
-    }
-    const { rating, type, comment } = req.body;
-    if (!rating || !type || !comment) {
-      return res.status(400).json({ error: "Missing required feedback fields. Rating, Type, and Comment are mandatory." });
+    const { name, role, rating, type, comment } = req.body;
+    if (!name || !role || !rating || !type || !comment) {
+      return res.status(400).json({ error: "Missing required feedback fields. Name, Role, Rating, Type, and Comment are mandatory." });
     }
     const rateNum = Number(rating);
     if (isNaN(rateNum) || rateNum < 1 || rateNum > 5) {
       return res.status(400).json({ error: "Invalid rating value. Must be an integer between 1 and 5." });
     }
-
-    const studentId = reqUser.studentId || `${reqUser.class}-${reqUser.section}-${reqUser.rollNumber}`;
-    const allFeedbacks = await dbService.getFeedbacks();
-    const existingFeedback = allFeedbacks.find(f => f.studentId === studentId);
-
-    // AI content moderation
-    const moderation = await classifyFeedbackContent(comment);
-    const isSpam = moderation.classification === 'SPAM_OR_ABUSE';
-    const computedStatus = isSpam ? 'Spam' : 'Approved';
-
-    let savedFeedback: any;
-
-    if (existingFeedback) {
-      // Update existing feedback (editable later)
-      existingFeedback.rating = rateNum;
-      existingFeedback.type = type;
-      existingFeedback.comment = comment;
-      existingFeedback.status = computedStatus;
-      existingFeedback.updatedAt = new Date().toISOString();
-      
-      savedFeedback = await dbService.saveFeedback(existingFeedback);
-      console.log(`Updated feedback for studentId ${studentId}. Moderation result: ${moderation.classification}. Status set to: ${computedStatus}`);
-    } else {
-      // Submit brand new feedback
-      const feedbackId = `FB-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
-      const newFeedback = {
-        id: feedbackId,
-        studentId,
-        studentName: reqUser.name || "Student",
-        rating: rateNum,
-        type,
-        comment,
-        reply: "",
-        status: computedStatus,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      savedFeedback = await dbService.saveFeedback(newFeedback);
-      console.log(`Created new feedback for studentId ${studentId}. Moderation result: ${moderation.classification}. Status set to: ${computedStatus}`);
+    const allowedRoles = ['Student', 'Teacher', 'Parent', 'Alumni', 'Visitor'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: "Invalid role value. Must be Student, Teacher, Parent, Alumni, or Visitor." });
     }
+
+    const computedStatus = 'Pending';
+    const feedbackId = `FB-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
+    const newFeedback = {
+      id: feedbackId,
+      studentId: `${role.toLowerCase()}-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      studentName: name.trim(),
+      studentRole: role,
+      rating: rateNum,
+      type,
+      comment: comment.trim(),
+      reply: "",
+      status: computedStatus,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const savedFeedback = await dbService.saveFeedback(newFeedback);
+    console.log(`Created new community feedback for ${name} (${role}). Status set to: ${computedStatus}`);
 
     res.status(201).json({
       ...savedFeedback,
+      success: true,
       moderation: {
-        classification: moderation.classification,
-        reason: moderation.reason,
-        isSpam
+        classification: 'PENDING_MODERATION',
+        reason: 'Awaiting manual librarian review',
+        isSpam: false
       }
     });
   } catch (error: any) {
@@ -1365,7 +1368,7 @@ app.get('/api/feedback/all', authenticateToken, requireLibrarian, async (req, re
 app.post('/api/feedback/:id/status', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const { status } = req.body;
-    if (!['Pending', 'Approved', 'Resolved', 'Spam'].includes(status)) {
+    if (!['Pending', 'Approved', 'Resolved', 'Spam', 'Rejected', 'Hidden'].includes(status)) {
       return res.status(400).json({ error: "Invalid feedback status option." });
     }
     const all = await dbService.getFeedbacks();
