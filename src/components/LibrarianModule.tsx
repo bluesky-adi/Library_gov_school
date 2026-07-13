@@ -161,6 +161,40 @@ export default function LibrarianModule({
   const [bookSearch, setBookSearch] = useState<string>('');
   const [studentSearch, setStudentSearch] = useState<string>('');
 
+  // SRE Search states for table cross-management
+  const [loanSearch, setLoanSearch] = useState<string>('');
+  const [requestSearch, setRequestSearch] = useState<string>('');
+  const [materialSearch, setMaterialSearch] = useState<string>('');
+  const [feedbackSearch, setFeedbackSearch] = useState<string>('');
+
+  // Highlight matching search term in text securely
+  const highlightText = (text: string | number | undefined, search: string) => {
+    if (text === undefined || text === null) return <span></span>;
+    const textStr = String(text);
+    if (!search || !textStr) return <span>{textStr}</span>;
+    const cleanSearch = search.trim();
+    if (!cleanSearch) return <span>{textStr}</span>;
+    
+    try {
+      const parts = textStr.split(new RegExp(`(${cleanSearch.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi'));
+      return (
+        <span>
+          {parts.map((part, i) => 
+            part.toLowerCase() === cleanSearch.toLowerCase() ? (
+              <mark key={i} className="bg-yellow-250 text-slate-900 font-bold px-0.5 rounded shadow-xs border border-yellow-300 dark:bg-yellow-500/30 dark:text-yellow-100 dark:border-yellow-600/50">
+                {part}
+              </mark>
+            ) : (
+              part
+            )
+          )}
+        </span>
+      );
+    } catch (e) {
+      return <span>{textStr}</span>;
+    }
+  };
+
   // Sliced Pagination indices
   const [booksPage, setBooksPage] = useState<number>(1);
   const [studentsPage, setStudentsPage] = useState<number>(1);
@@ -1032,8 +1066,19 @@ export default function LibrarianModule({
 
   // Active Loans status Issued List
   const activeLoans = useMemo(() => {
-    return issueLogs.filter(log => log.status === 'Issued');
-  }, [issueLogs]);
+    let list = issueLogs.filter(log => log.status === 'Issued');
+    if (loanSearch.trim()) {
+      const searchLower = loanSearch.toLowerCase().trim();
+      list = list.filter(loan => 
+        (loan.studentName || "").toLowerCase().includes(searchLower) ||
+        (loan.rollNumber || "").toLowerCase().includes(searchLower) ||
+        (loan.bookId || "").toLowerCase().includes(searchLower) ||
+        (loan.bookName || "").toLowerCase().includes(searchLower) ||
+        (loan.id || "").toLowerCase().includes(searchLower)
+      );
+    }
+    return list;
+  }, [issueLogs, loanSearch]);
 
   // General Overdue Logs list
   const overdueLogs = useMemo(() => {
@@ -2367,383 +2412,13 @@ export default function LibrarianModule({
                     <th className="p-3 border border-slate-800 text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-300 font-medium whitespace-nowrap">
-                  {paginatedBooks.map((book) => {
-                    const isAvail = book.availableCopies > 0;
-                    return (
-                      <tr 
-                        key={book.bookId}
-                        className={`hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-colors border-b border-slate-200 dark:border-slate-800 text-xs ${selectedBookIds.includes(book.bookId) ? 'bg-amber-50/20 dark:bg-amber-950/20' : ''}`}
-                      >
-                        <td className="p-3 text-center border border-slate-250 dark:border-slate-800">
-                          <input
-                            type="checkbox"
-                            checked={selectedBookIds.includes(book.bookId)}
-                            onChange={() => {
-                              if (selectedBookIds.includes(book.bookId)) {
-                                setSelectedBookIds(prev => prev.filter(id => id !== book.bookId));
-                              } else {
-                                setSelectedBookIds(prev => [...prev, book.bookId]);
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-0 cursor-pointer"
-                          />
-                        </td>
-                        <td className="p-3 text-center font-mono font-black text-slate-900 dark:text-white border border-slate-250 dark:border-slate-800">
-                          #{book.bookId}
-                        </td>
-                        <td className="p-3 text-center font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-250 dark:border-slate-800 bg-emerald-50/20">
-                          #{categorySerialsMap.get(book.bookId) || 1}
-                        </td>
-                        <td className="p-3 text-center font-mono font-black text-indigo-750 dark:text-indigo-400 border border-slate-250 dark:border-slate-800 bg-indigo-50/20">
-                          {book.accessionNumber || "-"}
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">
-                          {book.callNumber || "-"}
-                        </td>
-                        <td className="p-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">
-                          {book.bookNumber || "-"}
-                        </td>
-                        <td className="p-3 border border-slate-250 dark:border-slate-800 font-extrabold text-slate-950 dark:text-white max-w-[220px] truncate" title={book.bookName}>
-                          <div className="flex items-center gap-2">
-                            <div className="w-5 shrink-0 select-none">
-                              <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
-                            </div>
-                            <span className="truncate">{book.bookName}</span>
-                          </div>
-                        </td>
-                        <td className="p-3 border border-slate-250 dark:border-slate-800 italic max-w-[130px] truncate" title={book.author}>
-                          {book.author}
-                        </td>
-                        <td className="p-3 border border-slate-250 dark:border-slate-800 text-slate-600 dark:text-slate-400 max-w-[120px] truncate" title={book.publisher}>
-                          {book.publisher || "-"}
-                        </td>
-                        <td className="p-3 border border-slate-250 dark:border-slate-800 font-mono text-center">
-                          {book.yearOfPublication || "-"}
-                        </td>
-                        <td className="p-3 border border-slate-250 dark:border-slate-800">
-                          <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-800">{book.category}</span>
-                        </td>
-                        <td className="p-3 text-center border border-slate-250 dark:border-slate-800 font-mono">
-                          <span className={`px-2 py-1 rounded bg-slate-100 font-black text-[10px]`}>
-                            {book.availableCopies} / {book.totalCopies}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center border border-slate-250 dark:border-slate-800 font-sans">
-                          <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${isAvail ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                            {isAvail ? 'Available' : 'Checked Out'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center border border-slate-250 dark:border-slate-800">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openBookEdit(book)}
-                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-705 text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer transition-all border border-slate-300"
-                              title="Edit specs"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setConfirmModal({
-                                  type: 'delete-book',
-                                  title: 'Permanently Delete Book Profile',
-                                  message: `Are you sure you want to permanently delete the book '${book.bookName}' (Serial ID: ${book.bookId}) from the collection catalog?`,
-                                  confirmLabel: 'Confirm and Delete Book',
-                                  targetId: book.bookId
-                                });
-                              }}
-                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-650 text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer transition-all border border-red-200"
-                              title="Delete Book"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedProfileBook(book)}
-                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-705 text-[11px] font-bold rounded flex items-center gap-1 cursor-pointer transition-all border border-indigo-200"
-                              title="Audit history"
-                            >
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>History</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {paginatedBooks.length === 0 && (
-                    <tr>
-                      <td colSpan={14} className="p-8 text-center text-slate-400 font-sans">No book records map to current filters inside this Excel range.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {filteredBooks.length === 0 && (
-            <p className="py-12 bg-white dark:bg-slate-900 text-center rounded-xl border text-slate-400 text-xs">No matching title or category found in library index.</p>
-          )}
-
-          {/* INFINITE SCROLL SENTINEL FOR BOOKS */}
-          <InfiniteScrollSentinel 
-            onVisible={() => setVisibleBooksCount(prev => prev + 30)}
-            hasMore={paginatedBooks.length < filteredBooks.length}
-          />
-
-          {/* Excel Importer segment specifically for books */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-4">
-            <h3 className="text-sm font-extrabold uppercase text-slate-500 tracking-wider">
-              {t.excelModuleTitle}
-            </h3>
-            <ExcelModule
-              onImportBooks={handleExcelBooksImported}
-              onImportStudents={handleExcelStudentsImported}
-              currentLang={currentLang}
-              existingBooks={books}
-              existingStudents={students}
-            />
-          </div>
-
-        </div>
-      )}
-
-      {/* STUDENTS TAB PANEL */}
-      {activeTab === 'students' && (
-        <div className="space-y-6" id="tab-students-content">
-          
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1 max-w-md animate-fade-in">
-              <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={studentSearchInput}
-                onChange={(e) => setStudentSearchInput(e.target.value)}
-                placeholder={t.studentSearchPlaceholder}
-                className="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-slate-800 text-slate-900 dark:text-white"
-              />
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowExcelStudentsModal(true)}
-                className="px-4 py-2.5 bg-emerald-650 hover:bg-emerald-750 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs select-none"
-                type="button"
-                id="btn-upload-excel-students-shortcut"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Upload Excel</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setEditingStudent(null);
-                  setStudName('');
-                  setStudClass('10');
-                  setStudSection('A');
-                  setStudRoll('');
-                  setStudDOB('');
-                  setShowStudentForm(true);
-                }}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs select-none"
-                type="button"
-              >
-                <PlusCircle className="w-4.5 h-4.5" />
-                <span>Enroll Student Manually</span>
-              </button>
-            </div>
-          </div>
-
-          {/* QUICK CHANNELS CLASS & SECTION SELECTORS */}
-          <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200 dark:border-slate-850 flex flex-col sm:flex-row gap-4 sm:items-center select-none animate-fade-in">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-              Filter by class & section:
-            </span>
-            <div className="flex flex-wrap items-center gap-3.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Class:</span>
-                <select
-                  value={filterClass}
-                  onChange={(e) => {
-                    setFilterClass(e.target.value);
-                    setStudentsPage(1);
-                  }}
-                  className="text-xs p-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-700 font-bold outline-none text-slate-800 dark:text-slate-200"
-                  id="filter-student-class-select"
-                >
-                  <option value="">All Classes (Grades 1-12)</option>
-                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map(cls => (
-                    <option key={cls} value={cls}>Grade {cls}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Section:</span>
-                <select
-                  value={filterSection}
-                  onChange={(e) => {
-                    setFilterSection(e.target.value);
-                    setStudentsPage(1);
-                  }}
-                  className="text-xs p-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-700 font-bold outline-none text-slate-800 dark:text-slate-200"
-                  id="filter-student-section-select"
-                >
-                  <option value="">All Sections</option>
-                  {["A", "B", "C", "D", "E"].map(sec => (
-                    <option key={sec} value={sec}>Section {sec}</option>
-                  ))}
-                </select>
-              </div>
-
-              {(filterClass || filterSection) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterClass('');
-                    setFilterSection('');
-                    setStudentsPage(1);
-                  }}
-                  className="text-[11px] font-extrabold text-red-600 hover:text-red-700 underline cursor-pointer transition-all"
-                >
-                  Reset Filtering Settings
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between select-none">
-            <span>Students found: {filteredStudents.length} filtered ({students.length} total in roster)</span>
-            <span>Fuse Search Index benchmark lookup: <b>{studentSearchElapsed}ms</b></span>
-          </div>
-
-          {/* BULK SELECTION CONTROLS PANEL FOR STUDENTS */}
-          <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none animate-fade-in">
-            <div className="flex flex-wrap items-center gap-3">
-              <input 
-                type="checkbox"
-                id="bulk-select-all-students"
-                checked={filteredStudents.length > 0 && filteredStudents.every(s => {
-                  const sId = s.studentId || `${s.class}-${s.section}-${s.rollNumber}`;
-                  return selectedStudentIds.includes(sId);
-                })}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    const visibleIds = filteredStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                    setSelectedStudentIds(prev => Array.from(new Set([...prev, ...visibleIds])));
-                  } else {
-                    const visibleIds = filteredStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                    setSelectedStudentIds(prev => prev.filter(id => !visibleIds.includes(id)));
-                  }
-                }}
-                className="w-4 h-4 rounded border-slate-350 text-slate-800 focus:ring-slate-800 cursor-pointer"
-              />
-              <label htmlFor="bulk-select-all-students" className="text-xs font-bold text-slate-705 dark:text-slate-305 cursor-pointer select-none">
-                Select All Filtered Students ({filteredStudents.length})
-              </label>
-              {selectedStudentIds.length > 0 && (
-                <span className="text-[11px] bg-indigo-100 dark:bg-indigo-900 text-indigo-805 dark:text-indigo-205 font-extrabold px-2.5 py-0.5 rounded font-mono animate-fade-in">
-                  {selectedStudentIds.length} Selected
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {selectedStudentIds.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmModal({
-                        type: 'delete-selected-students',
-                        title: 'Bulk Delete Selected Student Enrollees',
-                        message: `Are you sure you want to permanently delete these ${selectedStudentIds.length} selected student accounts from database rosters?`,
-                        confirmLabel: 'Delete Selected Students',
-                        targetId: selectedStudentIds
-                      });
-                    }}
-                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs select-none"
-                    id="delete-selected-students-bulk-btn"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Selected ({selectedStudentIds.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStudentIds([])}
-                    className="px-3 py-2 border border-slate-250 hover:bg-slate-55 text-slate-650 font-bold text-xs rounded-lg transition-all cursor-pointer select-none"
-                  >
-                    Clear Selection
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmModal({
-                    type: 'clear-students',
-                    title: 'Wipe All Student Records',
-                    message: `CRITICAL SECURE DIRECTIVE: Are you sure you want to permanently delete ALL registered student accounts (${students.length}) in this school? This will wipe out all login pins and catalog access credentials. This cannot be undone. Please type 'DELETE ALL STUDENTS' exactly to confirm:`,
-                    confirmLabel: 'Wipe Entire Student Roster',
-                    requireInput: 'DELETE ALL STUDENTS'
-                  });
-                }}
-                className="px-3 py-2 border-2 border-red-300 bg-red-50 hover:bg-red-100 hover:border-red-400 text-red-700 font-extrabold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-xs select-none"
-                id="clear-students-registry-btn"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 text-red-650" />
-                <span>Delete All ({students.length})</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs animate-fade-in">
-            <div className="overflow-x-auto max-h-[650px] overflow-y-auto">
-              <table className="w-full text-xs text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-850 uppercase font-black text-slate-500 dark:text-slate-450 text-[10px] sticky top-0 z-10 shadow-xs">
-                    <th className="p-3 w-8 bg-slate-50 dark:bg-slate-950">
-                      <input
-                        type="checkbox"
-                        checked={paginatedStudents.length > 0 && paginatedStudents.every(s => {
-                          const targetId = s.studentId || `${s.class}-${s.section}-${s.rollNumber}`;
-                          return selectedStudentIds.includes(targetId);
-                        })}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                            setSelectedStudentIds(prev => Array.from(new Set([...prev, ...paginatedIds])));
-                          } else {
-                            const paginatedIds = paginatedStudents.map(s => s.studentId || `${s.class}-${s.section}-${s.rollNumber}`);
-                            setSelectedStudentIds(prev => prev.filter(id => !paginatedIds.includes(id)));
-                          }
-                        }}
-                        className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                    </th>
-                    <th className="p-3 bg-slate-50 dark:bg-slate-950">#</th>
-                    <th className="p-3 bg-slate-50 dark:bg-slate-950 sticky left-0 z-20 shadow-xs">Student Full Name</th>
-                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Class / Section</th>
-                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Roll Number</th>
-                    <th className="p-3 bg-slate-50 dark:bg-slate-950">Date of Birth (DOB)</th>
-                    <th className="p-3 text-center bg-slate-50 dark:bg-slate-950">Active Loans</th>
-                    <th className="p-3 text-right bg-slate-50 dark:bg-slate-950">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {paginatedStudents.map((stud, idx) => {
                     const checkoutsCount = issueLogs.filter(log => log.rollNumber === stud.rollNumber && log.status === 'Issued').length;
                     const itemIndex = (studentsPage - 1) * 15 + idx + 1;
-                    const displayStudentId = stud.studentId || `${stud.class || "10"}-${(stud.section || "A").toUpperCase()}-${stud.rollNumber}`;
+                    const displayStudentId = stud.studentId || (stud.class || "10") + "-" + (stud.section || "A").toUpperCase() + "-" + stud.rollNumber;
                     return (
-                      <tr key={idx} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all ${selectedStudentIds.includes(displayStudentId) ? 'bg-indigo-50/10 dark:bg-indigo-950/20' : ''}`}>
+                      <tr key={idx} className={"hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all " + (selectedStudentIds.includes(displayStudentId) ? "bg-indigo-50/10 dark:bg-indigo-950/20" : "")}>
                         <td className="p-3 w-8 col-checkbox">
                           <input
                             type="checkbox"
@@ -2758,7 +2433,7 @@ export default function LibrarianModule({
                             className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
                         </td>
-                        <td className="p-3 text-slate-400 dark:text-slate-500 font-mono">{itemIndex < 10 ? `0${itemIndex}` : itemIndex}</td>
+                        <td className="p-3 text-slate-400 dark:text-slate-500 font-mono">{itemIndex < 10 ? "0" + itemIndex : itemIndex}</td>
                         <td className="p-3 font-semibold text-slate-900 dark:text-slate-100 font-sans sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
                           <button
                             type="button"
@@ -2766,16 +2441,16 @@ export default function LibrarianModule({
                             className="hover:underline text-indigo-700 hover:text-indigo-905 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer focus:outline-none focus:ring-0 select-none"
                             title="Click to view full academic library profile history"
                           >
-                            {stud.status === "VACANT" || !stud.name ? (currentLang === 'EN' ? "Vacant" : "रिक्त") : stud.name}
+                            {stud.status === "VACANT" || !stud.name ? (currentLang === "EN" ? "Vacant" : "रिक्त") : stud.name}
                           </button>
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300">Class {stud.class || "10"}-{stud.section || "A"}</td>
+                        <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300 font-sans">Class {stud.class || "10"}-{stud.section || "A"}</td>
                         <td className="p-3 text-center font-bold font-mono text-indigo-600 dark:text-indigo-450">#{stud.rollNumber}</td>
                         <td className="p-3 font-mono text-slate-650 dark:text-slate-350">
                           {stud.dob ? (
                             stud.dob
                           ) : (
-                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider">
+                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider font-sans">
                               No DOB (Optional)
                             </span>
                           )}
@@ -2793,45 +2468,45 @@ export default function LibrarianModule({
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                           <button
-                             onClick={() => {
-                               const targetId = stud.studentId || `${stud.class}-${stud.section}-${stud.rollNumber}`;
-                               setConfirmModal({
-                                 type: 'delete-student',
-                                 title: 'permanently delete student enrollment',
-                                 message: `Are you sure you want to permanently delete student '${stud.name}' (Class: ${stud.class}, Section: ${stud.section}, Roll: ${stud.rollNumber}) from rosters database? This cannot be undone.`,
-                                 confirmLabel: 'Confirm and Delete Student',
-                                 targetId: targetId
-                               });
-                             }}
-                             className="p-1 rounded hover:bg-red-50 text-red-650 transition-all cursor-pointer"
-                             title="Delete Student"
-                             type="button"
-                             id={`delete-single-student-${stud.studentId || `${stud.class}-${stud.section}-${stud.rollNumber}`}`}
-                           >
-                             <Trash2 className="w-3.5 h-3.5" />
-                           </button>
-                         </div>
-                       </td>
-                     </tr>
-                   );
-                 })}
-                 {filteredStudents.length === 0 && (
-                   <tr>
-                     <td colSpan={9} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
-                   </tr>
-                 )}
-               </tbody>
-             </table>
-           </div>
-         </div>
- 
+                            <button
+                              onClick={() => {
+                                const targetId = stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber);
+                                setConfirmModal({
+                                  type: "delete-student",
+                                  title: "permanently delete student enrollment",
+                                  message: "Are you sure you want to permanently delete student " + stud.name + " (Class: " + stud.class + ", Section: " + stud.section + ", Roll: " + stud.rollNumber + ") from rosters database? This cannot be undone.",
+                                  confirmLabel: "Confirm and Delete Student",
+                                  targetId: targetId
+                                });
+                              }}
+                              className="p-1 rounded hover:bg-red-50 text-red-650 transition-all cursor-pointer"
+                              title="Delete Student"
+                              type="button"
+                              id={"delete-single-student-" + (stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber))}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* INFINITE SCROLL SENTINEL FOR STUDENTS */}
           <InfiniteScrollSentinel 
             onVisible={() => setVisibleStudentsCount(prev => prev + 40)}
             hasMore={paginatedStudents.length < filteredStudents.length}
           />
- 
+
            {/* Excel Importer segment specifically for student data */}
            <div className="bg-white p-6 border border-slate-200 rounded-xl space-y-4">
              <h3 className="text-sm font-extrabold uppercase text-slate-500 tracking-wider">
@@ -2845,10 +2520,10 @@ export default function LibrarianModule({
                existingStudents={students}
              />
            </div>
- 
+
          </div>
        )}
- 
+
        {/* REQUESTS & RETURNS TAB PANEL */}
        {activeTab === 'requests' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="tab-requests-content">
@@ -2861,8 +2536,28 @@ export default function LibrarianModule({
                 📜 Student Borrow Requests Awaiting Approval
               </h3>
 
+              <div className="relative select-none">
+                <input
+                  type="text"
+                  placeholder="🔍 Search borrow requests by student, roll, or book title..."
+                  value={requestSearch}
+                  onChange={e => setRequestSearch(e.target.value)}
+                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-indigo-650 outline-none placeholder-slate-400 dark:placeholder-slate-500 font-medium"
+                />
+              </div>
+
               <div className="divide-y divide-slate-150">
-                {requests.filter(r => r.status === 'Pending').map(req => {
+                {requests.filter(r => {
+                  if (r.status !== 'Pending') return false;
+                  if (!requestSearch.trim()) return true;
+                  const searchLower = requestSearch.toLowerCase().trim();
+                  return (
+                    (r.studentName || "").toLowerCase().includes(searchLower) ||
+                    (r.rollNumber || "").toLowerCase().includes(searchLower) ||
+                    (r.bookName || "").toLowerCase().includes(searchLower) ||
+                    (r.id || "").toLowerCase().includes(searchLower)
+                  );
+                }).map(req => {
                   const currentApproveDate = approvalDates[req.id] || (() => {
                     const d = new Date();
                     d.setDate(d.getDate() + 14);
@@ -2870,14 +2565,16 @@ export default function LibrarianModule({
                   })();
                   return (
                     <div key={req.id} className="py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
-                      <div className="space-y-1 text-slate-900">
+                      <div className="space-y-1 text-slate-900 font-sans">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 dark:text-slate-100">{req.studentName} (Roll #{req.rollNumber})</span>
-                          <span className="text-[10px] bg-slate-100 text-slate-800 px-1.5 rounded font-mono border">RQ ID: {req.id}</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {highlightText(req.studentName, requestSearch)} (Roll #{highlightText(req.rollNumber, requestSearch)})
+                          </span>
+                          <span className="text-[10px] bg-slate-100 text-slate-800 px-1.5 rounded font-mono border">RQ ID: {highlightText(req.id, requestSearch)}</span>
                         </div>
-                        <p className="text-slate-650">Requested: <b>{req.bookName}</b></p>
+                        <p className="text-slate-650">Requested: <b>{highlightText(req.bookName, requestSearch)}</b></p>
                         {req.comment && (
-                          <div className="text-[11px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1 rounded border border-amber-100 font-medium italic mt-1 max-w-md">
+                          <div className="text-[11px] text-amber-700 bg-amber-50 dark:bg-amber-955/40 px-2.5 py-1 rounded border border-amber-100 font-medium italic mt-1 max-w-md">
                             💡 Student Note: "{req.comment}"
                           </div>
                         )}
@@ -2896,7 +2593,7 @@ export default function LibrarianModule({
                           />
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0 font-sans">
                           <button
                             onClick={() => setSelectedRequestDetails(req)}
                             className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-755 font-bold text-xs rounded border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
@@ -2934,7 +2631,17 @@ export default function LibrarianModule({
                   );
                 })}
 
-                {requests.filter(r => r.status === 'Pending').length === 0 && (
+                {requests.filter(r => {
+                  if (r.status !== 'Pending') return false;
+                  if (!requestSearch.trim()) return true;
+                  const searchLower = requestSearch.toLowerCase().trim();
+                  return (
+                    (r.studentName || "").toLowerCase().includes(searchLower) ||
+                    (r.rollNumber || "").toLowerCase().includes(searchLower) ||
+                    (r.bookName || "").toLowerCase().includes(searchLower) ||
+                    (r.id || "").toLowerCase().includes(searchLower)
+                  );
+                }).length === 0 && (
                   <p className="py-6 text-center text-slate-400 text-xs">{t.noPenRequests}</p>
                 )}
               </div>
@@ -5156,196 +4863,36 @@ export default function LibrarianModule({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* COLUMN 1: PUBLIC PROFILE EDITING PANEL */}
-            <div className="space-y-4 border-r border-slate-100 dark:border-slate-800 lg:pr-8">
-              <div className="select-none">
-                <h4 className="font-extrabold text-xs text-slate-950 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-slate-500 shrink-0" />
-                  Librarian's Desk Profile Card
-                </h4>
-                <p className="text-[11px] text-slate-400 mt-0.5 leading-normal">
-                  These profile values populate the "Librarian's Desk" card visible to students and school guests on the library portal homepage.
-                </p>
-              </div>
-
-              {/* Avatar live preview */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-150 dark:border-slate-850 flex items-center gap-4">
-                {profilePhoto ? (
-                  <img 
-                    src={profilePhoto} 
-                    referrerPolicy="no-referrer"
-                    className="w-16 h-16 rounded-full object-cover border border-indigo-200 dark:border-slate-850 shadow-inner shrink-0" 
-                    alt="Preview"
-                    onError={(e) => {
-                      (e.target as any).src = ""; // Force avatar placeholder on fail
-                    }}
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-indigo-600 border border-indigo-200 dark:border-slate-850 flex items-center justify-center text-white text-xl font-black shadow-inner shrink-0 select-none">
-                    {newName ? newName.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() : "SR"}
-                  </div>
-                )}
-                <div>
-                  <h5 className="font-black text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
-                    {newName || "Not configured"}
-                  </h5>
-                  <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                    {profileDesignation || "Not configured"}
+            <div className="space-y-4 border-r border-slate-150 dark:border-slate-800 lg:pr-8 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="select-none">
+                  <h4 className="font-extrabold text-xs text-slate-950 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-slate-500 shrink-0" />
+                    Librarian's Desk Profile Card
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-normal">
+                    The public display profile is now managed directly from the library homepage with real-time inline controls.
                   </p>
-                  <span className="text-[9.5px] text-slate-400 block font-sans mt-1">Live Display Preview Card</span>
-                </div>
-              </div>
-
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    Librarian Full Display Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Enter full librarian name"
-                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-                  />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    Professional Designation
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={profileDesignation}
-                    onChange={(e) => setProfileDesignation(e.target.value)}
-                    placeholder="e.g., Senior Chief Librarian"
-                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-                  />
-                  <span className="text-[10px] text-slate-400 block font-sans select-none">Official administrative title used throughout the school register.</span>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    Desk biography (Welcome Quote)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={profileBiography}
-                    onChange={(e) => setProfileBiography(e.target.value)}
-                    placeholder="Write a warm message to scholars visiting the library..."
-                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-medium placeholder-slate-400"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    Years of Service (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={profileYearsOfService}
-                    onChange={(e) => setProfileYearsOfService(e.target.value)}
-                    placeholder="e.g., 25+ Years of Service"
-                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-350 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded focus:ring-1 focus:ring-slate-800 focus:border-slate-800 outline-none caret-indigo-600 font-bold placeholder-slate-400 dark:placeholder-slate-500"
-                  />
-                  <span className="text-[10px] text-slate-400 block font-sans select-none">Optional professional milestone displayed on the government portal.</span>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10.5px] font-bold text-slate-500 uppercase block select-none">
-                    📷 Upload Profile Photo
-                  </label>
+                <div className="p-5 bg-indigo-50/50 dark:bg-slate-950 border border-indigo-100 dark:border-slate-850 rounded-xl space-y-4 shadow-xs">
                   <div className="flex items-center gap-3">
-                    <label className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg cursor-pointer border border-indigo-200 dark:border-slate-700 flex items-center gap-1.5 transition-colors select-none">
-                      <Upload className="w-4 h-4" />
-                      <span>Choose Photo</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (!file.type.startsWith('image/')) {
-                            setProfileError("Please select a valid image file.");
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const img = new Image();
-                            img.onload = () => {
-                              const canvas = document.createElement('canvas');
-                              const maxDim = 300;
-                              let width = img.width;
-                              let height = img.height;
-                              if (width > height) {
-                                if (width > maxDim) {
-                                  height = Math.round((height * maxDim) / width);
-                                  width = maxDim;
-                                }
-                              } else {
-                                if (height > maxDim) {
-                                  width = Math.round((width * maxDim) / height);
-                                  height = maxDim;
-                                }
-                              }
-                              canvas.width = width;
-                              canvas.height = height;
-                              const ctx = canvas.getContext('2d');
-                              if (ctx) {
-                                ctx.drawImage(img, 0, 0, width, height);
-                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                                setProfilePhoto(dataUrl);
-                                setProfileError(null);
-                              } else {
-                                setProfilePhoto(event.target?.result as string);
-                              }
-                            };
-                            img.src = event.target?.result as string;
-                          };
-                          reader.readAsDataURL(file);
-                        }}
-                      />
-                    </label>
-                    {profilePhoto && (
-                      <button
-                        type="button"
-                        onClick={() => setProfilePhoto('')}
-                        className="text-xs font-bold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-350 cursor-pointer"
-                      >
-                        Remove Photo
-                      </button>
-                    )}
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-750 dark:bg-indigo-950 dark:text-indigo-400 flex items-center justify-center font-bold">
+                      🏠
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-black text-slate-800 dark:text-slate-100">Homepage Inline Editor</h5>
+                      <p className="text-[10px] text-slate-400">Edit biography, photos, titles live on the main page</p>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-sans select-none">
-                    Select a JPG or PNG photo directly from your computer/mobile. Image is automatically optimized. No URLs required.
+                  <p className="text-[11.5px] text-slate-650 dark:text-slate-350 leading-relaxed font-medium">
+                    To make administrative management simple and prevent confusing duplicate config menus, we have enabled elegant, inline visual editing directly on the <b>Librarian's Desk</b> card at the homepage.
                   </p>
+                  <div className="text-[10px] bg-indigo-100 text-indigo-855 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold p-2.5 rounded border border-indigo-200 dark:border-indigo-900/60 leading-normal">
+                    💡 Please switch to the <b>"Home" tab</b> at the top navigation bar, locate the <b>Librarian's Desk</b> card, and click the <b>"Edit Profile Desk"</b> button to perform modifications.
+                  </div>
                 </div>
-
-                {profileError && (
-                  <div className="p-3 bg-red-50 text-red-800 border border-red-200 rounded text-xs flex items-start gap-1.5 animate-bounce-short">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                    <span>{profileError}</span>
-                  </div>
-                )}
-
-                {profileSuccess && (
-                  <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-xs flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{profileSuccess}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={profileLoading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 select-none"
-                >
-                  <CheckCircle className="w-4 h-4 shrink-0" />
-                  <span>{profileLoading ? "Saving Profile..." : "Save Profile Details"}</span>
-                </button>
-              </form>
+              </div>
             </div>
 
             {/* COLUMN 2: LOGIN ACCESS SECURITY CONTROL PANEL */}

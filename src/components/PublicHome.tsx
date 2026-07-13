@@ -180,14 +180,27 @@ export default function PublicHome({
     document.title = title;
   }, [homeActiveTab]);
 
-  // Live Stats
-  const [liveStats, setLiveStats] = useState({
-    booksCount: books.length,
-    studentsCount: students.length,
-    digitalMaterialsCount: studyMaterials.length,
-    activeIssuedCount: 0,
-    avgRating: 0.0,
-    totalFeedbackCount: 0
+  // Live Stats with instant local storage caching to completely remove the "0 Books" initial state under SRE rules
+  const [liveStats, setLiveStats] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ramdiri_cached_stats');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed.booksCount === 'number') {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read cached stats from localStorage:", e);
+    }
+    return {
+      booksCount: books.length || 0,
+      studentsCount: students.length || 0,
+      digitalMaterialsCount: studyMaterials.length || 0,
+      activeIssuedCount: 0,
+      avgRating: 0.0,
+      totalFeedbackCount: 0
+    };
   });
 
   // Feedback states
@@ -204,6 +217,17 @@ export default function PublicHome({
   });
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState<number>(0);
   const [existingUserReview, setExistingUserReview] = useState<any | null>(null);
+
+  // Inline profile editing states
+  const [isEditingProfileInline, setIsEditingProfileInline] = useState(false);
+  const [editProfileName, setEditProfileName] = useState('');
+  const [editProfileDesignation, setEditProfileDesignation] = useState('');
+  const [editProfileBiography, setEditProfileBiography] = useState('');
+  const [editProfileYears, setEditProfileYears] = useState('');
+  const [editProfilePhoto, setEditProfilePhoto] = useState('');
+  const [isSavingProfileInline, setIsSavingProfileInline] = useState(false);
+  const [inlineProfileError, setInlineProfileError] = useState<string | null>(null);
+  const [inlineProfileSuccess, setInlineProfileSuccess] = useState<string | null>(null);
 
   const [librarianProfile, setLibrarianProfile] = useState<{
     name: string;
@@ -292,14 +316,20 @@ export default function PublicHome({
       .then(res => res.json())
       .then(data => {
         if (data && !data.error) {
-          setLiveStats({
+          const stats = {
             booksCount: typeof data.booksCount === 'number' ? data.booksCount : books.length,
             studentsCount: typeof data.studentsCount === 'number' ? data.studentsCount : students.length,
             digitalMaterialsCount: typeof data.digitalMaterialsCount === 'number' ? data.digitalMaterialsCount : studyMaterials.length,
             activeIssuedCount: typeof data.activeIssuedCount === 'number' ? data.activeIssuedCount : 0,
             avgRating: typeof data.avgRating === 'number' ? data.avgRating : 0.0,
             totalFeedbackCount: typeof data.totalFeedbackCount === 'number' ? data.totalFeedbackCount : 0
-          });
+          };
+          setLiveStats(stats);
+          try {
+            localStorage.setItem('ramdiri_cached_stats', JSON.stringify(stats));
+          } catch (e) {
+            console.warn("Could not write cached stats:", e);
+          }
         }
       })
       .catch(err => console.warn("Could not load public statistics:", err));
@@ -811,9 +841,228 @@ export default function PublicHome({
               </div>
             </div>
           </div>
+        ) : isEditingProfileInline ? (
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setIsSavingProfileInline(true);
+              setInlineProfileError(null);
+              setInlineProfileSuccess(null);
+              try {
+                const token = localStorage.getItem("ramdiri_library_token");
+                const res = await fetch('/api/librarian/profile', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    name: editProfileName,
+                    designation: editProfileDesignation,
+                    biography: editProfileBiography,
+                    yearsOfService: editProfileYears,
+                    profilePhoto: editProfilePhoto
+                  })
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                  setLibrarianProfile({
+                    name: editProfileName.trim(),
+                    designation: editProfileDesignation.trim(),
+                    biography: editProfileBiography.trim(),
+                    yearsOfService: editProfileYears.trim(),
+                    profilePhoto: editProfilePhoto
+                  });
+                  if (data.token) {
+                    localStorage.setItem("ramdiri_library_token", data.token);
+                  }
+                  setInlineProfileSuccess("Librarian profile updated successfully!");
+                  setIsEditingProfileInline(false);
+                } else {
+                  setInlineProfileError(data.error || "Failed to save profile changes.");
+                }
+              } catch (err: any) {
+                setInlineProfileError(err.message || "An error occurred.");
+              } finally {
+                setIsSavingProfileInline(false);
+              }
+            }}
+            className="space-y-4 relative z-10 text-xs text-slate-900 dark:text-slate-100"
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3 mb-2">
+              <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                📝 Edit Librarian's Desk Profile Card
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditingProfileInline(false)}
+                className="text-xs font-black text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-750 px-2.5 py-1 rounded transition-all cursor-pointer"
+              >
+                ✕ Cancel
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Librarian Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editProfileName}
+                  onChange={e => setEditProfileName(e.target.value)}
+                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-850 outline-none font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Professional Designation</label>
+                <input
+                  type="text"
+                  required
+                  value={editProfileDesignation}
+                  onChange={e => setEditProfileDesignation(e.target.value)}
+                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-850 outline-none font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Years of Service (Optional)</label>
+                <input
+                  type="text"
+                  value={editProfileYears}
+                  onChange={e => setEditProfileYears(e.target.value)}
+                  placeholder="e.g. 25+ Years of Service"
+                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-850 outline-none font-bold"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10.5px] font-bold text-slate-500 uppercase block">📷 Change Profile Photo</label>
+                <div className="flex items-center gap-3">
+                  <label className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-755 text-indigo-750 dark:text-indigo-300 font-bold text-xs rounded-lg cursor-pointer border border-indigo-200 dark:border-slate-700 flex items-center gap-1.5 transition-all select-none">
+                    <span>Choose Photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith('image/')) {
+                          setInlineProfileError("Please select a valid image file.");
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const maxDim = 300;
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > height) {
+                              if (width > maxDim) {
+                                height = Math.round((height * maxDim) / width);
+                                width = maxDim;
+                              }
+                            } else {
+                              if (height > maxDim) {
+                                width = Math.round((width * maxDim) / height);
+                                height = maxDim;
+                              }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                              ctx.drawImage(img, 0, 0, width, height);
+                              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                              setEditProfilePhoto(dataUrl);
+                              setInlineProfileError(null);
+                            } else {
+                              setEditProfilePhoto(event.target?.result as string);
+                            }
+                          };
+                          img.src = event.target?.result as string;
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                  {editProfilePhoto ? (
+                    <div className="flex items-center gap-2">
+                      <img src={editProfilePhoto} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover border" alt="Profile Preview" />
+                      <button
+                        type="button"
+                        onClick={() => setEditProfilePhoto('')}
+                        className="text-[11px] font-bold text-red-600 hover:text-red-500 cursor-pointer"
+                      >
+                        Remove Photo
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">No custom photo (Default avatar active)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Desk biography (Welcome Quote)</label>
+              <textarea
+                rows={3}
+                required
+                value={editProfileBiography}
+                onChange={e => setEditProfileBiography(e.target.value)}
+                placeholder="Write a warm message to scholars visiting the library..."
+                className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-850 outline-none leading-relaxed"
+              />
+            </div>
+
+            {inlineProfileError && (
+              <p className="text-red-600 font-bold font-mono text-[11px]">{inlineProfileError}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isSavingProfileInline}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-955 font-black uppercase rounded-xl shadow-xs cursor-pointer transition-all disabled:opacity-50"
+              >
+                {isSavingProfileInline ? "Saving Profile..." : "Save Profile Details"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditingProfileInline(false)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 text-slate-750 font-extrabold uppercase rounded-xl cursor-pointer transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         ) : (
           <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10">
             
+            {loggedInRole === 'Librarian' && (
+              <button
+                onClick={() => {
+                  setEditProfileName(librarianProfile.name);
+                  setEditProfileDesignation(librarianProfile.designation);
+                  setEditProfileBiography(librarianProfile.biography);
+                  setEditProfileYears(librarianProfile.yearsOfService);
+                  setEditProfilePhoto(librarianProfile.profilePhoto);
+                  setIsEditingProfileInline(true);
+                  setInlineProfileSuccess(null);
+                  setInlineProfileError(null);
+                }}
+                className="absolute right-0 top-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 border border-indigo-100 dark:border-slate-700 shadow-xs z-20 select-none"
+              >
+                <span>✏️ Edit Profile Desk</span>
+              </button>
+            )}
+
             {/* Headshot / Avatar */}
             <div className="shrink-0 select-none">
               {librarianProfile.profilePhoto ? (
