@@ -167,6 +167,7 @@ export default function LibrarianModule({
 
   // SRE Search states for table cross-management
   const [loanSearch, setLoanSearch] = useState<string>('');
+  const [reportsSearch, setReportsSearch] = useState<string>('');
   const [requestSearch, setRequestSearch] = useState<string>('');
   const [materialSearch, setMaterialSearch] = useState<string>('');
   const [feedbackSearch, setFeedbackSearch] = useState<string>('');
@@ -850,6 +851,7 @@ export default function LibrarianModule({
   // Issued Details Modal state
   const [showIssuedModal, setShowIssuedModal] = useState<boolean>(false);
   const [issuedModalFilter, setIssuedModalFilter] = useState<'Issued' | 'Returned' | 'Overdue'>('Issued');
+  const [issuedModalSearch, setIssuedModalSearch] = useState<string>('');
 
   const handleUpdateCredentials = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1059,13 +1061,20 @@ export default function LibrarianModule({
     return diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
   };
 
-  // Resolve Student demographic particulars from roll number
-  const getStudentProfile = (rollNumber: number) => {
-    const s = students.find(stud => stud.rollNumber === rollNumber);
+  // Resolve Student demographic particulars from roll number, class and section
+  const getStudentProfile = (rollNumber: number, studentClass?: string, studentSection?: string) => {
+    const s = students.find(stud => {
+      if (studentClass && studentSection) {
+        return stud.rollNumber === rollNumber && 
+               String(stud.class).trim().toLowerCase() === String(studentClass).trim().toLowerCase() && 
+               String(stud.section).trim().toLowerCase() === String(studentSection).trim().toLowerCase();
+      }
+      return stud.rollNumber === rollNumber;
+    });
     return {
       name: s?.name || "Student Reader",
-      class: s?.class || "10",
-      section: s?.section || "A"
+      class: s?.class || studentClass || "10",
+      section: s?.section || studentSection || "A"
     };
   };
 
@@ -1669,14 +1678,183 @@ export default function LibrarianModule({
 
   // Details state inside the interactive modal filter
   const filteredIssuedModalLogs = useMemo(() => {
+    let baseList = [];
     if (issuedModalFilter === 'Issued') {
-      return issueLogs.filter(log => log.status === 'Issued');
+      baseList = issueLogs.filter(log => log.status === 'Issued');
     } else if (issuedModalFilter === 'Returned') {
-      return issueLogs.filter(log => log.status === 'Returned');
+      baseList = issueLogs.filter(log => log.status === 'Returned');
     } else {
-      return issueLogs.filter(log => log.status === 'Issued' && isOverdue(log.dueDate));
+      baseList = issueLogs.filter(log => log.status === 'Issued' && isOverdue(log.dueDate));
     }
-  }, [issueLogs, issuedModalFilter]);
+
+    if (!issuedModalSearch.trim()) {
+      return baseList;
+    }
+
+    const q = issuedModalSearch.toLowerCase().trim();
+
+    // Map lookups for fast retrieval
+    const booksMap = new Map<string, typeof books[0]>();
+    for (const b of books) {
+      booksMap.set(b.bookId, b);
+    }
+
+    const studentsMap = new Map<string, typeof students[0]>();
+    for (const s of students) {
+      const key = `${String(s.class).trim().toLowerCase()}-${String(s.section).trim().toLowerCase()}-${s.rollNumber}`;
+      studentsMap.set(key, s);
+    }
+
+    return baseList.filter(log => {
+      // 1. Check direct properties of log
+      if (
+        (log.studentName || "").toLowerCase().includes(q) ||
+        String(log.rollNumber || "").toLowerCase().includes(q) ||
+        (log.class || "").toLowerCase().includes(q) ||
+        (log.section || "").toLowerCase().includes(q) ||
+        (log.bookName || "").toLowerCase().includes(q) ||
+        (log.bookId || "").toLowerCase().includes(q) ||
+        (log.id || "").toLowerCase().includes(q)
+      ) {
+        return true;
+      }
+
+      // 2. Check student's registered fields
+      const logClass = String(log.class || '').trim().toLowerCase();
+      const logSection = String(log.section || '').trim().toLowerCase();
+      const studKey = `${logClass}-${logSection}-${log.rollNumber}`;
+      const stud = studentsMap.get(studKey);
+      if (stud) {
+        if (
+          (stud.name || "").toLowerCase().includes(q) ||
+          String(stud.rollNumber || "").includes(q) ||
+          (stud.class || "").toLowerCase().includes(q) ||
+          (stud.section || "").toLowerCase().includes(q)
+        ) {
+          return true;
+        }
+      }
+
+      // 3. Check book's catalog details
+      const bk = booksMap.get(log.bookId);
+      if (bk) {
+        if (
+          (bk.bookName || "").toLowerCase().includes(q) ||
+          (bk.bookNumber || "").toLowerCase().includes(q) ||
+          (bk.accessionNumber || "").toLowerCase().includes(q) ||
+          (bk.callNumber || "").toLowerCase().includes(q) ||
+          (bk.author || "").toLowerCase().includes(q) ||
+          (bk.category || "").toLowerCase().includes(q)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }, [issueLogs, issuedModalFilter, issuedModalSearch, books, students]);
+
+  // Report lists with real-time high-performance filtering
+  const filteredReportLoans = useMemo(() => {
+    const baseList = issueLogs.filter(log => log.status === 'Issued');
+    if (!reportsSearch.trim()) return baseList;
+    const q = reportsSearch.toLowerCase().trim();
+    return baseList.filter(log => {
+      if (
+        (log.studentName || "").toLowerCase().includes(q) ||
+        String(log.rollNumber || "").toLowerCase().includes(q) ||
+        (log.bookName || "").toLowerCase().includes(q) ||
+        (log.bookId || "").toLowerCase().includes(q) ||
+        (log.class || "").toLowerCase().includes(q) ||
+        (log.section || "").toLowerCase().includes(q)
+      ) return true;
+      const bk = books.find(b => b.bookId === log.bookId);
+      if (bk && (
+        (bk.bookNumber || "").toLowerCase().includes(q) ||
+        (bk.accessionNumber || "").toLowerCase().includes(q) ||
+        (bk.callNumber || "").toLowerCase().includes(q) ||
+        (bk.author || "").toLowerCase().includes(q) ||
+        (bk.category || "").toLowerCase().includes(q)
+      )) return true;
+      return false;
+    });
+  }, [issueLogs, reportsSearch, books]);
+
+  const filteredReportOverdue = useMemo(() => {
+    const baseList = issueLogs.filter(log => log.status === 'Issued' && isOverdue(log.dueDate));
+    if (!reportsSearch.trim()) return baseList;
+    const q = reportsSearch.toLowerCase().trim();
+    return baseList.filter(log => {
+      if (
+        (log.studentName || "").toLowerCase().includes(q) ||
+        String(log.rollNumber || "").toLowerCase().includes(q) ||
+        (log.bookName || "").toLowerCase().includes(q) ||
+        (log.bookId || "").toLowerCase().includes(q) ||
+        (log.class || "").toLowerCase().includes(q) ||
+        (log.section || "").toLowerCase().includes(q)
+      ) return true;
+      const bk = books.find(b => b.bookId === log.bookId);
+      if (bk && (
+        (bk.bookNumber || "").toLowerCase().includes(q) ||
+        (bk.accessionNumber || "").toLowerCase().includes(q) ||
+        (bk.callNumber || "").toLowerCase().includes(q) ||
+        (bk.author || "").toLowerCase().includes(q) ||
+        (bk.category || "").toLowerCase().includes(q)
+      )) return true;
+      return false;
+    });
+  }, [issueLogs, reportsSearch, books]);
+
+  const filteredReportHistory = useMemo(() => {
+    const baseList = issueLogs;
+    if (!reportsSearch.trim()) return baseList;
+    const q = reportsSearch.toLowerCase().trim();
+    return baseList.filter(log => {
+      if (
+        (log.studentName || "").toLowerCase().includes(q) ||
+        String(log.rollNumber || "").toLowerCase().includes(q) ||
+        (log.bookName || "").toLowerCase().includes(q) ||
+        (log.bookId || "").toLowerCase().includes(q) ||
+        (log.class || "").toLowerCase().includes(q) ||
+        (log.section || "").toLowerCase().includes(q)
+      ) return true;
+      const bk = books.find(b => b.bookId === log.bookId);
+      if (bk && (
+        (bk.bookNumber || "").toLowerCase().includes(q) ||
+        (bk.accessionNumber || "").toLowerCase().includes(q) ||
+        (bk.callNumber || "").toLowerCase().includes(q) ||
+        (bk.author || "").toLowerCase().includes(q) ||
+        (bk.category || "").toLowerCase().includes(q)
+      )) return true;
+      return false;
+    });
+  }, [issueLogs, reportsSearch, books]);
+
+  const filteredReportStudents = useMemo(() => {
+    const baseList = students;
+    if (!reportsSearch.trim()) return baseList;
+    const q = reportsSearch.toLowerCase().trim();
+    return baseList.filter(s => 
+      (s.name || "").toLowerCase().includes(q) ||
+      String(s.rollNumber || "").toLowerCase().includes(q) ||
+      (s.class || "").toLowerCase().includes(q) ||
+      (s.section || "").toLowerCase().includes(q)
+    );
+  }, [students, reportsSearch]);
+
+  const filteredReportInventory = useMemo(() => {
+    const baseList = books;
+    if (!reportsSearch.trim()) return baseList;
+    const q = reportsSearch.toLowerCase().trim();
+    return baseList.filter(b => 
+      (b.bookName || "").toLowerCase().includes(q) ||
+      (b.author || "").toLowerCase().includes(q) ||
+      (b.category || "").toLowerCase().includes(q) ||
+      (b.bookNumber || "").toLowerCase().includes(q) ||
+      (b.accessionNumber || "").toLowerCase().includes(q) ||
+      (b.callNumber || "").toLowerCase().includes(q)
+    );
+  }, [books, reportsSearch]);
 
   return (
     <div className="space-y-6 animate-fade-in" id="librarian-workspace">
@@ -1817,7 +1995,7 @@ export default function LibrarianModule({
               </thead>
               <tbody className="divide-y divide-red-100 font-mono text-slate-800">
                 {overdueLogs.slice(0, 10).map(loan => {
-                  const demo = getStudentProfile(loan.rollNumber);
+                  const demo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
                   return (
                     <tr key={loan.id} className="hover:bg-red-100/30">
                       <td className="p-2.5 font-sans font-extrabold">{loan.studentName}</td>
@@ -3060,13 +3238,54 @@ export default function LibrarianModule({
                 {requests.filter(r => {
                   if (r.status !== 'Pending') return false;
                   if (!requestSearch.trim()) return true;
-                  const searchLower = requestSearch.toLowerCase().trim();
-                  return (
-                    (r.studentName || "").toLowerCase().includes(searchLower) ||
-                    String(r.rollNumber || "").toLowerCase().includes(searchLower) ||
-                    (r.bookName || "").toLowerCase().includes(searchLower) ||
-                    (r.id || "").toLowerCase().includes(searchLower)
+                  const q = requestSearch.toLowerCase().trim();
+                  
+                  // 1. Direct match on request properties
+                  if (
+                    (r.studentName || "").toLowerCase().includes(q) ||
+                    String(r.rollNumber || "").toLowerCase().includes(q) ||
+                    (r.bookName || "").toLowerCase().includes(q) ||
+                    (r.class || "").toLowerCase().includes(q) ||
+                    (r.section || "").toLowerCase().includes(q) ||
+                    (r.bookId || "").toLowerCase().includes(q) ||
+                    (r.id || "").toLowerCase().includes(q)
+                  ) {
+                    return true;
+                  }
+
+                  // 2. Student details match
+                  const stud = students.find(s => 
+                    s.rollNumber === r.rollNumber && 
+                    String(s.class).toLowerCase() === String(r.class || '').toLowerCase() && 
+                    String(s.section).toLowerCase() === String(r.section || '').toLowerCase()
                   );
+                  if (stud) {
+                    if (
+                      (stud.name || "").toLowerCase().includes(q) ||
+                      String(stud.rollNumber || "").includes(q) ||
+                      (stud.class || "").toLowerCase().includes(q) ||
+                      (stud.section || "").toLowerCase().includes(q)
+                    ) {
+                      return true;
+                    }
+                  }
+
+                  // 3. Book details match
+                  const bk = books.find(b => b.bookId === r.bookId);
+                  if (bk) {
+                    if (
+                      (bk.bookName || "").toLowerCase().includes(q) ||
+                      (bk.bookNumber || "").toLowerCase().includes(q) ||
+                      (bk.accessionNumber || "").toLowerCase().includes(q) ||
+                      (bk.callNumber || "").toLowerCase().includes(q) ||
+                      (bk.author || "").toLowerCase().includes(q) ||
+                      (bk.category || "").toLowerCase().includes(q)
+                    ) {
+                      return true;
+                    }
+                  }
+
+                  return false;
                 }).map(req => {
                   const currentApproveDate = approvalDates[req.id] || (() => {
                     const d = new Date();
@@ -3144,13 +3363,54 @@ export default function LibrarianModule({
                 {requests.filter(r => {
                   if (r.status !== 'Pending') return false;
                   if (!requestSearch.trim()) return true;
-                  const searchLower = requestSearch.toLowerCase().trim();
-                  return (
-                    (r.studentName || "").toLowerCase().includes(searchLower) ||
-                    String(r.rollNumber || "").toLowerCase().includes(searchLower) ||
-                    (r.bookName || "").toLowerCase().includes(searchLower) ||
-                    (r.id || "").toLowerCase().includes(searchLower)
+                  const q = requestSearch.toLowerCase().trim();
+                  
+                  // 1. Direct match on request properties
+                  if (
+                    (r.studentName || "").toLowerCase().includes(q) ||
+                    String(r.rollNumber || "").toLowerCase().includes(q) ||
+                    (r.bookName || "").toLowerCase().includes(q) ||
+                    (r.class || "").toLowerCase().includes(q) ||
+                    (r.section || "").toLowerCase().includes(q) ||
+                    (r.bookId || "").toLowerCase().includes(q) ||
+                    (r.id || "").toLowerCase().includes(q)
+                  ) {
+                    return true;
+                  }
+
+                  // 2. Student details match
+                  const stud = students.find(s => 
+                    s.rollNumber === r.rollNumber && 
+                    String(s.class).toLowerCase() === String(r.class || '').toLowerCase() && 
+                    String(s.section).toLowerCase() === String(r.section || '').toLowerCase()
                   );
+                  if (stud) {
+                    if (
+                      (stud.name || "").toLowerCase().includes(q) ||
+                      String(stud.rollNumber || "").includes(q) ||
+                      (stud.class || "").toLowerCase().includes(q) ||
+                      (stud.section || "").toLowerCase().includes(q)
+                    ) {
+                      return true;
+                    }
+                  }
+
+                  // 3. Book details match
+                  const bk = books.find(b => b.bookId === r.bookId);
+                  if (bk) {
+                    if (
+                      (bk.bookName || "").toLowerCase().includes(q) ||
+                      (bk.bookNumber || "").toLowerCase().includes(q) ||
+                      (bk.accessionNumber || "").toLowerCase().includes(q) ||
+                      (bk.callNumber || "").toLowerCase().includes(q) ||
+                      (bk.author || "").toLowerCase().includes(q) ||
+                      (bk.category || "").toLowerCase().includes(q)
+                    ) {
+                      return true;
+                    }
+                  }
+
+                  return false;
                 }).length === 0 && (
                   <p className="py-6 text-center text-slate-400 text-xs">{t.noPenRequests}</p>
                 )}
@@ -3165,7 +3425,7 @@ export default function LibrarianModule({
 
               <div className="divide-y divide-slate-150">
                 {paginatedLoans.map(loan => {
-                  const outDemo = getStudentProfile(loan.rollNumber);
+                  const outDemo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
                   const isPastDue = isOverdue(loan.dueDate);
                   return (
                     <div key={loan.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs animate-fade-in">
@@ -3319,18 +3579,46 @@ export default function LibrarianModule({
             </button>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-950 p-4 border border-slate-200 dark:border-slate-850 rounded-xl flex items-center justify-between">
+          <div className="bg-slate-50 dark:bg-slate-950 p-4 border border-slate-200 dark:border-slate-850 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="text-xs text-slate-500 select-none">
               Select any report tab above. Press <b>Print Report</b> below to generate an official hardcopy PDF directly from your browser.
             </div>
             
             <button
               onClick={handlePrintAction}
-              className="px-4.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded transition-all flex items-center gap-1.5 cursor-pointer select-none"
+              className="px-4.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded transition-all flex items-center gap-1.5 cursor-pointer select-none self-start sm:self-auto shrink-0"
             >
               <Printer className="w-4 h-4" />
               <span>Print Report Sheet (PDF)</span>
             </button>
+          </div>
+
+          {/* SEARCH BAR FOR REPORTS CONTROLS - PRINT-HIDDEN */}
+          <div className="bg-white dark:bg-slate-900 p-4 border border-slate-205 dark:border-slate-800 rounded-xl space-y-2 print:hidden shadow-xs">
+            <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block select-none">
+              🔍 Real-Time Filter & Search Active Report Registers
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={reportsSearch}
+                onChange={(e) => setReportsSearch(e.target.value)}
+                placeholder="Search report records by student name, roll call, class/section, book title, author, accession number, call number, category..."
+                className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:ring-indigo-650 text-slate-900 dark:text-white placeholder-slate-400"
+              />
+            </div>
+            {reportsSearch.trim() && (
+              <div className="flex justify-between items-center text-[10px] text-indigo-600 dark:text-amber-400 font-bold px-1 select-none">
+                <span>Filtering matching report records...</span>
+                <button 
+                  onClick={() => setReportsSearch('')}
+                  className="hover:underline cursor-pointer text-slate-400"
+                >
+                  Clear filter
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Report Paper Sheet Visual */}
@@ -3357,9 +3645,9 @@ export default function LibrarianModule({
             {activeReport === 'inventory' && (
               <div className="space-y-4 font-sans">
                 <div className="flex items-center justify-between bg-slate-100 p-2 text-xs font-bold rounded select-none">
-                  <span>Unique Titles: {books.length}</span>
-                  <span>Total Copies Volume: {books.reduce((sum, b) => sum + b.totalCopies, 0)}</span>
-                  <span>Available on Shelf: {books.reduce((sum, b) => sum + b.availableCopies, 0)}</span>
+                  <span>Unique Titles: {filteredReportInventory.length} {reportsSearch.trim() && `(matching ${reportsSearch})`}</span>
+                  <span>Total Copies Volume: {filteredReportInventory.reduce((sum, b) => sum + b.totalCopies, 0)}</span>
+                  <span>Available on Shelf: {filteredReportInventory.reduce((sum, b) => sum + b.availableCopies, 0)}</span>
                 </div>
                 
                 <div className="overflow-x-auto border rounded-xl shadow-xs border-slate-200">
@@ -3380,7 +3668,7 @@ export default function LibrarianModule({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                      {books.map(b => (
+                      {filteredReportInventory.map(b => (
                         <tr key={b.bookId} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/40">
                           <td className="py-2 px-3 font-mono font-bold text-indigo-600 dark:text-amber-400">{b.bookId}</td>
                           <td className="py-2 px-3 font-mono font-bold">{b.accessionNumber || b.bookId}</td>
@@ -3399,6 +3687,11 @@ export default function LibrarianModule({
                           <td className="py-2 px-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">{b.availableCopies}</td>
                         </tr>
                       ))}
+                      {filteredReportInventory.length === 0 && (
+                        <tr>
+                          <td colSpan={11} className="py-8 text-center text-slate-400">No matching catalog inventory books found.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -3409,7 +3702,7 @@ export default function LibrarianModule({
             {activeReport === 'loans' && (
               <div className="space-y-4 font-sans">
                 <div className="flex items-center justify-between bg-slate-100 p-2 text-xs font-bold rounded select-none">
-                  <span>Active Loans: {activeLoans.length}</span>
+                  <span>Active Loans: {filteredReportLoans.length} {reportsSearch.trim() && `(matching ${reportsSearch})`}</span>
                   <span>Total Past Returned: {issueLogs.filter(log => log.status === 'Returned').length}</span>
                 </div>
 
@@ -3424,7 +3717,7 @@ export default function LibrarianModule({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150">
-                    {activeLoans.map(log => (
+                    {filteredReportLoans.map(log => (
                       <tr key={log.id}>
                         <td className="py-2 font-bold text-slate-950">{log.studentName}</td>
                         <td className="py-2 font-mono">#{log.rollNumber}</td>
@@ -3433,9 +3726,9 @@ export default function LibrarianModule({
                         <td className="py-2 text-right font-bold text-amber-700 uppercase">{log.status}</td>
                       </tr>
                     ))}
-                    {activeLoans.length === 0 && (
+                    {filteredReportLoans.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400">0 active library loans recorded.</td>
+                        <td colSpan={5} className="py-6 text-center text-slate-400">0 active library loans matching criteria.</td>
                       </tr>
                     )}
                   </tbody>
@@ -3447,7 +3740,7 @@ export default function LibrarianModule({
             {activeReport === 'students' && (
               <div className="space-y-4 font-sans">
                 <div className="flex items-center justify-between bg-slate-100 p-2 text-xs font-bold rounded select-none">
-                  <span>Registered Students: {students.length}</span>
+                  <span>Registered Students: {filteredReportStudents.length} {reportsSearch.trim() && `(matching ${reportsSearch})`}</span>
                 </div>
 
                 <table className="w-full text-xs text-left border-collapse">
@@ -3460,7 +3753,7 @@ export default function LibrarianModule({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150">
-                    {students.map(s => (
+                    {filteredReportStudents.map(s => (
                       <tr key={s.studentId || `${s.class}-${s.section}-${s.rollNumber}`}>
                         <td className="py-2 font-bold text-slate-950">{s.status === "VACANT" || !s.name ? (currentLang === 'EN' ? "Vacant" : "रिक्त") : s.name}</td>
                         <td className="py-2 text-center">Grade {s.class || '10'}-{s.section || 'A'}</td>
@@ -3468,9 +3761,9 @@ export default function LibrarianModule({
                         <td className="py-2 text-right font-mono">{s.dob}</td>
                       </tr>
                     ))}
-                    {students.length === 0 && (
+                    {filteredReportStudents.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="py-6 text-center text-slate-400">0 students registered.</td>
+                        <td colSpan={4} className="py-6 text-center text-slate-400">0 students registered matching criteria.</td>
                       </tr>
                     )}
                   </tbody>
@@ -3482,7 +3775,7 @@ export default function LibrarianModule({
             {activeReport === 'overdue' && (
               <div className="space-y-4 font-sans text-slate-900">
                 <div className="flex items-center justify-between bg-red-50 text-red-900 border border-red-200 p-2 text-xs font-bold rounded select-none">
-                  <span>Total Overdue Books Checked: {overdueLogs.length}</span>
+                  <span>Total Overdue Books Checked: {filteredReportOverdue.length} {reportsSearch.trim() && `(matching ${reportsSearch})`}</span>
                   <span>Bihar Standard Penal Term: 14 Days max</span>
                 </div>
 
@@ -3499,7 +3792,7 @@ export default function LibrarianModule({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-150">
-                      {overdueLogs.map(log => {
+                      {filteredReportOverdue.map(log => {
                         const daysPast = getDaysOverdue(log.dueDate);
                         return (
                           <tr key={log.id} className="hover:bg-red-50/20">
@@ -3512,9 +3805,9 @@ export default function LibrarianModule({
                           </tr>
                         );
                       })}
-                      {overdueLogs.length === 0 && (
+                      {filteredReportOverdue.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-400 font-sans">Celebrate! 0 active books are overdue under current logs.</td>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 font-sans">0 active books are overdue matching criteria.</td>
                         </tr>
                       )}
                     </tbody>
@@ -3527,7 +3820,7 @@ export default function LibrarianModule({
             {activeReport === 'history' && (
               <div className="space-y-4 font-sans text-slate-900">
                 <div className="flex items-center justify-between bg-slate-100 p-2 text-xs font-bold rounded select-none">
-                  <span>Total Historic Logs Checked: {issueLogs.length} entries</span>
+                  <span>Total Historic Logs Checked: {filteredReportHistory.length} entries {reportsSearch.trim() && `(matching ${reportsSearch})`}</span>
                   <span>Scope: Cumulative (Returns are not deleted)</span>
                 </div>
 
@@ -3544,7 +3837,7 @@ export default function LibrarianModule({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-150 text-slate-800">
-                      {issueLogs.map(log => {
+                      {filteredReportHistory.map(log => {
                         const isPastDue = log.status === 'Issued' && isOverdue(log.dueDate);
                         return (
                           <tr key={log.id} className="hover:bg-slate-50/50">
@@ -3569,9 +3862,9 @@ export default function LibrarianModule({
                           </tr>
                         );
                       })}
-                      {issueLogs.length === 0 && (
+                      {filteredReportHistory.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-400">0 past or current borrowing trails mapped.</td>
+                          <td colSpan={6} className="p-8 text-center text-slate-400">0 past or current borrowing trails matching criteria.</td>
                         </tr>
                       )}
                     </tbody>
@@ -5638,76 +5931,6 @@ export default function LibrarianModule({
         </div>
       )}
 
-      {/* EXCEL BOOKS IMPORT MODAL */}
-      {showExcelBooksModal && (
-        <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 z-100 select-none animate-fade-in" id="excel-books-modal-container">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col">
-            
-            <div className="bg-slate-950 text-white p-4.5 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="font-extrabold text-[10px] uppercase tracking-wider block text-emerald-450">Excel Spreadsheet Ingress Console</span>
-                <h3 className="text-sm font-black uppercase text-slate-100">Bulk Upload Books via Excel Spreadsheet</h3>
-              </div>
-              <button 
-                onClick={() => setShowExcelBooksModal(false)}
-                className="w-7 h-7 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer font-bold text-sm animate-fade-in"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[75vh]">
-              <ExcelModule
-                onImportBooks={(imported) => {
-                  handleExcelBooksImported(imported);
-                  setShowExcelBooksModal(false);
-                }}
-                onImportStudents={handleExcelStudentsImported}
-                currentLang={currentLang}
-                existingBooks={books}
-                existingStudents={students}
-                initialPreset="books"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EXCEL STUDENTS IMPORT MODAL */}
-      {showExcelStudentsModal && (
-        <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4 z-100 select-none animate-fade-in" id="excel-students-modal-container">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col">
-            
-            <div className="bg-slate-950 text-white p-4.5 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="font-extrabold text-[10px] uppercase tracking-wider block text-emerald-450">Excel Spreadsheet Ingress Console</span>
-                <h3 className="text-sm font-black uppercase text-slate-100">Bulk Upload Students via Excel Spreadsheet</h3>
-              </div>
-              <button 
-                onClick={() => setShowExcelStudentsModal(false)}
-                className="w-7 h-7 rounded-full hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer font-bold text-sm animate-fade-in"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[75vh]">
-              <ExcelModule
-                onImportBooks={handleExcelBooksImported}
-                onImportStudents={(imported) => {
-                  handleExcelStudentsImported(imported);
-                  setShowExcelStudentsModal(false);
-                }}
-                currentLang={currentLang}
-                existingBooks={books}
-                existingStudents={students}
-                initialPreset="students"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* DYNAMIC ISSUED BOOK DETAILS MODAL PANEL (CLICKABLE KPI VIEWER) */}
       {showIssuedModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-100 select-none animate-fade-in" id="issued-books-details-panel">
@@ -5719,7 +5942,10 @@ export default function LibrarianModule({
                 <h3 className="text-sm font-black uppercase">Detailed Student Issue & Checkout Registers Dashboard</h3>
               </div>
               <button 
-                onClick={() => setShowIssuedModal(false)}
+                onClick={() => {
+                  setShowIssuedModal(false);
+                  setIssuedModalSearch('');
+                }}
                 className="w-7 h-7 rounded-full hover:bg-indigo-900 flex items-center justify-center text-indigo-200 hover:text-white transition-all cursor-pointer text-sm font-bold"
               >
                 ✕
@@ -5727,13 +5953,13 @@ export default function LibrarianModule({
             </div>
 
             {/* Filter segments inside dynamic issued list model */}
-            <div className="flex bg-slate-50 border-b border-slate-150 p-2 gap-2">
+            <div className="flex bg-slate-50 dark:bg-slate-950 border-b border-slate-150 dark:border-slate-800 p-2 gap-2 flex-wrap">
               <button
                 onClick={() => setIssuedModalFilter('Issued')}
                 className={`px-4 py-2 rounded text-xs font-bold transition-all ${
                   issuedModalFilter === 'Issued'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-slate-900 text-white shadow-xs dark:bg-indigo-600 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 📖 Currently Issued ({activeLoans.length})
@@ -5742,8 +5968,8 @@ export default function LibrarianModule({
                 onClick={() => setIssuedModalFilter('Returned')}
                 className={`px-4 py-2 rounded text-xs font-bold transition-all ${
                   issuedModalFilter === 'Returned'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-slate-900 text-white shadow-xs dark:bg-indigo-600 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 ✅ Returned Books ({issueLogs.filter(log => log.status === 'Returned').length})
@@ -5752,8 +5978,8 @@ export default function LibrarianModule({
                 onClick={() => setIssuedModalFilter('Overdue')}
                 className={`px-4 py-2 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
                   issuedModalFilter === 'Overdue'
-                    ? 'bg-red-655 text-white shadow-xs'
-                    : 'text-red-700 hover:bg-red-50'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
                 }`}
               >
                 <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -5761,40 +5987,59 @@ export default function LibrarianModule({
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto max-h-[60vh]">
+            {/* High-speed Real-time Search input for issued modal */}
+            <div className="bg-slate-50 dark:bg-slate-950 px-4 py-2.5 border-b border-slate-150 dark:border-slate-800 flex items-center gap-2">
+              <input
+                type="text"
+                value={issuedModalSearch}
+                onChange={e => setIssuedModalSearch(e.target.value)}
+                placeholder="🔍 Search logs by student (name, roll, class, sec) or book (title, accession #, call #, category)..."
+                className="w-full text-xs text-slate-900 dark:text-slate-100 p-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-lg focus:ring-1 focus:ring-indigo-600 outline-none placeholder-slate-400 dark:placeholder-slate-500 font-medium"
+              />
+              {issuedModalSearch && (
+                <button 
+                  onClick={() => setIssuedModalSearch('')} 
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold px-2 py-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="p-5 overflow-y-auto max-h-[60vh] bg-white dark:bg-slate-900">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-500 uppercase font-bold text-[9px] tracking-wider">
+                  <tr className="bg-slate-100 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-bold text-[9px] tracking-wider select-none font-mono">
                     <th className="p-2.5">Student Name</th>
                     <th className="p-2.5 text-center font-mono">Roll Number</th>
-                    <th className="p-2.5 text-center">Class / Section</th>
+                    <th className="p-2.5 text-center font-sans">Class / Section</th>
                     <th className="p-2.5">Book Title</th>
                     <th className="p-2.5 font-mono text-center">Checkout Date</th>
                     <th className="p-2.5 font-mono text-center">Due Return Date</th>
                     <th className="p-2.5 text-right font-bold">Status State</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800 font-mono">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200 font-mono">
                   {filteredIssuedModalLogs.map(log => {
-                    const demo = getStudentProfile(log.rollNumber);
+                    const demo = getStudentProfile(log.rollNumber, log.class, log.section);
                     const isPastDue = log.status === 'Issued' && isOverdue(log.dueDate);
                     return (
-                      <tr key={log.id} className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold">{log.studentName}</td>
-                        <td className="p-2.5 text-center">#{log.rollNumber}</td>
-                        <td className="p-2.5 text-center font-sans">Class {demo.class} - {demo.section}</td>
-                        <td className="p-2.5 font-sans font-medium italic">{log.bookName}</td>
-                        <td className="p-2.5 text-center">{log.issueDate}</td>
-                        <td className={`p-2.5 text-center font-bold ${isPastDue ? 'text-red-600 font-black' : ''}`}>{log.dueDate}</td>
+                      <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="p-2.5 font-sans font-bold text-slate-900 dark:text-slate-100">{log.studentName}</td>
+                        <td className="p-2.5 text-center text-slate-700 dark:text-slate-300">#{log.rollNumber}</td>
+                        <td className="p-2.5 text-center font-sans text-slate-800 dark:text-slate-200">Class {demo.class} - {demo.section}</td>
+                        <td className="p-2.5 font-sans font-medium italic text-slate-700 dark:text-slate-300">{log.bookName}</td>
+                        <td className="p-2.5 text-center text-slate-600 dark:text-slate-400">{log.issueDate}</td>
+                        <td className={`p-2.5 text-center font-bold ${isPastDue ? 'text-red-600 dark:text-red-450 font-black' : 'text-slate-700 dark:text-slate-300'}`}>{log.dueDate}</td>
                         <td className="p-2.5 text-right">
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-sans font-extrabold uppercase inline-block border ${
+                          <span className={`text-[10px] px-2.5 py-0.5 rounded font-sans font-extrabold uppercase inline-block border ${
                             log.status === 'Returned'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900'
                               : isPastDue
-                              ? 'bg-red-50 text-red-800 border-red-200 animate-pulse'
-                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                              ? 'bg-red-50 text-red-800 border-red-200 animate-pulse dark:bg-red-950/20 dark:text-red-400 dark:border-red-900'
+                              : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900'
                           }`}>
-                            {log.status === 'Returned' ? 'Returned' : isPastDue ? `${getDaysOverdue(log.dueDate)} Days Overdue` : 'Issued'}
+                            {log.status === 'Returned' ? 'Returned' : isPastDue ? `${getDaysOverdue(log.dueDate)} Overdue` : 'Issued'}
                           </span>
                         </td>
                       </tr>
@@ -5803,7 +6048,7 @@ export default function LibrarianModule({
 
                   {filteredIssuedModalLogs.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-10 text-center text-slate-400 font-sans text-xs">
+                      <td colSpan={7} className="p-10 text-center text-slate-400 dark:text-slate-500 font-sans text-xs">
                         No checked records available inside this selected register.
                       </td>
                     </tr>
@@ -5812,10 +6057,13 @@ export default function LibrarianModule({
               </table>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-105 flex justify-end">
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-155 dark:border-slate-800 flex justify-end">
               <button
-                onClick={() => setShowIssuedModal(false)}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded shadow-xs cursor-pointer select-none"
+                onClick={() => {
+                  setShowIssuedModal(false);
+                  setIssuedModalSearch('');
+                }}
+                className="px-5 py-2 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white font-extrabold text-xs rounded shadow-xs cursor-pointer select-none"
               >
                 Done / Close Console
               </button>
