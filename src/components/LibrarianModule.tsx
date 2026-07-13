@@ -154,6 +154,10 @@ export default function LibrarianModule({
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
+  const [studentModalView, setStudentModalView] = useState<'timeline' | 'table'>('timeline');
+  
+  // Universal Search query state
+  const [universalQuery, setUniversalQuery] = useState<string>('');
   
   // Debounced Search Inputs and original query state
   const [bookSearchInput, setBookSearchInput] = useState<string>('');
@@ -166,6 +170,35 @@ export default function LibrarianModule({
   const [requestSearch, setRequestSearch] = useState<string>('');
   const [materialSearch, setMaterialSearch] = useState<string>('');
   const [feedbackSearch, setFeedbackSearch] = useState<string>('');
+
+  // Memoized Universal Search results mapping matching books, students, and issue logs
+  const universalResults = useMemo(() => {
+    const query = universalQuery.trim().toLowerCase();
+    if (!query || query.length < 2) return { books: [], students: [], logs: [] };
+
+    const matchedBooks = books.filter(b => 
+      b.bookId.toLowerCase().includes(query) ||
+      b.bookName.toLowerCase().includes(query) ||
+      (b.author && b.author.toLowerCase().includes(query)) ||
+      (b.accessionNumber && b.accessionNumber.toLowerCase().includes(query))
+    ).slice(0, 4);
+
+    const matchedStudents = students.filter(s => 
+      s.name.toLowerCase().includes(query) ||
+      (s.studentId && s.studentId.toLowerCase().includes(query)) ||
+      String(s.rollNumber).includes(query) ||
+      (s.class && s.class.toLowerCase().includes(query))
+    ).slice(0, 4);
+
+    const matchedLogs = issueLogs.filter(l => 
+      l.bookName.toLowerCase().includes(query) ||
+      l.studentName.toLowerCase().includes(query) ||
+      l.id.toLowerCase().includes(query) ||
+      (l.class && l.class.toLowerCase().includes(query))
+    ).slice(0, 4);
+
+    return { books: matchedBooks, students: matchedStudents, logs: matchedLogs };
+  }, [universalQuery, books, students, issueLogs]);
 
   // Highlight matching search term in text securely
   const highlightText = (text: string | number | undefined, search: string) => {
@@ -1071,7 +1104,7 @@ export default function LibrarianModule({
       const searchLower = loanSearch.toLowerCase().trim();
       list = list.filter(loan => 
         (loan.studentName || "").toLowerCase().includes(searchLower) ||
-        (loan.rollNumber || "").toLowerCase().includes(searchLower) ||
+        String(loan.rollNumber || "").toLowerCase().includes(searchLower) ||
         (loan.bookId || "").toLowerCase().includes(searchLower) ||
         (loan.bookName || "").toLowerCase().includes(searchLower) ||
         (loan.id || "").toLowerCase().includes(searchLower)
@@ -1999,6 +2032,138 @@ export default function LibrarianModule({
         </button>
       </div>
 
+      {/* UNIVERSAL SEARCH BAR PANEL (P1) */}
+      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-850 space-y-2 relative" id="universal-search-section">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">
+            ⚡ Universal Search Engine / सार्वभौमिक खोज इंजन
+          </span>
+          {universalQuery && (
+            <button 
+              type="button"
+              onClick={() => setUniversalQuery('')}
+              className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-all cursor-pointer select-none"
+            >
+              Clear / साफ करें [✕]
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-3 w-4 h-4 text-indigo-500" />
+          <input
+            type="text"
+            value={universalQuery}
+            onChange={(e) => setUniversalQuery(e.target.value)}
+            placeholder="Search instantly across Books, Accession IDs, Students, and Active Loan Logs..."
+            className="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-indigo-500/25 focus:border-indigo-500 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-900 dark:text-white font-sans placeholder-slate-400 dark:placeholder-slate-500"
+          />
+        </div>
+
+        {/* Floating results overlay dropdown if query is present */}
+        {universalQuery.trim().length >= 2 && (
+          <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 max-h-[400px] overflow-y-auto">
+            
+            {/* 1. Books section */}
+            <div>
+              <div className="bg-slate-50 dark:bg-slate-950 px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                📖 Catalog Book Registers ({universalResults.books.length})
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                {universalResults.books.map(b => (
+                  <div 
+                    key={b.bookId}
+                    onClick={() => { setSelectedProfileBook(b); setUniversalQuery(''); }}
+                    className="p-3 hover:bg-slate-50 dark:hover:bg-slate-850/40 cursor-pointer flex items-center justify-between text-xs transition-all"
+                  >
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white">{b.bookName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">ID: #{b.bookId} • Acc: {b.accessionNumber || "-"} • Author: {b.author}</div>
+                    </div>
+                    <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-150 text-emerald-800 dark:text-emerald-400 font-bold px-2 py-0.5 rounded font-mono">
+                      View Catalog Trail →
+                    </span>
+                  </div>
+                ))}
+                {universalResults.books.length === 0 && (
+                  <div className="p-3 text-slate-400 text-[11px] font-sans">No matching book records in index.</div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Students section */}
+            <div>
+              <div className="bg-slate-55 dark:bg-slate-950 px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                👥 Registered Student Scholars ({universalResults.students.length})
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                {universalResults.students.map(s => (
+                  <div 
+                    key={s.studentId || `${s.class}-${s.section}-${s.rollNumber}`}
+                    onClick={() => { setSelectedProfileStudent(s); setUniversalQuery(''); }}
+                    className="p-3 hover:bg-slate-50 dark:hover:bg-slate-850/40 cursor-pointer flex items-center justify-between text-xs transition-all"
+                  >
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white">{s.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">Roll: #{s.rollNumber} • Class: Grade {s.class} • Sec: {s.section}</div>
+                    </div>
+                    <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/25 border border-indigo-150 text-indigo-800 dark:text-indigo-450 font-bold px-2 py-0.5 rounded font-mono">
+                      View Student File →
+                    </span>
+                  </div>
+                ))}
+                {universalResults.students.length === 0 && (
+                  <div className="p-3 text-slate-400 text-[11px] font-sans">No matching student accounts found.</div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Issue Logs section */}
+            <div>
+              <div className="bg-slate-55 dark:bg-slate-950 px-3 py-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                📜 Active/Historic Book Issue Logs ({universalResults.logs.length})
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                {universalResults.logs.map(l => (
+                  <div 
+                    key={l.id}
+                    onClick={() => { 
+                      const matchedBook = books.find(b => b.bookId === l.bookId);
+                      if (matchedBook) {
+                        setSelectedProfileBook(matchedBook);
+                      } else {
+                        alert(`Book ID: #${l.bookId} (${l.bookName})`);
+                      }
+                      setUniversalQuery(''); 
+                    }}
+                    className="p-3 hover:bg-slate-50 dark:hover:bg-slate-850/40 cursor-pointer flex items-center justify-between text-xs transition-all"
+                  >
+                    <div>
+                      <div className="font-extrabold text-slate-900 dark:text-white">{l.bookName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">Borrowed by: {l.studentName} (Roll: #{l.rollNumber}) • Due Date: {l.dueDate}</div>
+                    </div>
+                    <span className={`text-[9px] uppercase px-2 py-0.5 rounded font-bold font-mono ${
+                      l.status === 'Returned'
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-150'
+                        : 'bg-amber-50 text-amber-800 border border-amber-150 animate-pulse'
+                    }`}>
+                      {l.status}
+                    </span>
+                  </div>
+                ))}
+                {universalResults.logs.length === 0 && (
+                  <div className="p-3 text-slate-400 text-[11px] font-sans">No active transaction records match query.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950 px-3 py-2 text-[9px] text-slate-400 text-center font-sans">
+              Matches are computed locally and updated in real-time. Click on any item to view details instantly.
+            </div>
+
+          </div>
+        )}
+      </div>
+
       {/* RENDER ACTIVE TAB */}      {/* BOOKS TAB PANEL */}
       {activeTab === 'books' && (
         <div className="space-y-6" id="tab-books-content">
@@ -2412,77 +2577,101 @@ export default function LibrarianModule({
                     <th className="p-3 border border-slate-800 text-center">Actions</th>
                   </tr>
                 </thead>
-                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {paginatedStudents.map((stud, idx) => {
-                    const checkoutsCount = issueLogs.filter(log => log.rollNumber === stud.rollNumber && log.status === 'Issued').length;
-                    const itemIndex = (studentsPage - 1) * 15 + idx + 1;
-                    const displayStudentId = stud.studentId || (stud.class || "10") + "-" + (stud.section || "A").toUpperCase() + "-" + stud.rollNumber;
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {paginatedBooks.map((book) => {
+                    const shelfSrNo = categorySerialsMap.get(book.bookId) || 1;
+                    const isSelected = selectedBookIds.includes(book.bookId);
                     return (
-                      <tr key={idx} className={"hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all " + (selectedStudentIds.includes(displayStudentId) ? "bg-indigo-50/10 dark:bg-indigo-950/20" : "")}>
-                        <td className="p-3 w-8 col-checkbox">
+                      <tr key={book.bookId} className={"hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all " + (isSelected ? "bg-indigo-50/10 dark:bg-indigo-950/20" : "")}>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850">
                           <input
                             type="checkbox"
-                            checked={selectedStudentIds.includes(displayStudentId)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedStudentIds(prev => [...prev, displayStudentId]);
+                            checked={isSelected}
+                            onChange={() => {
+                              if (isSelected) {
+                                setSelectedBookIds(prev => prev.filter(id => id !== book.bookId));
                               } else {
-                                setSelectedStudentIds(prev => prev.filter(id => id !== displayStudentId));
+                                setSelectedBookIds(prev => [...prev, book.bookId]);
                               }
                             }}
-                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            className="rounded text-indigo-650 focus:ring-indigo-505 cursor-pointer"
                           />
                         </td>
-                        <td className="p-3 text-slate-400 dark:text-slate-500 font-mono">{itemIndex < 10 ? "0" + itemIndex : itemIndex}</td>
-                        <td className="p-3 font-semibold text-slate-900 dark:text-slate-100 font-sans sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-bold text-slate-500">
+                          #{book.bookId}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-black text-emerald-600 dark:text-emerald-450">
+                          {shelfSrNo}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-bold text-slate-850 dark:text-slate-250">
+                          {book.accessionNumber || book.bookId || "N/A"}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono text-slate-700 dark:text-slate-300">
+                          {book.callNumber || "N/A"}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono text-slate-700 dark:text-slate-300">
+                          {book.bookNumber || "N/A"}
+                        </td>
+                        <td className="p-3 border border-slate-200 dark:border-slate-850 font-bold text-slate-900 dark:text-slate-100 max-w-[250px] truncate">
                           <button
                             type="button"
-                            onClick={() => setSelectedProfileStudent(stud)}
-                            className="hover:underline text-indigo-700 hover:text-indigo-905 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer focus:outline-none focus:ring-0 select-none"
-                            title="Click to view full academic library profile history"
+                            onClick={() => setSelectedProfileBook(book)}
+                            className="hover:underline text-indigo-700 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer"
+                            title="Click to view history"
                           >
-                            {stud.status === "VACANT" || !stud.name ? (currentLang === "EN" ? "Vacant" : "रिक्त") : stud.name}
+                            {book.bookName}
                           </button>
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300 font-sans">Class {stud.class || "10"}-{stud.section || "A"}</td>
-                        <td className="p-3 text-center font-bold font-mono text-indigo-600 dark:text-indigo-450">#{stud.rollNumber}</td>
-                        <td className="p-3 font-mono text-slate-650 dark:text-slate-350">
-                          {stud.dob ? (
-                            stud.dob
+                        <td className="p-3 border border-slate-200 dark:border-slate-850 text-slate-700 dark:text-slate-300 max-w-[150px] truncate">
+                          {book.author}
+                        </td>
+                        <td className="p-3 border border-slate-200 dark:border-slate-850 text-slate-600 dark:text-slate-400 max-w-[150px] truncate">
+                          {book.publisher}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono text-slate-600 dark:text-slate-400">
+                          {book.yearOfPublication || "N/A"}
+                        </td>
+                        <td className="p-3 border border-slate-200 dark:border-slate-850">
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-650 dark:bg-slate-800 dark:text-slate-300 font-sans">
+                            {book.category}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono">
+                          <span className="font-bold text-slate-850 dark:text-slate-200">{book.availableCopies}</span> / {book.totalCopies}
+                        </td>
+                        <td className="p-3 text-center border border-slate-200 dark:border-slate-850">
+                          {book.availableCopies > 0 ? (
+                            <span className="px-2.5 py-1 text-[9px] font-black rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-955/40 dark:text-emerald-450 uppercase tracking-wider font-sans">
+                              Available
+                            </span>
                           ) : (
-                            <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider font-sans">
-                              No DOB (Optional)
+                            <span className="px-2.5 py-1 text-[9px] font-black rounded-full bg-red-100 text-red-800 dark:bg-red-955/40 dark:text-red-400 uppercase tracking-wider font-sans">
+                              Checked Out
                             </span>
                           )}
                         </td>
-                        <td className="p-3 text-center font-extrabold text-amber-700 dark:text-amber-500 font-mono">
-                          {checkoutsCount}
-                        </td>
-                        <td className="p-3 text-right">
+                        <td className="p-3 text-right border border-slate-200 dark:border-slate-850">
                           <div className="flex gap-2 justify-end">
                             <button
-                              onClick={() => openStudentEdit(stud)}
+                              onClick={() => openBookEdit(book)}
                               className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-405 transition-all cursor-pointer"
-                              title="Edit Student Information"
-                              type="button"
+                              title="Edit Book Specifications"
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => {
-                                const targetId = stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber);
                                 setConfirmModal({
-                                  type: "delete-student",
-                                  title: "permanently delete student enrollment",
-                                  message: "Are you sure you want to permanently delete student " + stud.name + " (Class: " + stud.class + ", Section: " + stud.section + ", Roll: " + stud.rollNumber + ") from rosters database? This cannot be undone.",
-                                  confirmLabel: "Confirm and Delete Student",
-                                  targetId: targetId
+                                  type: 'delete-book',
+                                  title: 'Permanently Delete Book Profile',
+                                  message: `Are you sure you want to permanently delete '${book.bookName}'? This cannot be undone.`,
+                                  confirmLabel: 'Confirm and Delete',
+                                  targetId: book.bookId
                                 });
                               }}
-                              className="p-1 rounded hover:bg-red-50 text-red-650 transition-all cursor-pointer"
-                              title="Delete Student"
-                              type="button"
-                              id={"delete-single-student-" + (stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber))}
+                              className="p-1 rounded hover:bg-red-50 text-red-650 cursor-pointer"
+                              title="Delete Book"
+                              id={`delete-single-book-${book.bookId}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2491,14 +2680,335 @@ export default function LibrarianModule({
                       </tr>
                     );
                   })}
-                  {filteredStudents.length === 0 && (
+                  {filteredBooks.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
+                      <td colSpan={14} className="p-6 text-center text-slate-400 text-xs font-sans">No books found in school registers matching queries.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+          )}
+
+          {/* INFINITE SCROLL SENTINEL FOR BOOKS */}
+          <InfiniteScrollSentinel 
+            onVisible={() => setVisibleBooksCount(prev => prev + 24)}
+            hasMore={paginatedBooks.length < filteredBooks.length}
+          />
+        </div>
+      )}
+
+      {/* STUDENTS TAB PANEL */}
+      {activeTab === 'students' && (
+        <div className="space-y-6" id="tab-students-content">
+          
+          {/* Header controls */}
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={studentSearchInput}
+                  onChange={(e) => {
+                    setStudentSearchInput(e.target.value);
+                    setStudentsPage(1);
+                  }}
+                  placeholder={currentLang === "EN" ? "Search students by name, roll, class, section, admission..." : "छात्र का नाम, रोल नंबर, कक्षा, अनुभाग, प्रवेश खोजें..."}
+                  className="w-full text-xs pl-9 pr-3 py-2.5 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-lg outline-none focus:ring-1 focus:focus:ring-slate-805 animate-fade-in text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Class Filter */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950/40 p-1 px-2.5 rounded-lg border border-slate-150 dark:border-slate-805">
+                <span className="text-[10px] font-black uppercase text-slate-450 shrink-0 font-mono">Class:</span>
+                <select
+                  value={filterClass}
+                  onChange={(e) => {
+                    setFilterClass(e.target.value);
+                    setStudentsPage(1);
+                  }}
+                  className="text-[11px] bg-transparent border-none text-slate-705 dark:text-slate-305 font-mono cursor-pointer outline-none focus:ring-0"
+                >
+                  <option value="">📁 All Classes</option>
+                  {Array.from(new Set(students.map(s => String(s.class || '')))).filter(Boolean).sort((a,b) => Number(a)-Number(b)).map(cls => (
+                    <option key={cls} value={cls}>Class {cls}</option>
+                  ))}
+                  {/* Fallback standard classes */}
+                  {!students.length && (
+                    <>
+                      <option value="6">Class 6</option>
+                      <option value="7">Class 7</option>
+                      <option value="8">Class 8</option>
+                      <option value="9">Class 9</option>
+                      <option value="10">Class 10</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Section Filter */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950/40 p-1 px-2.5 rounded-lg border border-slate-150 dark:border-slate-805">
+                <span className="text-[10px] font-black uppercase text-slate-450 shrink-0 font-mono">Section:</span>
+                <select
+                  value={filterSection}
+                  onChange={(e) => {
+                    setFilterSection(e.target.value);
+                    setStudentsPage(1);
+                  }}
+                  className="text-[11px] bg-transparent border-none text-slate-705 dark:text-slate-305 font-mono cursor-pointer outline-none focus:ring-0"
+                >
+                  <option value="">📁 All Sections</option>
+                  {Array.from(new Set(students.map(s => String(s.section || '').toUpperCase()))).filter(Boolean).sort().map(sec => (
+                    <option key={sec} value={sec}>Section {sec}</option>
+                  ))}
+                  {!students.length && (
+                    <>
+                      <option value="A">Section A</option>
+                      <option value="B">Section B</option>
+                      <option value="C">Section C</option>
+                      <option value="D">Section D</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowExcelStudentsModal(true)}
+                className="px-4 py-2.5 bg-emerald-650 hover:bg-emerald-750 text-white font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs select-none"
+                id="btn-upload-excel-students-shortcut"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Upload Excel</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingStudent(null);
+                  setStudName('');
+                  setStudClass('10');
+                  setStudSection('A');
+                  setStudRoll('');
+                  setStudDOB('');
+                  setShowStudentForm(true);
+                }}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer select-none"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{currentLang === "EN" ? "Enroll Student" : "छात्र नामांकित करें"}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between select-none">
+            <span>Students found: {filteredStudents.length} filtered ({students.length} total registered)</span>
+            <span>Ledger search lookup speed: <b>{studentSearchElapsed}ms</b></span>
+          </div>
+
+          {/* BULK SELECTION CONTROLS PANEL FOR STUDENTS */}
+          <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <input 
+                type="checkbox"
+                id="bulk-select-all-students"
+                checked={paginatedStudents.length > 0 && paginatedStudents.every(s => {
+                  const displayStudentId = s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber;
+                  return selectedStudentIds.includes(displayStudentId);
+                })}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const visibleIds = filteredStudents.map(s => s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber);
+                    setSelectedStudentIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+                  } else {
+                    const visibleIds = filteredStudents.map(s => s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber);
+                    setSelectedStudentIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                  }
+                }}
+                className="w-4 h-4 rounded border-slate-350 text-slate-800 focus:ring-slate-800 cursor-pointer"
+              />
+              <label htmlFor="bulk-select-all-students" className="text-xs font-bold text-slate-750 dark:text-slate-300 cursor-pointer select-none">
+                Select All Filtered Students ({filteredStudents.length})
+              </label>
+              {selectedStudentIds.length > 0 && (
+                <span className="text-[11px] bg-slate-200 dark:bg-slate-805 text-slate-800 dark:text-slate-205 font-extrabold px-2.5 py-0.5 rounded font-mono">
+                  {selectedStudentIds.length} Selected
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {selectedStudentIds.length > 0 && (
+                <>
+                  <button
+                    onClick={() => {
+                      setConfirmModal({
+                        type: 'delete-selected-students',
+                        title: 'Bulk Delete Selected Students',
+                        message: `Are you sure you want to permanently delete these ${selectedStudentIds.length} selected student registration accounts from lists?`,
+                        confirmLabel: 'Delete Selected Students',
+                        targetId: selectedStudentIds
+                      });
+                    }}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs select-none"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Selected ({selectedStudentIds.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedStudentIds([])}
+                    className="px-3 py-2 border border-slate-250 hover:bg-slate-50 text-slate-650 font-bold text-xs rounded-lg transition-all cursor-pointer select-none"
+                  >
+                    Clear Selection
+                  </button>
+                </>
+              )}
+
+              <div className="flex flex-col items-end gap-1 ml-auto">
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Total Students: {students.length}
+                </span>
+                <button
+                  onClick={() => {
+                    setConfirmModal({
+                      type: 'clear-students',
+                      title: 'Wipe All Student Roster Registrations',
+                      message: `CRITICAL SECURE DIRECTIVE: Are you sure you want to delete ALL ${students.length} registered student records? This will clear all student portal logins and rosters. This action is irreversible. Please type 'DELETE ALL STUDENTS' exactly to confirm:`,
+                      confirmLabel: 'Purge Student Registry',
+                      requireInput: 'DELETE ALL STUDENTS'
+                    });
+                  }}
+                  className="px-3.5 py-1.5 bg-red-50 hover:bg-red-105 hover:text-red-850 border-2 border-dashed border-red-300 dark:border-red-900 text-red-700 font-extrabold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer select-none"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-650 shrink-0" />
+                  <span>Purge Student Directory</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Students Table */}
+          <div className="overflow-x-auto border-2 border-slate-300 dark:border-slate-800 rounded-xl shadow-xs text-xs bg-white dark:bg-slate-900">
+            <table className="w-full text-left border-collapse" id="librarian-students-table">
+              <thead className="bg-slate-900 text-white font-mono uppercase tracking-wider text-[10px] border-b-2 border-slate-950 select-none">
+                <tr>
+                  <th className="p-3 text-center w-12 border border-slate-850">
+                    <input 
+                      type="checkbox"
+                      checked={paginatedStudents.length > 0 && paginatedStudents.every(s => {
+                        const displayStudentId = s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber;
+                        return selectedStudentIds.includes(displayStudentId);
+                      })}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const visibleIds = paginatedStudents.map(s => s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber);
+                          setSelectedStudentIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+                        } else {
+                          const visibleIds = paginatedStudents.map(s => s.studentId || (s.class || "10") + "-" + (s.section || "A").toUpperCase() + "-" + s.rollNumber);
+                          setSelectedStudentIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-slate-900 cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-3 border border-slate-850 text-center">S.No</th>
+                  <th className="p-3 border border-slate-850 text-left">Student Name</th>
+                  <th className="p-3 border border-slate-850 text-center">Class & Section</th>
+                  <th className="p-3 border border-slate-850 text-center">Roll Number</th>
+                  <th className="p-3 border border-slate-850 text-left">Date of Birth</th>
+                  <th className="p-3 border border-slate-850 text-center">Active Checked-out Books</th>
+                  <th className="p-3 border border-slate-850 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {paginatedStudents.map((stud, idx) => {
+                  const checkoutsCount = issueLogs.filter(log => log.rollNumber === stud.rollNumber && log.status === 'Issued').length;
+                  const itemIndex = idx + 1;
+                  const displayStudentId = stud.studentId || (stud.class || "10") + "-" + (stud.section || "A").toUpperCase() + "-" + stud.rollNumber;
+                  const isSelected = selectedStudentIds.includes(displayStudentId);
+                  return (
+                    <tr key={displayStudentId} className={"hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-all " + (isSelected ? "bg-indigo-50/10 dark:bg-indigo-950/20" : "")}>
+                      <td className="p-3 text-center w-12 border border-slate-200 dark:border-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            if (isSelected) {
+                              setSelectedStudentIds(prev => prev.filter(id => id !== displayStudentId));
+                            } else {
+                              setSelectedStudentIds(prev => [...prev, displayStudentId]);
+                            }
+                          }}
+                          className="rounded text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 text-slate-400 font-mono">{itemIndex < 10 ? "0" + itemIndex : itemIndex}</td>
+                      <td className="p-3 border border-slate-200 dark:border-slate-800 font-semibold text-slate-900 dark:text-slate-105 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProfileStudent(stud)}
+                          className="hover:underline text-indigo-700 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold text-left cursor-pointer"
+                          title="Click to view academic library profile history"
+                        >
+                          {stud.status === "VACANT" || !stud.name ? (currentLang === "EN" ? "Vacant" : "रिक्त") : stud.name}
+                        </button>
+                      </td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300">Class {stud.class || "10"}-{stud.section || "A"}</td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold font-mono text-indigo-600 dark:text-indigo-400">#{stud.rollNumber}</td>
+                      <td className="p-3 border border-slate-200 dark:border-slate-800 font-mono text-slate-650 dark:text-slate-350">
+                        {stud.dob ? stud.dob : (
+                          <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider font-sans">
+                            No DOB (Optional)
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-extrabold text-amber-700 dark:text-amber-500 font-mono">
+                        {checkoutsCount}
+                      </td>
+                      <td className="p-3 text-right border border-slate-200 dark:border-slate-800">
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => openStudentEdit(stud)}
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-405 transition-all cursor-pointer"
+                            title="Edit Student Information"
+                            type="button"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const targetId = stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber);
+                              setConfirmModal({
+                                type: "delete-student",
+                                title: "permanently delete student enrollment",
+                                message: "Are you sure you want to permanently delete student " + stud.name + " (Class: " + stud.class + ", Section: " + stud.section + ", Roll: " + stud.rollNumber + ") from rosters database? This cannot be undone.",
+                                confirmLabel: "Confirm and Delete Student",
+                                targetId: targetId
+                              });
+                            }}
+                            className="p-1 rounded hover:bg-red-50 text-red-650 transition-all cursor-pointer"
+                            title="Delete Student"
+                            type="button"
+                            id={"delete-single-student-" + (stud.studentId || (stud.class + "-" + stud.section + "-" + stud.rollNumber))}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredStudents.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           {/* INFINITE SCROLL SENTINEL FOR STUDENTS */}
@@ -2507,22 +3017,22 @@ export default function LibrarianModule({
             hasMore={paginatedStudents.length < filteredStudents.length}
           />
 
-           {/* Excel Importer segment specifically for student data */}
-           <div className="bg-white p-6 border border-slate-200 rounded-xl space-y-4">
-             <h3 className="text-sm font-extrabold uppercase text-slate-500 tracking-wider">
-               {t.excelModuleTitle}
-             </h3>
-             <ExcelModule
-               onImportBooks={handleExcelBooksImported}
-               onImportStudents={handleExcelStudentsImported}
-               currentLang={currentLang}
-               existingBooks={books}
-               existingStudents={students}
-             />
-           </div>
+          {/* Excel Importer segment specifically for student data */}
+          <div className="bg-white dark:bg-slate-900 p-6 border border-slate-205 dark:border-slate-800 rounded-xl space-y-4">
+            <h3 className="text-sm font-extrabold uppercase text-slate-500 tracking-wider">
+              {t.excelModuleTitle}
+            </h3>
+            <ExcelModule
+              onImportBooks={handleExcelBooksImported}
+              onImportStudents={handleExcelStudentsImported}
+              currentLang={currentLang}
+              existingBooks={books}
+              existingStudents={students}
+            />
+          </div>
 
-         </div>
-       )}
+        </div>
+      )}
 
        {/* REQUESTS & RETURNS TAB PANEL */}
        {activeTab === 'requests' && (
@@ -2553,7 +3063,7 @@ export default function LibrarianModule({
                   const searchLower = requestSearch.toLowerCase().trim();
                   return (
                     (r.studentName || "").toLowerCase().includes(searchLower) ||
-                    (r.rollNumber || "").toLowerCase().includes(searchLower) ||
+                    String(r.rollNumber || "").toLowerCase().includes(searchLower) ||
                     (r.bookName || "").toLowerCase().includes(searchLower) ||
                     (r.id || "").toLowerCase().includes(searchLower)
                   );
@@ -2637,7 +3147,7 @@ export default function LibrarianModule({
                   const searchLower = requestSearch.toLowerCase().trim();
                   return (
                     (r.studentName || "").toLowerCase().includes(searchLower) ||
-                    (r.rollNumber || "").toLowerCase().includes(searchLower) ||
+                    String(r.rollNumber || "").toLowerCase().includes(searchLower) ||
                     (r.bookName || "").toLowerCase().includes(searchLower) ||
                     (r.id || "").toLowerCase().includes(searchLower)
                   );
@@ -3817,22 +4327,28 @@ export default function LibrarianModule({
                           }
                           grid.shift(); // remove header
                           const importedBooks: Book[] = grid
-                            .filter(row => row.length >= 5 && row[0] && row[1])
-                            .map(row => ({
-                              bookId: row[0] || `${Date.now()}-${Math.random()}`,
-                              bookName: row[1] || "Untitled Book",
-                              author: row[2] || "Unknown",
-                              publisher: row[3] || "N/A",
-                              category: row[4] || "General",
-                              accessionNumber: row[5] || "",
-                              totalCopies: parseInt(row[6]) || 1,
-                              availableCopies: parseInt(row[7]) || 1,
-                              callNumber: row[8] || "",
-                              bookNumber: row[9] || "",
-                              ddcCategory: row[10] || "",
-                              description: "",
-                              coverImage: ""
-                            }));
+                            .filter(row => row.length >= 2 && row[1])
+                            .map(row => {
+                              const accession = row[5] || "";
+                              const bookId = (row[0] && row[0].trim()) 
+                                ? row[0].trim() 
+                                : (accession.trim() ? `BK-${accession.trim()}` : `BK-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                              return {
+                                bookId,
+                                bookName: row[1] || "Untitled Book",
+                                author: row[2] || "Unknown",
+                                publisher: row[3] || "N/A",
+                                category: row[4] || "General",
+                                accessionNumber: accession,
+                                totalCopies: parseInt(row[6]) || 1,
+                                availableCopies: parseInt(row[7]) || 1,
+                                callNumber: row[8] || "",
+                                bookNumber: row[9] || "",
+                                ddcCategory: row[10] || "",
+                                description: "",
+                                coverImage: ""
+                              };
+                            });
 
                           if (importedBooks.length === 0) {
                             alert("No valid book records could be recognized under CSV header specifications.");
@@ -5312,13 +5828,104 @@ export default function LibrarianModule({
       {/* 3. STUDENT PROFILE DETAIL VIEW MODAL (CLICKABLE STUDENT PROFILE INSIDE LIST) */}
       {selectedProfileStudent && (() => {
         const stud = selectedProfileStudent;
-        const studentRequests = requests.filter(r => r.rollNumber === stud.rollNumber);
-        const studentLogs = issueLogs.filter(l => l.rollNumber === stud.rollNumber);
+        const studentRequests = requests.filter(r => 
+          (r.studentId && stud.studentId && r.studentId === stud.studentId) ||
+          (r.rollNumber === Number(stud.rollNumber) && r.class === stud.class && r.section === stud.section)
+        );
+        const studentLogs = issueLogs.filter(l => 
+          (l.studentId && stud.studentId && l.studentId === stud.studentId) ||
+          (l.rollNumber === Number(stud.rollNumber) && l.class === stud.class && l.section === stud.section)
+        );
         const totalRequested = studentRequests.length;
         const totalIssuedValue = studentLogs.length;
         const totalReturnedValue = studentLogs.filter(l => l.status === 'Returned' || l.returnDate).length;
         const currentlyIssuedValue = studentLogs.filter(l => l.status === 'Issued').length;
         const overdueBooksValue = studentLogs.filter(l => l.status === 'Issued' && isOverdue(l.dueDate)).length;
+
+        // Build integrated chronological timeline events
+        const timelineEvents: {
+          type: 'Request' | 'Issue' | 'Return';
+          date: string;
+          bookName: string;
+          bookId: string;
+          status: string;
+          color: string;
+          iconName: string;
+        }[] = [];
+
+        studentRequests.forEach(req => {
+          let statusText = "Requested (Pending Approval)";
+          let color = 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900';
+          let iconName = 'Clock';
+          if (req.status === 'Approved') {
+            statusText = "Request Approved & Ready";
+            color = 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900';
+            iconName = 'CheckCircle';
+          } else if (req.status === 'Rejected') {
+            statusText = "Request Rejected";
+            color = 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900';
+            iconName = 'XCircle';
+          }
+          timelineEvents.push({
+            type: 'Request',
+            date: req.requestDate,
+            bookName: req.bookName,
+            bookId: req.bookId,
+            status: statusText,
+            color,
+            iconName
+          });
+        });
+
+        studentLogs.forEach(log => {
+          const isPastDue = log.status === 'Issued' && isOverdue(log.dueDate);
+          let statusText = "Book Issued / Borrowed";
+          let color = 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900';
+          let iconName = 'BookOpen';
+          if (isPastDue) {
+            statusText = "Book Borrowed (Overdue!)";
+            color = 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 font-black animate-pulse';
+          }
+          
+          timelineEvents.push({
+            type: 'Issue',
+            date: log.issueDate,
+            bookName: log.bookName,
+            bookId: log.bookId,
+            status: statusText,
+            color,
+            iconName
+          });
+
+          if (log.status === 'Returned' && log.returnDate) {
+            timelineEvents.push({
+              type: 'Return',
+              date: log.returnDate,
+              bookName: log.bookName,
+              bookId: log.bookId,
+              status: "Book Safely Returned",
+              color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900',
+              iconName: 'ClipboardCheck'
+            });
+          }
+        });
+
+        // Sort timelineEvents chronologically: latest first
+        timelineEvents.sort((a, b) => {
+          const tA = new Date(a.date).getTime() || 0;
+          const tB = new Date(b.date).getTime() || 0;
+          return tB - tA;
+        });
+
+        const renderTimelineIcon = (iconName: string) => {
+          switch (iconName) {
+            case 'CheckCircle': return <CheckCircle className="w-4 h-4" />;
+            case 'XCircle': return <XCircle className="w-4 h-4" />;
+            case 'BookOpen': return <BookOpen className="w-4 h-4" />;
+            case 'ClipboardCheck': return <ClipboardCheck className="w-4 h-4" />;
+            default: return <Clock className="w-4 h-4" />;
+          }
+        };
 
         return (
           <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-100 animate-fade-in" id="student-profile-details-modal">
@@ -5422,73 +6029,128 @@ export default function LibrarianModule({
 
                 </div>
 
-                {/* 2. Transaction Logs History List */}
+                {/* Tab selector for Timeline vs Table views */}
+                <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStudentModalView('timeline')}
+                    className={`pb-2 px-3 text-xs font-bold tracking-wide uppercase transition-all border-b-2 ${
+                      studentModalView === 'timeline'
+                        ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    🕒 {currentLang === 'HI' ? "समय-सीमा दृश्य" : "Timeline View"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentModalView('table')}
+                    className={`pb-2 px-3 text-xs font-bold tracking-wide uppercase transition-all border-b-2 ${
+                      studentModalView === 'table'
+                        ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400'
+                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    📋 {currentLang === 'HI' ? "तालिका दृश्य" : "Table View"}
+                  </button>
+                </div>
+
+                {/* 2. Interactive Timeline or Transaction Logs History List */}
                 <div className="space-y-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider font-mono block">📜 Checkouts History & Logs Pool</span>
-                  
-                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 dark:bg-slate-850 uppercase text-slate-500 font-bold text-[9px] border-b border-slate-150 dark:border-slate-800">
-                          <th className="p-3">Book Title / Syllabus Unit</th>
-                          <th className="p-3 font-mono text-center">Serial #</th>
-                          <th className="p-3 font-mono text-center">Acc #</th>
-                          <th className="p-3">Author</th>
-                          <th className="p-3 text-center font-mono">Issue Date</th>
-                          <th className="p-3 text-center font-mono">Due Date</th>
-                          <th className="p-3 text-center font-mono">Return Date</th>
-                          <th className="p-3 text-right">Status State</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {studentLogs.map((log, lidx) => {
-                          const isPastDue = log.status === 'Issued' && isOverdue(log.dueDate);
-                          let logStatus = "Currently Issued";
-                          if (log.status === 'Returned') {
-                            logStatus = "Returned";
-                          } else if (isPastDue) {
-                            logStatus = "Overdue";
-                          }
-
-                          const matchedB = books.find(b => b.bookId === log.bookId);
-                          const bookAuthorStr = matchedB ? matchedB.author : "Bihar Education Board";
-                          const bookAccNo = matchedB ? (matchedB.accessionNumber || matchedB.bookId) : "-";
-
-                          return (
-                            <tr key={lidx} className="hover:bg-slate-50/60 dark:hover:bg-slate-850/20 font-mono text-slate-850 dark:text-slate-200">
-                              <td className="p-3 font-sans font-bold text-slate-900 dark:text-white">{log.bookName}</td>
-                              <td className="p-3 text-center font-mono font-black text-indigo-700 dark:text-amber-400">#{log.bookId}</td>
-                              <td className="p-3 text-center font-mono font-bold text-slate-805 dark:text-slate-300">{bookAccNo}</td>
-                              <td className="p-3 font-sans text-slate-505 dark:text-slate-400 text-xs">{bookAuthorStr}</td>
-                              <td className="p-3 text-center">{log.issueDate}</td>
-                              <td className="p-3 text-center font-bold">{log.dueDate}</td>
-                              <td className="p-3 text-center text-emerald-700 dark:text-emerald-450 font-black">{log.returnDate || "-"}</td>
-                              <td className="p-3 text-right">
-                                <span className={`text-[10px] px-2.5 py-1 rounded font-sans font-black uppercase inline-block border ${
-                                  logStatus === 'Returned'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-150 dark:bg-emerald-950/20 dark:border-emerald-950'
-                                    : logStatus === 'Overdue'
-                                    ? 'bg-red-50 text-red-800 border-red-200 text-red-750 font-black animate-pulse dark:bg-red-950/20 dark:border-red-900'
-                                    : 'bg-amber-50 text-amber-805 border-amber-150 dark:bg-amber-950/20 dark:border-amber-950'
-                                }`}>
-                                  {logStatus === 'Returned' 
-                                    ? (currentLang === 'HI' ? "जमा" : "Returned") 
-                                    : logStatus === 'Overdue' 
-                                    ? (currentLang === 'HI' ? "विलंबित" : "Overdue") 
-                                    : (currentLang === 'HI' ? "जारी" : "Currently Issued")}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {studentLogs.length === 0 && (
-                          <tr>
-                            <td colSpan={8} className="p-8 text-center text-slate-400 font-sans">No physical book issues in student's academic history ledger.</td>
+                  {studentModalView === 'timeline' ? (
+                    <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 pl-8 space-y-5 py-2">
+                      {timelineEvents.map((evt, idx) => (
+                        <div key={idx} className="relative">
+                          {/* Dot Circle Container */}
+                          <div className={`absolute -left-12 top-0.5 w-8 h-8 rounded-full border flex items-center justify-center bg-white dark:bg-slate-900 shadow-xs ${evt.color}`}>
+                            {renderTimelineIcon(evt.iconName)}
+                          </div>
+                          {/* Content Panel Card */}
+                          <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/60 dark:border-slate-800 p-4 rounded-xl space-y-1 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono text-slate-500 font-bold">{evt.date}</span>
+                              <span className={`text-[9px] font-sans font-black uppercase px-2 py-0.5 rounded-full border ${evt.color}`}>
+                                {evt.status}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-black text-slate-900 dark:text-white mt-1">{evt.bookName}</h4>
+                            <p className="text-[11px] font-mono text-slate-500">
+                              Book ID: #{evt.bookId} • Event Type: {evt.type === 'Request' ? 'Reservation Request' : evt.type === 'Issue' ? 'Physical Checkout' : 'Physical Return'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {timelineEvents.length === 0 && (
+                        <div className="text-center py-12 text-slate-400 font-sans -ml-8">
+                          No history or transaction timeline logged under this student's registration.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-850 uppercase text-slate-500 font-bold text-[9px] border-b border-slate-150 dark:border-slate-800">
+                            <th className="p-3">Book Title / Syllabus Unit</th>
+                            <th className="p-3 font-mono text-center">Serial #</th>
+                            <th className="p-3 font-mono text-center">Acc #</th>
+                            <th className="p-3">Author</th>
+                            <th className="p-3 text-center font-mono">Issue Date</th>
+                            <th className="p-3 text-center font-mono">Due Date</th>
+                            <th className="p-3 text-center font-mono">Return Date</th>
+                            <th className="p-3 text-right">Status State</th>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {studentLogs.map((log, lidx) => {
+                            const isPastDue = log.status === 'Issued' && isOverdue(log.dueDate);
+                            let logStatus = "Currently Issued";
+                            if (log.status === 'Returned') {
+                              logStatus = "Returned";
+                            } else if (isPastDue) {
+                              logStatus = "Overdue";
+                            }
+
+                            const matchedB = books.find(b => b.bookId === log.bookId);
+                            const bookAuthorStr = matchedB ? matchedB.author : "Bihar Education Board";
+                            const bookAccNo = matchedB ? (matchedB.accessionNumber || matchedB.bookId) : "-";
+
+                            return (
+                              <tr key={lidx} className="hover:bg-slate-50/60 dark:hover:bg-slate-850/20 font-mono text-slate-850 dark:text-slate-200">
+                                <td className="p-3 font-sans font-bold text-slate-900 dark:text-white">{log.bookName}</td>
+                                <td className="p-3 text-center font-mono font-black text-indigo-700 dark:text-amber-400">#{log.bookId}</td>
+                                <td className="p-3 text-center font-mono font-bold text-slate-805 dark:text-slate-300">{bookAccNo}</td>
+                                <td className="p-3 font-sans text-slate-505 dark:text-slate-400 text-xs">{bookAuthorStr}</td>
+                                <td className="p-3 text-center">{log.issueDate}</td>
+                                <td className="p-3 text-center font-bold">{log.dueDate}</td>
+                                <td className="p-3 text-center text-emerald-700 dark:text-emerald-450 font-black">{log.returnDate || "-"}</td>
+                                <td className="p-3 text-right">
+                                  <span className={`text-[10px] px-2.5 py-1 rounded font-sans font-black uppercase inline-block border ${
+                                    logStatus === 'Returned'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-150 dark:bg-emerald-950/20 dark:border-emerald-950'
+                                      : logStatus === 'Overdue'
+                                      ? 'bg-red-50 text-red-800 border-red-200 text-red-750 font-black animate-pulse dark:bg-red-950/20 dark:border-red-900'
+                                      : 'bg-amber-50 text-amber-805 border-amber-150 dark:bg-amber-950/20 dark:border-amber-950'
+                                  }`}>
+                                    {logStatus === 'Returned' 
+                                      ? (currentLang === 'HI' ? "जमा" : "Returned") 
+                                      : logStatus === 'Overdue' 
+                                      ? (currentLang === 'HI' ? "विलंबित" : "Overdue") 
+                                      : (currentLang === 'HI' ? "जारी" : "Currently Issued")}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {studentLogs.length === 0 && (
+                            <tr>
+                              <td colSpan={8} className="p-8 text-center text-slate-400 font-sans">No physical book issues in student's academic history ledger.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
               </div>

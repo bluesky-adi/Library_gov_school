@@ -461,6 +461,13 @@ export const dbService = {
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
+    if (isConnectedToMongo) {
+      return (await MongoBook.find().lean()) as Book[];
+    } else {
+      return readLocalFile<Book>(BOOKS_FILE);
+    }
+  },
+  async getBooksOld(): Promise<Book[]> {
     let books: Book[];
     if (isConnectedToMongo) {
       books = (await MongoBook.find().lean()) as any[];
@@ -623,9 +630,10 @@ export const dbService = {
     }
   },
 
-  async saveBooksBulk(booksList: Book[]): Promise<{ saved: Book[], skippedCount: number }> {
+  async saveBooksBulk(booksList: Book[]): Promise<{ saved: Book[], skippedCount: number, skippedRows: { row: any; reason: string }[] }> {
     const saved: Book[] = [];
     let skippedCount = 0;
+    const skippedRows: { row: any; reason: string }[] = [];
     
     // Fetch all existing books to get unique identifiers quickly
     const existingBooks = await this.getBooks();
@@ -640,13 +648,20 @@ export const dbService = {
 
     for (const book of booksList) {
       if (!book.bookId || !book.bookName) {
+        skippedRows.push({ row: book, reason: "Missing mandatory Book ID or Book Name specification." });
         continue; // skip incomplete entries
       }
       const bIdLower = book.bookId.toLowerCase();
       const accLower = book.accessionNumber?.trim().toLowerCase();
 
       // Check duplicate guards
-      if (existingIds.has(bIdLower) || (accLower && existingAccessions.has(accLower))) {
+      if (existingIds.has(bIdLower)) {
+        skippedRows.push({ row: book, reason: `Duplicate Book ID coordinate: ${book.bookId}` });
+        skippedCount++;
+        continue;
+      }
+      if (accLower && existingAccessions.has(accLower)) {
+        skippedRows.push({ row: book, reason: `Duplicate Accession Number register: ${book.accessionNumber}` });
         skippedCount++;
         continue;
       }
@@ -685,6 +700,13 @@ export const dbService = {
       booksToInsert.push(modifiedBook);
     }
 
+    if (skippedRows.length > 0) {
+      console.warn(`[DLMS BULK IMPORT] Skipped ${skippedRows.length} book rows during validation filtering:`);
+      skippedRows.forEach((item, index) => {
+        console.warn(`  #${index + 1}: Name: "${item.row.bookName || 'N/A'}", ID: "${item.row.bookId || 'N/A'}", Accession: "${item.row.accessionNumber || 'N/A'}" -> Reason: ${item.reason}`);
+      });
+    }
+
     if (isConnectedToMongo) {
       const ops = booksToInsert.map(book => ({
         updateOne: {
@@ -705,7 +727,7 @@ export const dbService = {
     }
 
     await this.updateImportStats(booksToInsert.length);
-    return { saved: booksToInsert, skippedCount };
+    return { saved: booksToInsert, skippedCount, skippedRows };
   },
 
   async getDbStats() {

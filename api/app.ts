@@ -502,14 +502,26 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/auth/verify', (req, res) => {
+app.get('/api/auth/verify', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, error: 'Authorization header missing' });
   }
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    if (decoded && decoded.role === 'Student') {
+      const students = await dbService.getStudents();
+      const sId = decoded.studentId;
+      const liveStudent = students.find(s => {
+        const idA = (s.studentId || `${s.class}-${s.section}-${s.rollNumber}`).trim().toLowerCase();
+        const idB = String(sId || "").trim().toLowerCase();
+        return idA === idB;
+      });
+      if (liveStudent) {
+        return res.json({ success: true, decoded, student: liveStudent });
+      }
+    }
     res.json({ success: true, decoded });
   } catch (err) {
     res.status(401).json({ success: false, error: 'Token is invalid or expired' });
@@ -689,9 +701,9 @@ app.post('/api/books/bulk', authenticateToken, requireLibrarian, async (req, res
     if (!Array.isArray(records)) {
       return res.status(400).json({ error: "Invalid books bulk upload payload. Expected a list of books." });
     }
-    const { saved, skippedCount } = await dbService.saveBooksBulk(records);
+    const { saved, skippedCount, skippedRows } = await dbService.saveBooksBulk(records);
     await addAuditLog(req, 'Book Added', `Bulk imported ${saved.length} books into catalog register. Skipped ${skippedCount} duplicate Accession items.`);
-    res.json({ success: true, count: saved.length, skippedCount, records: saved });
+    res.json({ success: true, count: saved.length, skippedCount, skippedRows, records: saved });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }

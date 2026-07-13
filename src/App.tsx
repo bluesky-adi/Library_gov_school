@@ -44,8 +44,8 @@ export default function App() {
   const t = translations[currentLang];
 
   // Refresh all system metrics and records from servers safely
-  const refreshData = async () => {
-    if (isSyncingRef.current) return;
+  const refreshData = async (force: boolean = true) => {
+    if (isSyncingRef.current && !force) return;
     isSyncingRef.current = true;
     try {
       const handleSafeFetch = async (url: string, init?: RequestInit) => {
@@ -153,7 +153,7 @@ export default function App() {
   useEffect(() => {
     // Poll every 3000ms to ensure real-time synchronization of state without stale data or manual refreshes
     const interval = setInterval(() => {
-      refreshData();
+      refreshData(false);
     }, 3000);
 
     return () => clearInterval(interval);
@@ -196,19 +196,23 @@ export default function App() {
               setLoggedInName(payload.name || "Not configured");
             } else if (payload.role === 'Student') {
               setLoggedInRole('Student');
-              setLoggedInName(payload.name || "Scholar Reader");
-              // Form student profile structure loaded via payload values
-              const sClass = payload.class || "10";
-              const sSection = payload.section || "A";
-              const rNum = Number(payload.rollNumber) || 0;
-              setLoggedInStudent({
-                studentId: `${sClass}-${sSection}-${rNum}`,
-                name: payload.name || "Student Reader",
-                rollNumber: rNum,
-                dob: "2010-01-01",
-                class: sClass,
-                section: sSection
-              });
+              if (data.student) {
+                setLoggedInStudent(data.student);
+                setLoggedInName(data.student.name);
+              } else {
+                setLoggedInName(payload.name || "Scholar Reader");
+                const sClass = payload.class || "10";
+                const sSection = payload.section || "A";
+                const rNum = Number(payload.rollNumber) || 0;
+                setLoggedInStudent({
+                  studentId: payload.studentId || `${sClass}-${sSection}-${rNum}`,
+                  name: payload.name || "Student Reader",
+                  rollNumber: rNum,
+                  dob: "2010-01-01",
+                  class: sClass,
+                  section: sSection
+                });
+              }
             }
           }
         })

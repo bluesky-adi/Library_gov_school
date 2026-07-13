@@ -2163,43 +2163,68 @@ export default function PublicHome({
       </div>
 
       {/* 7. STATISTICS PANEL */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statTotalBooks}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{liveStats.booksCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitUnits}</span>
+      {(() => {
+        const showSkeleton = books.length === 0 && liveStats.booksCount === 0;
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statTotalBooks}</span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                {showSkeleton ? (
+                  <span className="h-7 w-14 bg-slate-200 dark:bg-slate-850 animate-pulse rounded block mt-1"></span>
+                ) : (
+                  <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">{liveStats.booksCount}</span>
+                )}
+                <span className="text-[10px] text-slate-500">{t.unitUnits}</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statIssuedBooks}</span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                {showSkeleton ? (
+                  <span className="h-7 w-14 bg-slate-200 dark:bg-slate-850 animate-pulse rounded block mt-1"></span>
+                ) : (
+                  <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono">{liveStats.activeIssuedCount}</span>
+                )}
+                <span className="text-[10px] text-slate-500">{t.unitActive}</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statRegisteredStudents}</span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                {showSkeleton ? (
+                  <span className="h-7 w-14 bg-slate-200 dark:bg-slate-850 animate-pulse rounded block mt-1"></span>
+                ) : (
+                  <span className="text-2xl font-black text-emerald-650 dark:text-emerald-400 font-mono">{liveStats.studentsCount}</span>
+                )}
+                <span className="text-[10px] text-slate-500">{t.unitScholars}</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statDigitalResources}</span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                {showSkeleton ? (
+                  <span className="h-7 w-14 bg-slate-200 dark:bg-slate-850 animate-pulse rounded block mt-1"></span>
+                ) : (
+                  <span className="text-2xl font-black text-amber-600 font-mono">{liveStats.digitalMaterialsCount}</span>
+                )}
+                <span className="text-[10px] text-slate-500">{t.unitPdfs}</span>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs col-span-2 md:col-span-1">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statCommunityRating}</span>
+              <div className="flex items-baseline gap-1.5 mt-2">
+                {showSkeleton ? (
+                  <span className="h-7 w-20 bg-slate-200 dark:bg-slate-850 animate-pulse rounded block mt-1"></span>
+                ) : (
+                  <span className="text-2xl font-black text-amber-500 font-mono">★ {liveStats.avgRating}</span>
+                )}
+                <span className="text-[10px] text-slate-500">({liveStats.totalFeedbackCount} {t.unitReviews})</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statIssuedBooks}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono">{liveStats.activeIssuedCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitActive}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statRegisteredStudents}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-emerald-650 dark:text-emerald-400 font-mono">{liveStats.studentsCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitScholars}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statDigitalResources}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-amber-600 font-mono">{liveStats.digitalMaterialsCount}</span>
-            <span className="text-[10px] text-slate-500">{t.unitPdfs}</span>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs col-span-2 md:col-span-1">
-          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t.statCommunityRating}</span>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-2xl font-black text-amber-500 font-mono">★ {liveStats.avgRating}</span>
-            <span className="text-[10px] text-slate-500">({liveStats.totalFeedbackCount} {t.unitReviews})</span>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* 8. STUDENT REVIEWS */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 sm:p-8 rounded-2xl shadow-sm space-y-6">
