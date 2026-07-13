@@ -609,6 +609,30 @@ app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (r
 });
 
 
+// ---- GALLERY REST API ENDPOINTS ----
+app.get('/api/gallery', async (req, res) => {
+  try {
+    const images = await dbService.getGalleryImages();
+    res.json({ success: true, images });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/gallery', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { images } = req.body;
+    if (!Array.isArray(images)) {
+      return res.status(400).json({ success: false, error: "images field must be an array" });
+    }
+    const saved = await dbService.saveGalleryImages(images);
+    res.json({ success: true, images: saved, message: "Gallery updated successfully" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // ---- BOOKS REST API ENDPOINTS ----
 app.get('/api/books', async (req, res) => {
   console.log(`[API ROUTE] GET /api/books requested. Mongo Link Status: ${dbService.getMongoConnectionState()}`);

@@ -452,8 +452,8 @@ export default function StudentModule({
           <div className="space-y-1 pl-7">
             <p className="text-xs text-red-700 dark:text-red-300">
               {currentLang === 'EN' 
-                ? "Our database shows you have past-due books. Please visit Assistant Librarian S. K. Roy immediately to check-in on the following school property and restart your checking balance."
-                : "हमारे डेटाबेस से पता चलता है कि आपके पास कुछ अतिदेय पुस्तकें हैं। कृपया स्कूल संपत्ति को जमा करने के लिए तुरंत सहायक पुस्तकालयाध्यक्ष एस. के. रॉय से मिलें|"}
+                ? "Our database shows you have past-due books. Please visit the Librarian immediately to check-in on the following school property and restart your checking balance."
+                : "हमारे डेटाबेस से पता चलता है कि आपके पास कुछ अतिदेय पुस्तकें हैं। कृपया स्कूल संपत्ति को जमा करने के लिए तुरंत पुस्तकालयाध्यक्ष से मिलें|"}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1.5">
               {studentOverdueLoansList.map(loan => (

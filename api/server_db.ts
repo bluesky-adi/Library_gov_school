@@ -28,10 +28,11 @@ const ISSUE_LOGS_FILE = path.join(LOCAL_DB_DIR, 'issue_logs.json');
 const AUDIT_LOGS_FILE = path.join(LOCAL_DB_DIR, 'audit_logs.json');
 const STUDY_MATERIALS_FILE = path.join(LOCAL_DB_DIR, 'study_materials.json');
 const FEEDBACK_FILE = path.join(LOCAL_DB_DIR, 'feedback.json');
+const GALLERY_FILE = path.join(LOCAL_DB_DIR, 'gallery.json');
 
 // Copy bundled databases to writable /tmp directory if running in a serverless environment
 function ensureWritableDatabaseFiles() {
-  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json', 'feedback.json'];
+  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json', 'feedback.json', 'gallery.json'];
   for (const filename of filesToCopy) {
     const destPath = path.join(LOCAL_DB_DIR, filename);
     const srcPath = path.join(BUNDLED_DB_DIR, filename);
@@ -125,6 +126,14 @@ try {
   }
 } catch (e) {
   console.warn("Operational database initialization notice (Feedback):", e);
+}
+
+try {
+  if (!fs.existsSync(GALLERY_FILE) || fs.readFileSync(GALLERY_FILE, 'utf8').trim() === '') {
+    fs.writeFileSync(GALLERY_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Gallery):", e);
 }
 
 // Unified MongoDB / Mongoose Configurations
@@ -268,6 +277,18 @@ const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model(
 const MongoLibrarianConfig = (mongoose.models.LibrarianConfig || mongoose.model('LibrarianConfig', LibrarianConfigSchema)) as any;
 const MongoStudyMaterial = (mongoose.models.StudyMaterial || mongoose.model('StudyMaterial', StudyMaterialSchema)) as any;
 const MongoFeedback = (mongoose.models.Feedback || mongoose.model('Feedback', FeedbackSchema)) as any;
+
+const GalleryImageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  url: { type: String, required: true },
+  caption: { type: String, default: "" },
+  order: { type: Number, default: 0 },
+  createdAt: { type: String, required: true }
+});
+GalleryImageSchema.index({ id: 1 });
+GalleryImageSchema.index({ order: 1 });
+
+const MongoGalleryImage = (mongoose.models.GalleryImage || mongoose.model('GalleryImage', GalleryImageSchema)) as any;
 
 let cachedConnection: Promise<any> | null = null;
 
@@ -1190,6 +1211,27 @@ export const dbService = {
         return true;
       }
       return false;
+    }
+  },
+
+  async getGalleryImages(): Promise<any[]> {
+    if (isConnectedToMongo) {
+      return (await MongoGalleryImage.find().sort({ order: 1 }).lean()) as any[];
+    }
+    const list = readLocalFile<any>(GALLERY_FILE);
+    return list.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+  },
+
+  async saveGalleryImages(images: any[]): Promise<any[]> {
+    if (isConnectedToMongo) {
+      await MongoGalleryImage.deleteMany({});
+      if (images.length > 0) {
+        await MongoGalleryImage.insertMany(images);
+      }
+      return images;
+    } else {
+      writeLocalFile(GALLERY_FILE, images);
+      return images;
     }
   }
 };

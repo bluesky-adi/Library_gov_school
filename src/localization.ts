@@ -8,7 +8,7 @@ export const translations = {
     schoolName: "PM SHRI Ramdiri +2 High School",
     location: "Begusarai, Bihar, India",
     subtitle: "Digital Library Management Portal",
-    tagline: "Empowering education through digital exploration and seamless knowledge management under Pradhan Mantri Schools for Rising India (PM SHRI).",
+    tagline: "Empowering education through digital exploration and seamless knowledge management.",
     
     // Navigation
     navHome: "Home",
@@ -86,7 +86,7 @@ export const translations = {
     schoolName: "पीएम श्री रामदीरी +2 उच्च विद्यालय",
     location: "बेगूसराय, बिहार, भारत",
     subtitle: "डिजिटल पुस्तकालय प्रबंधन पोर्टल",
-    tagline: "पीएम श्री (PM SHRI - Pradhan Mantri Schools for Rising India) के अंतर्गत डिजिटल अन्वेषण और सुगम ज्ञान प्रबंधन के माध्यम से शिक्षा को सशक्त बनाना।",
+    tagline: "डिजिटल अन्वेषण और सुगम ज्ञान प्रबंधन के माध्यम से शिक्षा को सशक्त बनाना।",
     
     // Navigation
     navHome: "मुख्य पृष्ठ",

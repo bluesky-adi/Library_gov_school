@@ -60,7 +60,7 @@ import {
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
   Key, Eye, EyeOff, Shield, Sliders, AlertCircle, User, Database, RefreshCw, Upload, Clock,
-  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star
+  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star, Camera
 } from 'lucide-react';
 
 interface LibrarianModuleProps {
@@ -150,7 +150,7 @@ export default function LibrarianModule({
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
   const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
-  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback'>('books');
+  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback' | 'gallery'>('books');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
@@ -200,6 +200,39 @@ export default function LibrarianModule({
   React.useEffect(() => {
     if (activeTab === 'feedback') {
       fetchLibrarianFeedbacks();
+    }
+  }, [activeTab]);
+
+  // --- GALLERY MANAGEMENT STATES & HANDLERS ---
+  const [localGalleryImages, setLocalGalleryImages] = useState<any[]>([]);
+  const [isGalleryLoading, setIsGalleryLoading] = useState<boolean>(false);
+  const [isGallerySaving, setIsGallerySaving] = useState<boolean>(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [gallerySuccess, setGallerySuccess] = useState<string | null>(null);
+
+  const fetchGalleryImages = () => {
+    setIsGalleryLoading(true);
+    setGalleryError(null);
+    setGallerySuccess(null);
+    fetch('/api/gallery')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          setLocalGalleryImages(data.images || []);
+        } else {
+          setGalleryError(data.error || "Failed to load gallery");
+        }
+      })
+      .catch(err => {
+        console.error("Gallery load error:", err);
+        setGalleryError("Network error loading gallery images");
+      })
+      .finally(() => setIsGalleryLoading(false));
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'gallery') {
+      fetchGalleryImages();
     }
   }, [activeTab]);
 
@@ -1906,6 +1939,18 @@ export default function LibrarianModule({
         >
           <Database className="w-4 h-4 shrink-0" />
           <span>System Status</span>
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('gallery'); }}
+          className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'gallery'
+              ? 'border-slate-800 text-slate-900 dark:text-white font-extrabold bg-slate-11 border-b-slate-80 bg-slate-100 dark:bg-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Camera className="w-4 h-4 shrink-0" />
+          <span>Library Gallery</span>
         </button>
       </div>
 
@@ -4750,6 +4795,328 @@ export default function LibrarianModule({
                 )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* GALLERY MANAGEMENT TAB PANEL */}
+      {activeTab === 'gallery' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-6 shadow-xs animate-fade-in" id="gallery-tab-content">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <Camera className="w-5 h-5 text-indigo-600 shrink-0" />
+              <span>Library Gallery Showcase</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 leading-normal">
+              Manage the photographs shown on the homepage gallery. Upload high-quality pictures of reading halls, shelves, activities, or academic achievements.
+            </p>
+          </div>
+
+          {/* Success / Error Messages */}
+          {galleryError && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-xs text-red-700 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{galleryError}</span>
+            </div>
+          )}
+
+          {gallerySuccess && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              <span>{gallerySuccess}</span>
+            </div>
+          )}
+
+          {/* Upload Drag and Drop Target Area */}
+          <div className="space-y-2">
+            <label className="text-[10.5px] font-black uppercase tracking-wider text-slate-500 block">
+              Upload New Photographs / नई तस्वीरें अपलोड करें
+            </label>
+            <div 
+              className="border-2 border-dashed border-slate-250 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/10 rounded-xl p-8 text-center transition-all cursor-pointer relative"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  const files = Array.from(e.dataTransfer.files);
+                  files.forEach((file) => {
+                    if (file.type.startsWith('image/')) {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        if (event.target?.result) {
+                          setLocalGalleryImages((prev) => [
+                            ...prev,
+                            {
+                              url: event.target!.result as string,
+                              caption: "",
+                              order: prev.length
+                            }
+                          ]);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  });
+                }
+              }}
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.accept = 'image/*';
+                input.onchange = (e: any) => {
+                  if (e.target.files) {
+                    const files = Array.from(e.target.files);
+                    files.forEach((file: any) => {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        if (event.target?.result) {
+                          setLocalGalleryImages((prev) => [
+                            ...prev,
+                            {
+                              url: event.target!.result as string,
+                              caption: "",
+                              order: prev.length
+                            }
+                          ]);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                  }
+                };
+                input.click();
+              }}
+            >
+              <div className="flex flex-col items-center justify-center gap-2">
+                <Upload className="w-8 h-8 text-slate-400" />
+                <p className="text-xs font-semibold text-slate-755 dark:text-slate-350">
+                  Drag & Drop pictures here, or <span className="text-indigo-650 dark:text-indigo-400 underline">browse computer</span>
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Supports multiple PNG, JPG, JPEG, or WEBP images. Custom captions can be added after selection.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick URL Input (Alternative/Addition Option) */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-150 dark:border-slate-800 p-4 rounded-xl space-y-2">
+            <h4 className="text-[10.5px] font-black uppercase tracking-wider text-slate-500">
+              Add External Image URL / बाहरी यूआरएल से तस्वीर जोड़ें
+            </h4>
+            <div className="flex gap-2">
+              <input 
+                id="gallery-external-url-input"
+                type="text"
+                placeholder="https://images.unsplash.com/photo-..."
+                className="flex-1 text-xs p-2.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded outline-none text-slate-900 dark:text-white"
+              />
+              <button
+                onClick={() => {
+                  const el = document.getElementById('gallery-external-url-input') as HTMLInputElement;
+                  if (el && el.value.trim()) {
+                    setLocalGalleryImages((prev) => [
+                      ...prev,
+                      {
+                        url: el.value.trim(),
+                        caption: "",
+                        order: prev.length
+                      }
+                    ]);
+                    el.value = "";
+                  }
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 dark:bg-slate-700 dark:hover:bg-slate-650 text-white text-xs font-bold rounded cursor-pointer transition-all shrink-0"
+              >
+                Add URL
+              </button>
+            </div>
+          </div>
+
+          {/* Gallery Items Grid list */}
+          <div className="space-y-3">
+            <h4 className="text-[10.5px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between">
+              <span>Gallery Layout & Ordering ({localGalleryImages.length} images)</span>
+            </h4>
+
+            {isGalleryLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="aspect-video w-full rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"></div>
+                ))}
+              </div>
+            ) : localGalleryImages.length === 0 ? (
+              <div className="border border-dashed border-slate-200 dark:border-slate-800 py-12 text-center rounded-xl text-xs text-slate-400 italic">
+                No configured photographs available in gallery. Choose files to upload or add urls.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {localGalleryImages.map((img, idx) => (
+                  <div 
+                    key={idx}
+                    className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-950/40 p-3 space-y-3 relative group"
+                  >
+                    {/* Image Preview Container */}
+                    <div className="aspect-video w-full rounded-lg overflow-hidden relative bg-slate-200 dark:bg-slate-800">
+                      <img 
+                        src={img.url}
+                        alt="Gallery preview"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover select-none"
+                        draggable="false"
+                      />
+                      <div className="absolute top-2 left-2 bg-black/70 text-white text-[9px] font-mono px-2 py-0.5 rounded-full">
+                        #{idx + 1}
+                      </div>
+                    </div>
+
+                    {/* Image Caption Edit Input */}
+                    <div className="space-y-1">
+                      <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-widest block">
+                        Photo Caption
+                      </label>
+                      <input 
+                        type="text"
+                        value={img.caption || ""}
+                        onChange={(e) => {
+                          const updated = [...localGalleryImages];
+                          updated[idx] = { ...updated[idx], caption: e.target.value };
+                          setLocalGalleryImages(updated);
+                        }}
+                        placeholder="e.g. Reading Hall activities..."
+                        className="w-full text-xs p-2 bg-white dark:bg-slate-950 border border-slate-250 dark:border-slate-850 rounded outline-none text-slate-900 dark:text-white font-medium"
+                      />
+                    </div>
+
+                    {/* Controls Actions Toolbar (Move Left/Up, Move Right/Down, Delete) */}
+                    <div className="flex items-center justify-between border-t border-slate-150 dark:border-slate-800 pt-2.5">
+                      <div className="flex items-center gap-1">
+                        {/* Move Left/Up Button */}
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => {
+                            if (idx === 0) return;
+                            const updated = [...localGalleryImages];
+                            const temp = updated[idx];
+                            updated[idx] = updated[idx - 1];
+                            updated[idx - 1] = temp;
+                            // reset orders
+                            updated.forEach((item, index) => {
+                              item.order = index;
+                            });
+                            setLocalGalleryImages(updated);
+                          }}
+                          className="p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-650 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-slate-650 transition-all cursor-pointer text-xs"
+                          title="Move Up/Left"
+                        >
+                          ←
+                        </button>
+                        {/* Move Right/Down Button */}
+                        <button
+                          type="button"
+                          disabled={idx === localGalleryImages.length - 1}
+                          onClick={() => {
+                            if (idx === localGalleryImages.length - 1) return;
+                            const updated = [...localGalleryImages];
+                            const temp = updated[idx];
+                            updated[idx] = updated[idx + 1];
+                            updated[idx + 1] = temp;
+                            // reset orders
+                            updated.forEach((item, index) => {
+                              item.order = index;
+                            });
+                            setLocalGalleryImages(updated);
+                          }}
+                          className="p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-650 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-slate-650 transition-all cursor-pointer text-xs"
+                          title="Move Down/Right"
+                        >
+                          →
+                        </button>
+                      </div>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = localGalleryImages.filter((_, i) => i !== idx);
+                          updated.forEach((item, index) => {
+                            item.order = index;
+                          });
+                          setLocalGalleryImages(updated);
+                        }}
+                        className="p-1.5 px-2.5 rounded bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/50 border border-red-200/50 dark:border-red-900/30 text-red-650 dark:text-red-400 text-[10px] font-bold transition-all cursor-pointer"
+                        title="Remove Photograph"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Action Toolbar buttons */}
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-5">
+            <button
+              type="button"
+              onClick={fetchGalleryImages}
+              disabled={isGalleryLoading || isGallerySaving}
+              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-650 text-xs font-bold rounded cursor-pointer disabled:opacity-50 transition-all"
+            >
+              Reset Layout
+            </button>
+
+            <button
+              type="button"
+              disabled={isGalleryLoading || isGallerySaving}
+              onClick={() => {
+                setIsGallerySaving(true);
+                setGalleryError(null);
+                setGallerySuccess(null);
+                const token = localStorage.getItem("ramdiri_library_token");
+                fetch('/api/gallery', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ images: localGalleryImages })
+                })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data && data.success) {
+                      setGallerySuccess("Gallery layout saved successfully! The homepage gallery will display your updated photographs.");
+                      setLocalGalleryImages(data.images || []);
+                    } else {
+                      setGalleryError(data.error || "Failed to save gallery changes");
+                    }
+                  })
+                  .catch(err => {
+                    console.error("Save gallery error:", err);
+                    setGalleryError("Network error: Could not connect to gallery server.");
+                  })
+                  .finally(() => {
+                    setIsGallerySaving(false);
+                  });
+              }}
+              className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 text-white text-xs font-extrabold rounded shadow-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-2"
+            >
+              {isGallerySaving ? (
+                <>
+                  <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                  <span>Saving Layout...</span>
+                </>
+              ) : (
+                <span>Save Gallery Layout</span>
+              )}
+            </button>
+          </div>
         </div>
       )}
 

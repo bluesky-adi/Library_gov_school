@@ -9,7 +9,7 @@ import {
   BookOpen, Award, GraduationCap, MapPin, 
   Phone, Mail, Calendar, Key, Shield, User, X, CheckCircle, AlertCircle, Eye, EyeOff,
   Search, LayoutGrid, Table, Info, FileText, MessageSquare, Download, Star, Send, ChevronDown,
-  TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight, ZoomIn, ZoomOut, RotateCcw
+  TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight, ZoomIn, ZoomOut, RotateCcw, Camera
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { searchBooksSmart } from '../lib/searchUtils';
@@ -178,15 +178,20 @@ export default function PublicHome({
   const [feedbackRefreshTrigger, setFeedbackRefreshTrigger] = useState<number>(0);
   const [existingUserReview, setExistingUserReview] = useState<any | null>(null);
 
-  const [librarianProfile, setLibrarianProfile] = useState({
-    name: "S. K. Roy (Chief Librarian)",
-    designation: "Senior Chief Librarian",
-    biography: "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
-    profilePhoto: "",
-    yearsOfService: ""
-  });
+  const [librarianProfile, setLibrarianProfile] = useState<{
+    name: string;
+    designation: string;
+    biography: string;
+    profilePhoto: string;
+    yearsOfService: string;
+  } | null>(null);
+  const [isLibrarianLoading, setIsLibrarianLoading] = useState(true);
+
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [isGalleryLoading, setIsGalleryLoading] = useState(true);
 
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+  const [viewerPhoto, setViewerPhoto] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
   const [zoomScale, setZoomScale] = useState(1);
   const [touchStartDist, setTouchStartDist] = useState<number | null>(null);
   const [initialScale, setInitialScale] = useState<number>(1);
@@ -219,20 +224,39 @@ export default function PublicHome({
   };
 
   useEffect(() => {
+    setIsLibrarianLoading(true);
     fetch('/api/librarian/profile')
       .then(res => res.json())
       .then(data => {
         if (data && data.success) {
           setLibrarianProfile({
-            name: data.name || "S. K. Roy (Chief Librarian)",
-            designation: data.designation || "Senior Chief Librarian",
-            biography: data.biography || "Welcome scholars! This portal acts as our school's central register for textbooks and study notes. Ensure you lodge borrow requests digitally before collecting titles from physical shelf locations.",
+            name: data.name || "the Librarian",
+            designation: data.designation || "Librarian",
+            biography: data.biography || "No biography configured.",
             profilePhoto: data.profilePhoto || "",
             yearsOfService: data.yearsOfService || ""
           });
         }
       })
-      .catch(err => console.warn("Could not load librarian profile:", err));
+      .catch(err => console.warn("Could not load librarian profile:", err))
+      .finally(() => {
+        setIsLibrarianLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    setIsGalleryLoading(true);
+    fetch('/api/gallery')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          setGalleryImages(data.images || []);
+        }
+      })
+      .catch(err => console.warn("Could not load gallery images:", err))
+      .finally(() => {
+        setIsGalleryLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -472,8 +496,8 @@ export default function PublicHome({
     EN: {
       dlmsTitle: "Digital Library Management System",
       welcomeBanner: "PM SHRI Ramdiri +2 High School Library",
-      subTitleText: "Under the Pradhan Mantri Schools for Rising India (PM SHRI) Initiative",
-      established: "BSEB PATNA AFFILIATED • PM SHRI PARTNER SCHOOL",
+      subTitleText: "",
+      established: "",
       tagline: "Empowering our students around Begusarai with accessible digitizations, NCERT syllabus handbooks, and literature cataloging.",
       featuredHeadline: "Featured Books & Syllabus Reference",
       available: "In Stock",
@@ -493,7 +517,7 @@ export default function PublicHome({
       logoutBtn: "Log Out Account",
       guestLabel: "Guest Scholar",
       aboutTitle: "About PM SHRI Ramdiri School Library",
-      aboutContent: "PM SHRI Ramdiri +2 High School, located in the historical district of Begusarai, Bihar, is a state-supported senior secondary high school selected under the PM SHRI initiative. Developed by the Ministry of Education, PM SHRI schools showcase leadership, high educational standards, and modern digital tooling like this automated Library Portal to foster reading, academic focus, and student growth.",
+      aboutContent: "PM SHRI Ramdiri +2 High School, located in the historical district of Begusarai, Bihar, is a senior secondary high school. The Digital Library Portal is an independent modernization initiative spearheaded by the school librarian to simplify textbooks tracking, NCERT reference materials distribution, and book transactions for students.",
       locationText: "Ramdiri Village, Begusarai District, Bihar - 851129",
       contactPhone: "+91-6243-245102 (BSEB Begusarai Office)",
       statTotalBooks: "Total Books",
@@ -510,8 +534,8 @@ export default function PublicHome({
     HI: {
       dlmsTitle: "डिजिटल पुस्तकालय प्रबंधन प्रणाली",
       welcomeBanner: "पीएम श्री रामदीरी +2 उच्च विद्यालय पुस्तकालय",
-      subTitleText: "प्रधान मंत्री स्कूल्स फॉर राइजिंग इंडिया (PM SHRI) पहल के अंतर्गत",
-      established: "बिहार विद्यालय परीक्षा समिति संबद्ध • पीएम श्री मॉडल स्कूल",
+      subTitleText: "",
+      established: "",
       tagline: "बेगूसराय क्षेत्र के हमारे विद्यार्थियों को आधुनिक डिजिटल कैटलॉग, एनसीईआरटी पाठ्यपुस्तकों और साहित्यिक रचनाओं तक सरल पहुंच प्रदान करना।",
       featuredHeadline: "समीक्षित एवं अनुशंसित उत्कृष्ट पुस्तकें",
       available: "स्टॉक में उपलब्ध",
@@ -531,7 +555,7 @@ export default function PublicHome({
       logoutBtn: "लॉगआउट करें",
       guestLabel: "अतिथि पाठक",
       aboutTitle: "पीएम श्री रामदीरी उच्च विद्यालय पुस्तकालय के बारे में",
-      aboutContent: "पीएम श्री रामदीरी +2 उच्च विद्यालय, बेगूसराय, बिहार के ऐतिहासिक क्षेत्र में स्थित एक प्रमुख माध्यमिक एवं उच्चतर माध्यमिक विद्यालय है, जिसे भारत सरकार की पीएम श्री (PM SHRI) योजना के तहत चयनित किया गया है। पीएम श्री पहल के तहत उन्नत और उत्कृष्ट शैक्षिक मानकों का प्रदर्शन करते हुए, यह स्वचालित डिजिटल पुस्तकालय पोर्टल छात्रों में अध्ययनशीलता को बढ़ावा देने और सुगम पुस्तकालय संचालन को सुनिश्चित करने के लिए कार्यरत है।",
+      aboutContent: "पीएम श्री रामदीरी +2 उच्च विद्यालय, बेगूसराय, बिहार में स्थित एक माध्यमिक एवं उच्चतर माध्यमिक विद्यालय है। यह डिजिटल पुस्तकालय पोर्टल विद्यालय के पुस्तकालयाध्यक्ष द्वारा पुस्तकालय सेवाओं को आधुनिक बनाने के लिए शुरू की गई एक स्वतंत्र पहल है, जिसका उद्देश्य छात्रों के लिए पुस्तकों और एनसीईआरटी पाठ्यसामग्री की उपलब्धता को सुगम बनाना है।",
       locationText: "ग्राम - रामदीरी, बेगूसराय जिला, बिहार - 851129",
       contactPhone: "+91-6243-245102 (बेगूसराय शिक्षा कार्यालय)",
       statTotalBooks: "कुल पुस्तकें",
@@ -654,15 +678,23 @@ export default function PublicHome({
             <GraduationCap className="w-8 h-8 text-slate-700" />
           </div>
           <div>
-            <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider leading-none">
-              {t.established}
-            </span>
+            {t.established && (
+              <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider leading-none block w-max mx-auto md:mx-0">
+                {t.established}
+              </span>
+            )}
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 mt-1 leading-tight">
               {t.welcomeBanner}
             </h1>
-            <p className="text-xs text-slate-500 font-mono mt-0.5 uppercase tracking-wide">
-              {t.dlmsTitle} • {t.subTitleText}
-            </p>
+            {t.subTitleText ? (
+              <p className="text-xs text-slate-500 font-mono mt-0.5 uppercase tracking-wide">
+                {t.dlmsTitle} • {t.subTitleText}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 font-mono mt-0.5 uppercase tracking-wide">
+                {t.dlmsTitle}
+              </p>
+            )}
           </div>
         </div>
 
@@ -709,57 +741,150 @@ export default function PublicHome({
       {/* FEATURE 1 — LIBRARIAN PROFILE CARD */}
       <div className="bg-white dark:bg-slate-900 border-2 border-indigo-50 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm relative overflow-hidden" id="librarian-profile-homepage">
         <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full pointer-events-none transform translate-x-12 -translate-y-12"></div>
-        <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10">
-          
-          {/* Headshot / Avatar */}
-          <div className="shrink-0 select-none">
-            {librarianProfile.profilePhoto ? (
-              <img
-                src={librarianProfile.profilePhoto}
-                referrerPolicy="no-referrer"
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-indigo-100 dark:border-slate-800 shadow-md cursor-zoom-in hover:opacity-95 hover:scale-105 active:scale-95 transition-all"
-                alt={librarianProfile.name}
+        
+        {isLibrarianLoading || !librarianProfile ? (
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10 animate-pulse">
+            {/* Avatar skeleton */}
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0"></div>
+            {/* Details skeleton */}
+            <div className="flex-1 space-y-3 w-full">
+              <div className="flex justify-center md:justify-start gap-2">
+                <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded-full"></div>
+                <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded-full"></div>
+              </div>
+              <div className="h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded mx-auto md:mx-0"></div>
+              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded mx-auto md:mx-0"></div>
+              <div className="space-y-2 pt-1">
+                <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded"></div>
+                <div className="h-3 w-5/6 bg-slate-200 dark:bg-slate-800 rounded mx-auto md:mx-0"></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10">
+            
+            {/* Headshot / Avatar */}
+            <div className="shrink-0 select-none">
+              {librarianProfile.profilePhoto ? (
+                <img
+                  src={librarianProfile.profilePhoto}
+                  referrerPolicy="no-referrer"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-indigo-100 dark:border-slate-800 shadow-md cursor-zoom-in hover:opacity-95 hover:scale-105 active:scale-95 transition-all"
+                  alt={librarianProfile.name}
+                  onClick={() => {
+                    setViewerPhoto({
+                      url: librarianProfile.profilePhoto,
+                      title: librarianProfile.name,
+                      subtitle: librarianProfile.designation
+                    });
+                    setZoomScale(1);
+                    setIsPhotoViewerOpen(true);
+                  }}
+                />
+              ) : (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-indigo-600 border-2 border-indigo-100 dark:border-slate-800 flex items-center justify-center text-white text-2xl font-black shadow-md">
+                  {librarianProfile.name
+                    ? librarianProfile.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                    : "SR"
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* Profile details */}
+            <div className="flex-1 text-center md:text-left space-y-2">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                  <span className="text-[10px] bg-indigo-100 text-indigo-805 dark:bg-indigo-950/50 dark:text-indigo-400 font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
+                    Librarian's Desk
+                  </span>
+                  {librarianProfile.yearsOfService && (
+                    <span className="text-[10px] bg-amber-100 text-amber-855 dark:bg-amber-950/50 dark:text-amber-400 font-extrabold px-2 py-0.5 rounded-full tracking-wider">
+                      ★ {librarianProfile.yearsOfService}
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 leading-tight">
+                  {librarianProfile.name}
+                </h2>
+                <p className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                  {librarianProfile.designation}
+                </p>
+              </div>
+
+              <p className="text-xs text-slate-650 dark:text-slate-300 leading-relaxed font-sans font-medium italic">
+                "{librarianProfile.biography}"
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* FEATURE: LIBRARY GALLERY */}
+      <div className="mt-8 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 mb-6 gap-2">
+          <div>
+            <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <Camera className="w-5 h-5 text-indigo-500" />
+              <span>{currentLang === 'EN' ? "Inside Our Library" : "हमारे पुस्तकालय की झलकियाँ"}</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {currentLang === 'EN' 
+                ? "Showcasing our physical reading spaces, bookshelves, and academic activities." 
+                : "हमारे पाठन कक्ष, पुस्तकों की अलमारियों और शैक्षणिक गतिविधियों की झलक।"}
+            </p>
+          </div>
+          <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-2.5 py-1 rounded">
+            {galleryImages.length} {galleryImages.length === 1 ? (currentLang === 'EN' ? 'Photo' : 'तस्वीर') : (currentLang === 'EN' ? 'Photos' : 'तस्वीरें')}
+          </span>
+        </div>
+
+        {isGalleryLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="aspect-video w-full rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"></div>
+            ))}
+          </div>
+        ) : galleryImages.length === 0 ? (
+          <div className="text-center py-8 text-xs text-slate-400 font-mono italic">
+            {currentLang === 'EN' ? "No configured photographs" : "कोई जानकारी उपलब्ध नहीं है"}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {galleryImages.map((img: any, idx: number) => (
+              <div 
+                key={img.id || idx} 
+                className="group relative overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 cursor-zoom-in shadow-sm hover:shadow-md transition-all duration-350"
                 onClick={() => {
+                  setViewerPhoto({
+                    url: img.url,
+                    title: img.caption || (currentLang === 'EN' ? "Library Gallery Image" : "पुस्तकालय की तस्वीर"),
+                    subtitle: currentLang === 'EN' ? "Inside Our Library" : "हमारे पुस्तकालय की झलकियाँ"
+                  });
                   setZoomScale(1);
                   setIsPhotoViewerOpen(true);
                 }}
-              />
-            ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-indigo-600 border-2 border-indigo-100 dark:border-slate-800 flex items-center justify-center text-white text-2xl font-black shadow-md">
-                {librarianProfile.name
-                  ? librarianProfile.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-                  : "SR"
-                }
-              </div>
-            )}
-          </div>
-
-          {/* Profile details */}
-          <div className="flex-1 text-center md:text-left space-y-2">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <span className="text-[10px] bg-indigo-100 text-indigo-805 dark:bg-indigo-950/50 dark:text-indigo-400 font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
-                  Librarian's Desk
-                </span>
-                {librarianProfile.yearsOfService && (
-                  <span className="text-[10px] bg-amber-100 text-amber-855 dark:bg-amber-950/50 dark:text-amber-400 font-extrabold px-2 py-0.5 rounded-full tracking-wider">
-                    ★ {librarianProfile.yearsOfService}
-                  </span>
+              >
+                <div className="aspect-video w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                  <img 
+                    src={img.url}
+                    alt={img.caption || "Library gallery photo"}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transform transition-transform duration-500 group-hover:scale-110"
+                  />
+                </div>
+                {img.caption && (
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-8">
+                    <p className="text-[11px] font-sans font-bold text-white line-clamp-1">
+                      {img.caption}
+                    </p>
+                  </div>
                 )}
               </div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 leading-tight">
-                {librarianProfile.name}
-              </h2>
-              <p className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold">
-                {librarianProfile.designation}
-              </p>
-            </div>
-
-            <p className="text-xs text-slate-650 dark:text-slate-300 leading-relaxed font-sans font-medium italic">
-              "{librarianProfile.biography}"
-            </p>
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Main Feature Tabs Switcher */}
@@ -2261,7 +2386,7 @@ export default function PublicHome({
 
       {/* SECURE LIBRARIAN PROFILE PHOTO VIEW LIGHTBOX */}
       <AnimatePresence>
-        {isPhotoViewerOpen && librarianProfile.profilePhoto && (
+        {isPhotoViewerOpen && librarianProfile?.profilePhoto && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2327,15 +2452,15 @@ export default function PublicHome({
               onTouchEnd={handleTouchEnd}
             >
               <motion.img
-                key={librarianProfile.profilePhoto}
-                src={librarianProfile.profilePhoto}
+                key={viewerPhoto.url}
+                src={viewerPhoto.url}
                 referrerPolicy="no-referrer"
                 style={{ scale: zoomScale }}
                 initial={{ scale: 0.9, y: 10 }}
                 animate={{ scale: zoomScale, y: 0 }}
                 transition={{ type: "spring", damping: 25, stiffness: 120 }}
                 className="max-h-[75vh] max-w-[90vw] md:max-w-xl object-contain rounded-2xl shadow-2xl border border-white/10 select-none"
-                alt={librarianProfile.name}
+                alt={viewerPhoto.title}
                 draggable="false"
                 onDragStart={(e) => e.preventDefault()}
                 onContextMenu={(e) => e.preventDefault()}
@@ -2348,8 +2473,8 @@ export default function PublicHome({
               className="w-full text-center text-[10px] text-slate-400 font-mono py-4 z-50 border-t border-white/5"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="font-sans font-bold text-white text-xs">{librarianProfile.name}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{librarianProfile.designation}</p>
+              <p className="font-sans font-bold text-white text-xs">{viewerPhoto.title}</p>
+              {viewerPhoto.subtitle && <p className="text-[10px] text-slate-400 mt-0.5">{viewerPhoto.subtitle}</p>}
               <div className="mt-2 flex items-center justify-center gap-4 text-[9px] text-slate-500">
                 <span>Zoom: {Math.round(zoomScale * 100)}%</span>
                 <span>•</span>
