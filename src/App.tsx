@@ -62,48 +62,56 @@ export default function App() {
         return null;
       };
 
-      const dataBooks = await handleSafeFetch('/api/books');
-      if (dataBooks) setBooks(dataBooks);
-
-      const dataMaterials = await handleSafeFetch('/api/study-materials');
-      if (dataMaterials) setStudyMaterials(dataMaterials);
-
       const token = localStorage.getItem("ramdiri_library_token");
-      if (!token) return;
-
-      try {
-        const payloadStr = atob(token.split('.')[1]);
-        const payload = JSON.parse(payloadStr);
-
-        const headers = { 'Authorization': `Bearer ${token}` };
-
-        if (payload.role === 'Librarian') {
-          const [studentsData, requestsData, logsData, auditData, materialsData] = await Promise.all([
-            handleSafeFetch('/api/students', { headers }),
-            handleSafeFetch('/api/requests', { headers }),
-            handleSafeFetch('/api/issue-logs', { headers }),
-            handleSafeFetch('/api/audit-logs', { headers }),
-            handleSafeFetch('/api/study-materials', { headers })
-          ]);
-
-          if (studentsData) setStudents(studentsData);
-          if (requestsData) setRequests(requestsData);
-          if (logsData) setIssueLogs(logsData);
-          if (auditData) setAuditLogs(auditData);
-          if (materialsData) setStudyMaterials(materialsData);
-        } else if (payload.role === 'Student') {
-          const [requestsData, logsData, materialsData] = await Promise.all([
-            handleSafeFetch('/api/requests', { headers }),
-            handleSafeFetch('/api/issue-logs', { headers }),
-            handleSafeFetch('/api/study-materials', { headers })
-          ]);
-
-          if (requestsData) setRequests(requestsData);
-          if (logsData) setIssueLogs(logsData);
-          if (materialsData) setStudyMaterials(materialsData);
+      let role: string | null = null;
+      let headers: any = {};
+      if (token) {
+        try {
+          const payloadStr = atob(token.split('.')[1]);
+          const payload = JSON.parse(payloadStr);
+          role = payload.role;
+          headers = { 'Authorization': `Bearer ${token}` };
+        } catch (e) {
+          console.warn("Could not parse token:", e);
         }
-      } catch (e: any) {
-        console.warn("Secure metadata log synchronization gracefully deferred:", e?.message || e);
+      }
+
+      if (role === 'Librarian') {
+        const [dataBooks, dataMaterials, studentsData, requestsData, logsData, auditData] = await Promise.all([
+          handleSafeFetch('/api/books'),
+          handleSafeFetch('/api/study-materials', { headers }),
+          handleSafeFetch('/api/students', { headers }),
+          handleSafeFetch('/api/requests', { headers }),
+          handleSafeFetch('/api/issue-logs', { headers }),
+          handleSafeFetch('/api/audit-logs', { headers })
+        ]);
+
+        if (dataBooks) setBooks(dataBooks);
+        if (dataMaterials) setStudyMaterials(dataMaterials);
+        if (studentsData) setStudents(studentsData);
+        if (requestsData) setRequests(requestsData);
+        if (logsData) setIssueLogs(logsData);
+        if (auditData) setAuditLogs(auditData);
+      } else if (role === 'Student') {
+        const [dataBooks, dataMaterials, requestsData, logsData] = await Promise.all([
+          handleSafeFetch('/api/books'),
+          handleSafeFetch('/api/study-materials', { headers }),
+          handleSafeFetch('/api/requests', { headers }),
+          handleSafeFetch('/api/issue-logs', { headers })
+        ]);
+
+        if (dataBooks) setBooks(dataBooks);
+        if (dataMaterials) setStudyMaterials(dataMaterials);
+        if (requestsData) setRequests(requestsData);
+        if (logsData) setIssueLogs(logsData);
+      } else {
+        const [dataBooks, dataMaterials] = await Promise.all([
+          handleSafeFetch('/api/books'),
+          handleSafeFetch('/api/study-materials')
+        ]);
+
+        if (dataBooks) setBooks(dataBooks);
+        if (dataMaterials) setStudyMaterials(dataMaterials);
       }
     } finally {
       isSyncingRef.current = false;

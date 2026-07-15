@@ -98,6 +98,8 @@ export interface Feedback {
   id: string;
   studentId: string;
   studentName: string;
+  studentRole?: string;
+  role?: string;
   rating: number;
   type: 'General' | 'Bug' | 'Suggestion' | 'Feature Request';
   comment: string;

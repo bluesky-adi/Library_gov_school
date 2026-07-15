@@ -202,7 +202,18 @@ export default function PublicHome({
       totalFeedbackCount: 0
     };
   });
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ramdiri_cached_stats');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed.booksCount === 'number' && parsed.booksCount > 0) {
+          return false;
+        }
+      }
+    } catch (_) {}
+    return true;
+  });
 
   // Feedback states
   const [publicFeedbacks, setPublicFeedbacks] = useState<any[]>([]);
@@ -350,7 +361,17 @@ export default function PublicHome({
       })
       .catch(err => console.warn("Could not load public feedbacks:", err))
       .finally(() => setFeedbackLoading(false));
-  }, [books, students, studyMaterials, feedbackRefreshTrigger]);
+  }, [feedbackRefreshTrigger]);
+
+  // Synchronize local states instantly based on parent props primitive lengths without network calls or skeleton loading
+  useEffect(() => {
+    setLiveStats(prev => ({
+      ...prev,
+      booksCount: books.length > 0 ? books.length : prev.booksCount,
+      studentsCount: (students && students.length > 0) ? students.length : prev.studentsCount,
+      digitalMaterialsCount: studyMaterials.length > 0 ? studyMaterials.length : prev.digitalMaterialsCount,
+    }));
+  }, [books.length, students.length, studyMaterials.length]);
 
   useEffect(() => {
     if (isLoggedIn && homeActiveTab === 'feedback') {
@@ -1049,24 +1070,6 @@ export default function PublicHome({
           </form>
         ) : (
           <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 relative z-10">
-            
-            {loggedInRole === 'Librarian' && (
-              <button
-                onClick={() => {
-                  setEditProfileName(librarianProfile.name);
-                  setEditProfileDesignation(librarianProfile.designation);
-                  setEditProfileBiography(librarianProfile.biography);
-                  setEditProfileYears(librarianProfile.yearsOfService);
-                  setEditProfilePhoto(librarianProfile.profilePhoto);
-                  setIsEditingProfileInline(true);
-                  setInlineProfileSuccess(null);
-                  setInlineProfileError(null);
-                }}
-                className="absolute right-0 top-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 border border-indigo-100 dark:border-slate-700 shadow-xs z-20 select-none"
-              >
-                <span>✏️ Edit Profile Desk</span>
-              </button>
-            )}
 
             {/* Headshot / Avatar */}
             <div className="shrink-0 select-none">
@@ -1351,8 +1354,8 @@ export default function PublicHome({
             onChange={(e) => setHomeSearchInput(e.target.value)}
             placeholder={
               currentLang === 'EN' 
-                ? "🔍 Search by Title, Author, Accession No, Call Number, Publisher or Hinglish terms (e.g. vigyan, itihaas, ganit)..."
-                : "🔍 पुस्तक का नाम, लेखक, एक्सेशन नंबर, कॉल कोड या हिन्दी/हिंग्लिश शब्दों द्वारा खोजें..."
+                ? "🔍 Enter a title, author, category, or syllabus subject to explore our shared world of learning and imagination..."
+                : "🔍 पुस्तक का नाम, लेखक, विषय या ज्ञान की श्रेणी दर्ज करें और हमारे सुंदर पुस्तकालय के ज्ञान से जुड़ें..."
             }
             className="w-full text-sm font-bold text-slate-900 dark:text-white pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-950/60 border-2 border-slate-350 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-600 select-all"
           />
@@ -1826,8 +1829,8 @@ export default function PublicHome({
                       onChange={(e) => setNewFeedbackForm(f => ({ ...f, comment: e.target.value }))}
                       placeholder={
                         currentLang === 'EN'
-                          ? "Please write what books you need, system issues, or general remarks..."
-                          : "कृपया लिखें कि आपको किन पुस्तकों की आवश्यकता है, या पुस्तकालय संबंधी सुझाव..."
+                          ? "We are listening. Share your suggestions, list the books you'd love to see on our shelves, or write a warm note about your library experience..."
+                          : "हम सुन रहे हैं। अपने सुझाव साझा करें, उन पुस्तकों की सूची बनाएं जिन्हें आप देखना चाहते हैं, या अपने पुस्तकालय के अनुभव के बारे में एक प्यारा संदेश लिखें..."
                       }
                       className="w-full text-xs font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
                     />
@@ -1882,15 +1885,28 @@ export default function PublicHome({
                       </p>
 
                       {/* Author credentials block */}
-                      <div className="pl-1 space-y-0.5">
-                        <p className="text-xs font-black text-slate-800 dark:text-slate-200">
-                          — {f.studentName}
-                        </p>
-                        {(f.studentRole || f.role) && (
-                          <p className="text-[10px] font-bold text-indigo-650 dark:text-indigo-400 font-mono tracking-wide">
-                            {f.studentRole || f.role}
-                          </p>
-                        )}
+                      <div className="pl-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-extrabold text-slate-800 dark:text-slate-100">
+                            — {f.studentName}
+                          </span>
+                          {(f.studentRole || f.role) && (
+                            <>
+                              <span className="text-slate-400 dark:text-slate-600 font-bold select-none">•</span>
+                              <span className="text-indigo-650 dark:text-indigo-400 font-extrabold tracking-wide text-[11px]">
+                                {f.studentRole || f.role}
+                              </span>
+                            </>
+                          )}
+                          {f.type && (
+                            <>
+                              <span className="text-slate-400 dark:text-slate-600 font-bold select-none">•</span>
+                              <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
+                                {f.type}
+                              </span>
+                            </>
+                          )}
+                        </div>
                         <span className="text-[9px] text-slate-400 block font-mono">
                           {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}
                         </span>

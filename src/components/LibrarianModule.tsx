@@ -6061,23 +6061,139 @@ export default function LibrarianModule({
                   </p>
                 </div>
 
-                <div className="p-5 bg-indigo-50/50 dark:bg-slate-950 border border-indigo-100 dark:border-slate-850 rounded-xl space-y-4 shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-750 dark:bg-indigo-950 dark:text-indigo-400 flex items-center justify-center font-bold">
-                      🏠
+                <form onSubmit={handleUpdateProfile} className="space-y-4 text-xs">
+                  <div className="space-y-3 bg-slate-50 dark:bg-slate-950/45 p-4 rounded-xl border border-slate-200 dark:border-slate-850">
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Librarian Display Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        className="w-full text-xs text-slate-905 dark:text-slate-105 p-2.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-800 outline-none font-bold"
+                      />
                     </div>
-                    <div>
-                      <h5 className="text-xs font-black text-slate-800 dark:text-slate-100">Homepage Inline Editor</h5>
-                      <p className="text-[10px] text-slate-400">Edit biography, photos, titles live on the main page</p>
+
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Professional Designation</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileDesignation}
+                        onChange={e => setProfileDesignation(e.target.value)}
+                        className="w-full text-xs text-slate-905 dark:text-slate-105 p-2.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-800 outline-none font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Years of Service (Optional)</label>
+                      <input
+                        type="text"
+                        value={profileYearsOfService}
+                        onChange={e => setProfileYearsOfService(e.target.value)}
+                        placeholder="e.g. 25+ Years of Service"
+                        className="w-full text-xs text-slate-905 dark:text-slate-105 p-2.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-800 outline-none font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase block">📷 Desk Profile Photograph</label>
+                      <div className="flex items-center gap-3">
+                        <label className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-755 text-indigo-750 dark:text-indigo-300 font-bold text-xs rounded-lg cursor-pointer border border-indigo-200 dark:border-slate-700 flex items-center gap-1.5 transition-all select-none">
+                          <span>Upload Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (!file.type.startsWith('image/')) {
+                                setProfileError("Please select a valid image file.");
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const canvas = document.createElement('canvas');
+                                  const maxDim = 300;
+                                  let width = img.width;
+                                  let height = img.height;
+                                  if (width > height) {
+                                    if (width > maxDim) {
+                                      height = Math.round((height * maxDim) / width);
+                                      width = maxDim;
+                                    }
+                                  } else {
+                                    if (height > maxDim) {
+                                      width = Math.round((width * maxDim) / height);
+                                      height = maxDim;
+                                    }
+                                  }
+                                  canvas.width = width;
+                                  canvas.height = height;
+                                  const ctx = canvas.getContext('2d');
+                                  if (ctx) {
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                    setProfilePhoto(dataUrl);
+                                    setProfileError(null);
+                                  } else {
+                                    setProfilePhoto(event.target?.result as string);
+                                  }
+                                };
+                                img.src = event.target?.result as string;
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        {profilePhoto ? (
+                          <div className="flex items-center gap-2">
+                            <img src={profilePhoto} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover border" alt="Profile Preview" />
+                            <button
+                              type="button"
+                              onClick={() => setProfilePhoto('')}
+                              className="text-[11px] font-bold text-red-600 hover:text-red-500 cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Default avatar is active</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase block">Desk Biography (Welcome Quote)</label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={profileBiography}
+                        onChange={e => setProfileBiography(e.target.value)}
+                        placeholder="Write a warm message to scholars visiting the library..."
+                        className="w-full text-xs text-slate-905 dark:text-slate-105 p-2.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-slate-800 outline-none leading-relaxed"
+                      />
                     </div>
                   </div>
-                  <p className="text-[11.5px] text-slate-650 dark:text-slate-350 leading-relaxed font-medium">
-                    To make administrative management simple and prevent confusing duplicate config menus, we have enabled elegant, inline visual editing directly on the <b>Librarian's Desk</b> card at the homepage.
-                  </p>
-                  <div className="text-[10px] bg-indigo-100 text-indigo-855 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold p-2.5 rounded border border-indigo-200 dark:border-indigo-900/60 leading-normal">
-                    💡 Please switch to the <b>"Home" tab</b> at the top navigation bar, locate the <b>Librarian's Desk</b> card, and click the <b>"Edit Profile Desk"</b> button to perform modifications.
-                  </div>
-                </div>
+
+                  {profileError && (
+                    <p className="text-red-600 font-bold font-mono text-[10.5px]">{profileError}</p>
+                  )}
+                  {profileSuccess && (
+                    <p className="text-emerald-600 font-bold font-mono text-[10.5px]">{profileSuccess}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={profileLoading}
+                    className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-955 font-black uppercase rounded-xl shadow-xs cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    {profileLoading ? "Saving Desk Profile..." : "Save Desk Profile Details"}
+                  </button>
+                </form>
               </div>
             </div>
 
@@ -6455,11 +6571,11 @@ export default function LibrarianModule({
         const stud = selectedProfileStudent;
         const studentRequests = requests.filter(r => 
           (r.studentId && stud.studentId && r.studentId === stud.studentId) ||
-          (r.rollNumber === Number(stud.rollNumber) && r.class === stud.class && r.section === stud.section)
+          (String(r.rollNumber) === String(stud.rollNumber) && r.class === stud.class && r.section === stud.section)
         );
         const studentLogs = issueLogs.filter(l => 
           (l.studentId && stud.studentId && l.studentId === stud.studentId) ||
-          (l.rollNumber === Number(stud.rollNumber) && l.class === stud.class && l.section === stud.section)
+          (String(l.rollNumber) === String(stud.rollNumber) && l.class === stud.class && l.section === stud.section)
         );
         const totalRequested = studentRequests.length;
         const totalIssuedValue = studentLogs.length;
@@ -6476,6 +6592,14 @@ export default function LibrarianModule({
           status: string;
           color: string;
           iconName: string;
+          accessionNumber?: string;
+          callNumber?: string;
+          bookNumber?: string;
+          shelfLocation?: string;
+          shelfSerial?: number;
+          dueDate?: string;
+          issueDate?: string;
+          returnDate?: string;
         }[] = [];
 
         studentRequests.forEach(req => {
@@ -6491,6 +6615,7 @@ export default function LibrarianModule({
             color = 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900';
             iconName = 'XCircle';
           }
+          const bk = books.find(b => b.bookId === req.bookId);
           timelineEvents.push({
             type: 'Request',
             date: req.requestDate,
@@ -6498,7 +6623,12 @@ export default function LibrarianModule({
             bookId: req.bookId,
             status: statusText,
             color,
-            iconName
+            iconName,
+            accessionNumber: bk?.accessionNumber,
+            callNumber: bk?.callNumber,
+            bookNumber: bk?.bookNumber,
+            shelfLocation: bk?.category ? `Shelf Row: ${bk.category}` : undefined,
+            shelfSerial: categorySerialsMap.get(req.bookId) || 1
           });
         });
 
@@ -6512,6 +6642,7 @@ export default function LibrarianModule({
             color = 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 font-black animate-pulse';
           }
           
+          const bk = books.find(b => b.bookId === log.bookId);
           timelineEvents.push({
             type: 'Issue',
             date: log.issueDate,
@@ -6519,7 +6650,14 @@ export default function LibrarianModule({
             bookId: log.bookId,
             status: statusText,
             color,
-            iconName
+            iconName,
+            accessionNumber: bk?.accessionNumber,
+            callNumber: bk?.callNumber,
+            bookNumber: bk?.bookNumber,
+            shelfLocation: bk?.category ? `Shelf Row: ${bk.category}` : undefined,
+            shelfSerial: categorySerialsMap.get(log.bookId) || 1,
+            dueDate: log.dueDate,
+            issueDate: log.issueDate
           });
 
           if (log.status === 'Returned' && log.returnDate) {
@@ -6530,7 +6668,15 @@ export default function LibrarianModule({
               bookId: log.bookId,
               status: "Book Safely Returned",
               color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900',
-              iconName: 'ClipboardCheck'
+              iconName: 'ClipboardCheck',
+              accessionNumber: bk?.accessionNumber,
+              callNumber: bk?.callNumber,
+              bookNumber: bk?.bookNumber,
+              shelfLocation: bk?.category ? `Shelf Row: ${bk.category}` : undefined,
+              shelfSerial: categorySerialsMap.get(log.bookId) || 1,
+              dueDate: log.dueDate,
+              issueDate: log.issueDate,
+              returnDate: log.returnDate
             });
           }
         });
@@ -6601,9 +6747,13 @@ export default function LibrarianModule({
                         <span className="text-slate-555 mr-2">{currentLang === 'HI' ? "वर्ग / सेक्शन" : "Section Block"}:</span>
                         <span className="font-bold font-sans text-right">Section {stud.section || "A"}</span>
                       </div>
-                      <div className="flex justify-between py-1">
+                      <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-555 mr-2">{currentLang === 'HI' ? "जन्म तिथि" : "Date of Birth"}:</span>
-                        <span className="font-bold font-mono text-slate-700 dark:text-slate-350 text-right">{stud.dob}</span>
+                        <span className="font-bold font-mono text-slate-700 dark:text-slate-350 text-right">{stud.dob || "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-555 mr-2">{currentLang === 'HI' ? "प्रवेश संख्या" : "Admission Number"}:</span>
+                        <span className="font-bold font-mono text-indigo-700 dark:text-indigo-400 text-right">{(stud as any).admissionNumber || "N/A"}</span>
                       </div>
                     </div>
                   </div>
@@ -6702,6 +6852,48 @@ export default function LibrarianModule({
                             <p className="text-[11px] font-mono text-slate-500">
                               Book ID: #{evt.bookId} • Event Type: {evt.type === 'Request' ? 'Reservation Request' : evt.type === 'Issue' ? 'Physical Checkout' : 'Physical Return'}
                             </p>
+                            
+                            {/* Rich Book Parameters Details Grid */}
+                            <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5 text-[10px] text-slate-650 dark:text-slate-350 font-mono">
+                              <div>
+                                <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Accession Number</span>
+                                <span className="font-extrabold text-slate-800 dark:text-slate-200">{evt.accessionNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Call Number</span>
+                                <span className="font-extrabold text-slate-800 dark:text-slate-200">{evt.callNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Book Number</span>
+                                <span className="font-extrabold text-slate-800 dark:text-slate-200">{evt.bookNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Shelf Serial No.</span>
+                                <span className="font-black text-emerald-600 dark:text-emerald-400">#{evt.shelfSerial || '1'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Shelf Location</span>
+                                <span className="font-bold text-slate-850 dark:text-slate-250 truncate block">{evt.shelfLocation || 'Main Stack Section'}</span>
+                              </div>
+                              {evt.issueDate && (
+                                <div>
+                                  <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Issue Date</span>
+                                  <span className="font-extrabold text-slate-800 dark:text-slate-200">{evt.issueDate}</span>
+                                </div>
+                              )}
+                              {evt.dueDate && (
+                                <div>
+                                  <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Due Date</span>
+                                  <span className={`font-black ${evt.status.includes('Overdue') ? 'text-red-650 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'}`}>{evt.dueDate}</span>
+                                </div>
+                              )}
+                              {evt.returnDate && (
+                                <div>
+                                  <span className="text-slate-400 block uppercase text-[8px] font-sans font-extrabold tracking-wider">Return Date</span>
+                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-450">{evt.returnDate}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
