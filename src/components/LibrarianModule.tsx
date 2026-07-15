@@ -1779,19 +1779,25 @@ export default function LibrarianModule({
 
   const handleStudentFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studName.trim() || !studRoll.trim() || !studClass.trim() || !studSection.trim()) {
-      alert("Please fill all required student parameters (Name, Roll Number, Class, Section).");
+    if (!studName.trim() || !studRoll.trim() || !studClass.trim() || !studSection.trim() || !studDOB.trim()) {
+      alert("Please fill all required student parameters (Name, Roll Number, Class, Section, and Date of Birth).");
       return;
     }
 
-    // Generate unique Student ID: Class-Section-RollNumber
-    const studentId = `${studClass.trim()}-${studSection.trim().toUpperCase()}-${studRoll.trim()}`;
+    const parsedRoll = parseInt(studRoll.trim(), 10) || 0;
+    if (parsedRoll <= 0) {
+      alert("Roll Number must be a positive integer.");
+      return;
+    }
+
+    // Generate unique Student ID: Class-Section-RollNumber with normalized integer roll number
+    const studentId = `${studClass.trim().toUpperCase()}-${studSection.trim().toUpperCase()}-${parsedRoll}`;
 
     // Verify duplication client-side to raise warning
     if (!editingStudent) {
       const isDuplicate = students.some(s => s.studentId === studentId);
       if (isDuplicate) {
-        alert(`Duplicate Registry: A student with Class ${studClass.trim()}, Section ${studSection.trim().toUpperCase()}, and Roll Number ${studRoll.trim()} is already registered.`);
+        alert(`Duplicate Registry: A student with Class ${studClass.trim()}, Section ${studSection.trim().toUpperCase()}, and Roll Number ${parsedRoll} is already registered.`);
         return;
       }
     }
@@ -1799,9 +1805,9 @@ export default function LibrarianModule({
     const payload: Student = {
       studentId,
       name: studName.trim(),
-      class: studClass.trim(),
+      class: studClass.trim().toUpperCase(),
       section: studSection.trim().toUpperCase(),
-      rollNumber: parseInt(studRoll.trim(), 10) || 0,
+      rollNumber: parsedRoll,
       dob: studDOB.trim(),
       pin: editingStudent ? (editingStudent.pin || '1234') : '1234'
     };
@@ -3155,21 +3161,14 @@ export default function LibrarianModule({
                   className="text-[11px] bg-transparent border-none text-slate-705 dark:text-slate-305 font-mono cursor-pointer outline-none focus:ring-0"
                 >
                   <option value="">📁 All Classes</option>
-                  {Array.from(new Set(students.map(s => String(s.class || '')))).filter(Boolean).sort((a,b) => Number(a)-Number(b)).map(cls => (
-                    <option key={cls} value={cls}>Class {cls}</option>
-                  ))}
-                  {/* Fallback standard classes */}
-                  {!students.length && (
-                    <>
-                      <option value="6">Class 6</option>
-                      <option value="7">Class 7</option>
-                      <option value="8">Class 8</option>
-                      <option value="9">Class 9</option>
-                      <option value="10">Class 10</option>
-                      <option value="11">Class 11</option>
-                      <option value="12">Class 12</option>
-                    </>
-                  )}
+                  {(() => {
+                    const dynamic = Array.from(new Set(students.map(s => String(s.class || '')))).filter(Boolean);
+                    const standard = ['6', '7', '8', '9', '10', '11', '12'];
+                    const combined = Array.from(new Set([...standard, ...dynamic])).sort((a, b) => Number(a) - Number(b));
+                    return combined.map(cls => (
+                      <option key={cls} value={cls}>Class {cls}</option>
+                    ));
+                  })()}
                 </select>
               </div>
 
@@ -3185,17 +3184,14 @@ export default function LibrarianModule({
                   className="text-[11px] bg-transparent border-none text-slate-705 dark:text-slate-305 font-mono cursor-pointer outline-none focus:ring-0"
                 >
                   <option value="">📁 All Sections</option>
-                  {Array.from(new Set(students.map(s => String(s.section || '').toUpperCase()))).filter(Boolean).sort().map(sec => (
-                    <option key={sec} value={sec}>Section {sec}</option>
-                  ))}
-                  {!students.length && (
-                    <>
-                      <option value="A">Section A</option>
-                      <option value="B">Section B</option>
-                      <option value="C">Section C</option>
-                      <option value="D">Section D</option>
-                    </>
-                  )}
+                  {(() => {
+                    const dynamic = Array.from(new Set(students.map(s => String(s.section || '').toUpperCase()))).filter(Boolean);
+                    const standard = ['A', 'B', 'C', 'D', 'E'];
+                    const combined = Array.from(new Set([...standard, ...dynamic])).sort();
+                    return combined.map(sec => (
+                      <option key={sec} value={sec}>Section {sec}</option>
+                    ));
+                  })()}
                 </select>
               </div>
             </div>
@@ -3539,7 +3535,7 @@ export default function LibrarianModule({
                     className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-lg focus:ring-1 focus:ring-indigo-650 outline-none font-bold"
                   >
                     <option value="">🛡️ Section Filter: All</option>
-                    {['A', 'B', 'C', 'D'].map(sec => (
+                    {['A', 'B', 'C', 'D', 'E'].map(sec => (
                       <option key={sec} value={sec}>Section {sec}</option>
                     ))}
                   </select>
@@ -4709,12 +4705,13 @@ export default function LibrarianModule({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Date of Birth (DOB) (Optional)</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Date of Birth (DOB) *</label>
                   <input
                     type="date"
+                    required
                     value={studDOB}
                     onChange={(e) => setStudDOB(e.target.value)}
-                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-mono"
+                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-mono font-bold"
                   />
                 </div>
               </div>

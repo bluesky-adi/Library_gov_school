@@ -100,7 +100,12 @@ export default function StudentModule({
 
   const fetchMyReview = () => {
     setMyReviewLoading(true);
-    fetch('/api/feedback/my-review')
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch('/api/feedback/my-review', {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    })
       .then(res => res.json())
       .then(data => {
         if (data.feedback) {
@@ -135,10 +140,18 @@ export default function StudentModule({
     setFeedbackSuccess(null);
     setFeedbackError(null);
 
+    const token = localStorage.getItem("ramdiri_library_token");
     fetch('/api/feedback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(feedbackForm)
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({
+        ...feedbackForm,
+        name: loggedInStudent?.name || "Student",
+        role: "Student"
+      })
     })
       .then(async res => {
         const data = await res.json();

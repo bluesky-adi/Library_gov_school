@@ -1292,11 +1292,26 @@ app.post('/api/feedback', async (req, res) => {
       return res.status(400).json({ error: "Invalid role value. Must be Student, Teacher, Parent, Alumni, or Visitor." });
     }
 
+    // Attempt optional JWT verification to bind genuine studentId
+    let studentId = `${role.toLowerCase()}-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        if (decoded && decoded.role === 'Student') {
+          studentId = decoded.studentId || `${decoded.class}-${decoded.section}-${decoded.rollNumber}`;
+        }
+      } catch (err) {
+        console.warn("Optional feedback JWT token verification skipped or failed:", err);
+      }
+    }
+
     const computedStatus = 'Pending';
     const feedbackId = `FB-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
     const newFeedback = {
       id: feedbackId,
-      studentId: `${role.toLowerCase()}-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      studentId,
       studentName: name.trim(),
       studentRole: role,
       rating: rateNum,

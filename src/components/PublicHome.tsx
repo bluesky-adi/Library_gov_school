@@ -1873,18 +1873,11 @@ export default function PublicHome({
                   {publicFeedbacks.map((f) => (
                     <div key={f.id} className="bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 p-4 rounded-xl space-y-3 flex flex-col justify-between hover:shadow-md transition-all">
                       <div className="space-y-2">
-                        {/* Star Ratings & Category */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex text-amber-400 gap-0.5 text-xs">
-                            {Array.from({ length: f.rating || 5 }).map((_, idx) => (
-                              <span key={idx}>★</span>
-                            ))}
-                          </div>
-                          {f.type && (
-                            <span className="text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 px-2 py-0.5 rounded font-mono font-bold uppercase shrink-0">
-                              {f.type}
-                            </span>
-                          )}
+                        {/* Star Ratings */}
+                        <div className="flex text-amber-400 gap-0.5 text-xs">
+                          {Array.from({ length: f.rating || 5 }).map((_, idx) => (
+                            <span key={idx}>★</span>
+                          ))}
                         </div>
 
                         {/* Comment text */}
@@ -1895,17 +1888,25 @@ export default function PublicHome({
 
                       {/* Author credentials block */}
                       <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300 uppercase shrink-0">
+                        <div className="flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-full bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center font-bold text-xs text-indigo-700 dark:text-indigo-300 uppercase shrink-0 mt-0.5">
                             {f.studentName ? f.studentName.charAt(0) : "S"}
                           </div>
                           <div className="min-w-0 flex-1">
+                            {/* Author Name with Em-dash */}
                             <span className="font-extrabold text-xs text-slate-800 dark:text-slate-100 block truncate">
-                              {f.studentName}
+                              — {f.studentName}
                             </span>
-                            {(f.studentRole || f.role) && (
-                              <span className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] block truncate">
-                                {f.studentRole || f.role}
+                            
+                            {/* User Role */}
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold text-[10.5px] block truncate">
+                              {f.studentRole || f.role || "Student"}
+                            </span>
+
+                            {/* Feedback Category */}
+                            {f.type && (
+                              <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] block truncate font-mono mt-0.5">
+                                {f.type}
                               </span>
                             )}
                           </div>

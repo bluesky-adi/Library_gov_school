@@ -31,6 +31,19 @@ export default function App() {
   const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null);
   const [loggedInName, setLoggedInName] = useState<string>('');
 
+  // --- Back Navigation Exit Confirmation States ---
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [pendingExitAction, setPendingExitAction] = useState<(() => void) | null>(null);
+
+  const triggerExitConfirmation = (action: () => void) => {
+    if (activeTab === 'portal') {
+      setPendingExitAction(() => action);
+      setShowExitConfirm(true);
+    } else {
+      action();
+    }
+  };
+
   // --- Progressive Excel Upload Progress States ---
   const [importProgress, setImportProgress] = useState<{
     status: 'idle' | 'uploading';
@@ -298,11 +311,13 @@ export default function App() {
 
   // --- Handle Logout ---
   const handleLogout = () => {
-    localStorage.removeItem("ramdiri_library_token");
-    setLoggedInRole('Guest');
-    setLoggedInStudent(null);
-    setLoggedInName('');
-    setActiveTab('home');
+    triggerExitConfirmation(() => {
+      localStorage.removeItem("ramdiri_library_token");
+      setLoggedInRole('Guest');
+      setLoggedInStudent(null);
+      setLoggedInName('');
+      setActiveTab('home');
+    });
   };
 
   // --- Direct login launcher helper ---
@@ -1055,7 +1070,9 @@ export default function App() {
                   if (item.id === 'portal' && loggedInRole === 'Guest') {
                     handleTriggerLoginClick();
                   } else {
-                    setActiveTab(item.id as any);
+                    triggerExitConfirmation(() => {
+                      setActiveTab(item.id as any);
+                    });
                   }
                 }}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
@@ -1151,7 +1168,9 @@ export default function App() {
                   if (tab.id === 'portal' && loggedInRole === 'Guest') {
                     handleTriggerLoginClick();
                   } else {
-                    setActiveTab(tab.id as any);
+                    triggerExitConfirmation(() => {
+                      setActiveTab(tab.id as any);
+                    });
                   }
                 }}
                 className={`flex-1 py-2 text-[11px] font-black rounded-lg text-center transition-all ${
@@ -1277,6 +1296,48 @@ export default function App() {
             <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal text-center">
               Processing rows in safety-throttled chunks to prevent catalog browser freezes. Please keep this session open.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* SYSTEM BACK NAVIGATION EXIT CONFIRMATION MODAL */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-6 z-[9999] animate-fade-in select-none">
+          <div className="bg-white dark:bg-slate-900 border-2 border-red-500 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center mx-auto text-red-600">
+              <LogOut className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                {currentLang === 'EN' ? "Are you sure you want to exit the system?" : "क्या आप वाकई सिस्टम से बाहर जाना चाहते हैं?"}
+              </h3>
+              <p className="text-xs text-slate-500 leading-normal font-bold">
+                {currentLang === 'EN' ? "You will exit the secure system panel. Any unsaved edits will be discarded." : "आप सुरक्षित सिस्टम पैनल से बाहर निकल जाएंगे। किसी भी सहेजे न गए बदलाव को खारिज कर दिया जाएगा।"}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  setPendingExitAction(null);
+                }}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                {currentLang === 'EN' ? "Keep Browsing" : "ब्राउज़ करते रहें"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  if (pendingExitAction) {
+                    pendingExitAction();
+                  }
+                  setPendingExitAction(null);
+                }}
+                className="w-full py-2.5 bg-red-605 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-red-500/20 transition-all cursor-pointer"
+              >
+                {currentLang === 'EN' ? "Exit" : "बाहर निकलें"}
+              </button>
+            </div>
           </div>
         </div>
       )}
