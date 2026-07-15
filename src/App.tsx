@@ -311,13 +311,11 @@ export default function App() {
 
   // --- Handle Logout ---
   const handleLogout = () => {
-    triggerExitConfirmation(() => {
-      localStorage.removeItem("ramdiri_library_token");
-      setLoggedInRole('Guest');
-      setLoggedInStudent(null);
-      setLoggedInName('');
-      setActiveTab('home');
-    });
+    localStorage.removeItem("ramdiri_library_token");
+    setLoggedInRole('Guest');
+    setLoggedInStudent(null);
+    setLoggedInName('');
+    setActiveTab('home');
   };
 
   // --- Direct login launcher helper ---

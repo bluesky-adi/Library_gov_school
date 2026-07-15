@@ -1638,21 +1638,53 @@ export default function PublicHome({
                     </div>
 
                     <div className="border-t border-slate-201 dark:border-slate-800/60 pt-3 mt-3 flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-mono font-bold text-slate-400 block truncate max-w-[150px]">
+                      <span className="text-[10px] font-mono font-bold text-slate-400 block truncate max-w-[100px]" title={mat.id}>
                         ID: {mat.id}
                       </span>
-                      {mat.fileUrl ? (
-                        <a
-                          href={mat.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10.5px] font-bold rounded-lg flex items-center gap-1 shrink-0 cursor-pointer"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download PDF</span>
-                        </a>
+                      {mat.pdfData || mat.fileUrl ? (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => {
+                              try {
+                                const fileSource = mat.pdfData || mat.fileUrl;
+                                const w = window.open();
+                                if (w) {
+                                  w.document.write(`<iframe src="${fileSource}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
+                                } else {
+                                  alert("Pop-up blocker active! Please allow pop-ups to preview the document.");
+                                }
+                              } catch (err) {
+                                alert("Error launching PDF preview.");
+                              }
+                            }}
+                            className="px-2.5 py-1.5 border border-slate-250 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 text-[10.5px] font-bold rounded-lg flex items-center gap-1 cursor-pointer select-none"
+                            title="Preview PDF Document"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Preview</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              try {
+                                const linkSource = mat.pdfData || mat.fileUrl;
+                                const downloadLink = document.createElement("a");
+                                const fileName = mat.pdfName || `${mat.title.replace(/\s+/g, '_')}.pdf`;
+                                downloadLink.href = linkSource;
+                                downloadLink.download = fileName;
+                                downloadLink.click();
+                              } catch (err) {
+                                alert("Error initiating PDF download.");
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10.5px] font-bold rounded-lg flex items-center gap-1 cursor-pointer select-none border-0"
+                            title="Download PDF Document"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-[10px] text-red-655 font-bold">No file URL cataloged</span>
+                        <span className="text-[10px] text-red-655 font-bold">No file document cataloged</span>
                       )}
                     </div>
                   </div>

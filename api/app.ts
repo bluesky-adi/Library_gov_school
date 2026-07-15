@@ -810,7 +810,7 @@ app.post('/api/students', authenticateToken, requireLibrarian, async (req, res) 
 
 app.put('/api/students/:studentId', authenticateToken, requireLibrarian, async (req, res) => {
   try {
-    const updatedStudent = await dbService.saveStudent(req.body, true);
+    const updatedStudent = await dbService.saveStudent(req.body, true, req.params.studentId);
     await addAuditLog(req, 'Student Edited', `Edited student record for '${updatedStudent.name}' (ID: ${updatedStudent.studentId})`);
     res.json(updatedStudent);
   } catch (error: any) {

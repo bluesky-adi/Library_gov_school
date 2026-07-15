@@ -240,11 +240,12 @@ const FeedbackSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   studentId: { type: String, required: true },
   studentName: { type: String, required: true },
+  studentRole: { type: String, default: 'Student' },
   rating: { type: Number, required: true, min: 1, max: 5 },
   type: { type: String, required: true, default: 'General' },
   comment: { type: String, required: true },
   reply: { type: String, default: "" },
-  status: { type: String, enum: ['Pending', 'Approved', 'Resolved', 'Spam'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Approved', 'Resolved', 'Spam', 'Rejected', 'Hidden'], default: 'Pending' },
   createdAt: { type: String, required: true }
 });
 
@@ -867,7 +868,10 @@ export const dbService = {
     }
     let modified = false;
     const mapped = list.map(s => {
-      const finalId = s.studentId || `${s.class.toUpperCase()}-${s.section.toUpperCase()}-${s.rollNumber}`;
+      const c = s.class ? s.class.toString().trim().toUpperCase() : "10";
+      const sec = s.section ? s.section.toString().trim().toUpperCase() : "A";
+      const r = s.rollNumber || 1;
+      const finalId = s.studentId || `${c}-${sec}-${r}`;
       if (!s.studentId) {
         s.studentId = finalId;
         modified = true;
@@ -881,7 +885,7 @@ export const dbService = {
     return mapped;
   },
 
-  async saveStudent(student: Student, isEdit?: boolean): Promise<Student> {
+  async saveStudent(student: Student, isEdit?: boolean, oldStudentId?: string): Promise<Student> {
     // Generate/Validate unique Student ID
     if ((!student.name && student.status !== "VACANT") || !student.rollNumber || !student.class || !student.section) {
       throw new Error("Validation Error: Student Name, Roll Number, Class, and Section are absolutely required.");
@@ -895,6 +899,11 @@ export const dbService = {
     student.studentId = genId;
 
     if (isConnectedToMongo) {
+      // Clean up old student record if Class/Section/Roll (and thus studentId) changed to prevent stale duplicate login blocks
+      if (isEdit && oldStudentId && oldStudentId !== genId) {
+        await MongoStudent.deleteOne({ studentId: oldStudentId });
+      }
+
       const match = await MongoStudent.findOne({ studentId: genId });
       if (match && !isEdit) {
         throw new Error(`Data Integrity Guard: A student is already registered with Student ID "${genId}" in Class ${student.class}-${student.section}. Duplicate rolls are prohibited.`);
@@ -904,6 +913,15 @@ export const dbService = {
       return student;
     } else {
       const studentsList = readLocalFile<Student>(STUDENTS_FILE);
+      
+      // Clean up old student record if Class/Section/Roll changed
+      if (isEdit && oldStudentId && oldStudentId !== genId) {
+        const oldIdx = studentsList.findIndex(s => s.studentId === oldStudentId);
+        if (oldIdx !== -1) {
+          studentsList.splice(oldIdx, 1);
+        }
+      }
+
       const idx = studentsList.findIndex(s => s.studentId === genId);
       
       if (idx !== -1) {
