@@ -1869,57 +1869,61 @@ export default function PublicHome({
                   <p className="text-xs text-slate-500">No public feedback items approved yet.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[500px] overflow-y-auto pr-1 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-1">
                   {publicFeedbacks.map((f) => (
-                    <div key={f.id} className="pt-5 first:pt-0 pb-5 border-b last:border-0 border-slate-100 dark:border-slate-800 space-y-3">
-                      {/* Star Ratings */}
-                      <div className="flex text-amber-400 gap-0.5 text-xs">
-                        {Array.from({ length: f.rating || 5 }).map((_, idx) => (
-                          <span key={idx}>★</span>
-                        ))}
-                      </div>
-
-                      {/* Comment text */}
-                      <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-serif italic leading-relaxed">
-                        "{f.comment}"
-                      </p>
-
-                      {/* Author credentials block */}
-                      <div className="pl-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                          <span className="font-extrabold text-slate-800 dark:text-slate-100">
-                            — {f.studentName}
-                          </span>
-                          {(f.studentRole || f.role) && (
-                            <>
-                              <span className="text-slate-400 dark:text-slate-600 font-bold select-none">•</span>
-                              <span className="text-indigo-650 dark:text-indigo-400 font-extrabold tracking-wide text-[11px]">
-                                {f.studentRole || f.role}
-                              </span>
-                            </>
-                          )}
+                    <div key={f.id} className="bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 p-4 rounded-xl space-y-3 flex flex-col justify-between hover:shadow-md transition-all">
+                      <div className="space-y-2">
+                        {/* Star Ratings & Category */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex text-amber-400 gap-0.5 text-xs">
+                            {Array.from({ length: f.rating || 5 }).map((_, idx) => (
+                              <span key={idx}>★</span>
+                            ))}
+                          </div>
                           {f.type && (
-                            <>
-                              <span className="text-slate-400 dark:text-slate-600 font-bold select-none">•</span>
-                              <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
-                                {f.type}
-                              </span>
-                            </>
+                            <span className="text-[10px] bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 px-2 py-0.5 rounded font-mono font-bold uppercase shrink-0">
+                              {f.type}
+                            </span>
                           )}
                         </div>
-                        <span className="text-[9px] text-slate-400 block font-mono">
+
+                        {/* Comment text */}
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-serif italic leading-relaxed">
+                          "{f.comment}"
+                        </p>
+                      </div>
+
+                      {/* Author credentials block */}
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-300 uppercase shrink-0">
+                            {f.studentName ? f.studentName.charAt(0) : "S"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="font-extrabold text-xs text-slate-800 dark:text-slate-100 block truncate">
+                              {f.studentName}
+                            </span>
+                            {(f.studentRole || f.role) && (
+                              <span className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] block truncate">
+                                {f.studentRole || f.role}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {f.reply && (
+                          <div className="p-2 bg-indigo-50/50 dark:bg-indigo-950/25 border-l-2 border-indigo-500 text-[10px] text-slate-800 dark:text-slate-200 rounded-r-lg space-y-0.5">
+                            <span className="text-[8px] font-black uppercase text-indigo-700 dark:text-indigo-400 block">
+                              Librarian Response:
+                            </span>
+                            <p className="italic">"{f.reply}"</p>
+                          </div>
+                        )}
+                        
+                        <span className="text-[9px] text-slate-400 block font-mono text-right">
                           {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}
                         </span>
                       </div>
-
-                      {f.reply && (
-                        <div className="ml-5 p-2.5 bg-indigo-50/50 dark:bg-indigo-950/25 border-l-2 border-indigo-500 text-[11px] text-slate-800 dark:text-slate-200 rounded-r-lg space-y-1">
-                          <span className="text-[9px] font-black uppercase text-indigo-700 dark:text-indigo-400 block">
-                            Response from Chief Librarian:
-                          </span>
-                          <p className="italic">"{f.reply}"</p>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

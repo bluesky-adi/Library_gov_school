@@ -660,6 +660,32 @@ export default function LibrarianModule({
     localStorage.setItem("ramdiri_custom_categories", JSON.stringify(categories));
   }, [categories, defaultCategories]);
 
+  // Manage browser history popstate to allow physical back-button to close active profile modals
+  useEffect(() => {
+    let pushed = false;
+    const handlePopState = () => {
+      if (selectedProfileStudent || selectedProfileBook) {
+        setSelectedProfileStudent(null);
+        setSelectedProfileBook(null);
+      }
+    };
+
+    if (selectedProfileStudent || selectedProfileBook) {
+      window.history.pushState({ modalOpen: "profile-modal" }, "");
+      pushed = true;
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (pushed && !(selectedProfileStudent || selectedProfileBook)) {
+        if (window.history.state?.modalOpen === "profile-modal") {
+          window.history.back();
+        }
+      }
+    };
+  }, [selectedProfileStudent, selectedProfileBook]);
+
   // Prepopulate security config and benchmark elapsed search times
   useEffect(() => {
     if (activeTab === 'security') {
@@ -715,8 +741,8 @@ export default function LibrarianModule({
     // Type checking and verification input
     if (requireInput && confirmInput.trim().toUpperCase() !== requireInput.trim().toUpperCase()) {
       setAlertOverlay({
-        title: "Validation Defect",
-        message: `Please enter '${requireInput}' exactly to authorize this destructive administrative operation.`,
+        title: "Verification Required",
+        message: `Please enter '${requireInput}' exactly to authorize this administrative operation.`,
         type: 'error'
       });
       return;
@@ -729,32 +755,32 @@ export default function LibrarianModule({
       if (type === 'delete-book' && typeof targetId === 'string') {
         onDeleteBook(targetId);
         setAlertOverlay({
-          title: "Deletion Completed",
-          message: "The selected academic book asset record has been completely expunged from database files and indexing metrics.",
+          title: "Book Deleted Successfully",
+          message: "The selected book record has been successfully deleted from the library catalog.",
           type: 'success'
         });
       } else if (type === 'delete-selected-books' && Array.isArray(targetId)) {
         onDeleteBooksBulk(targetId);
         setSelectedBookIds([]);
         setAlertOverlay({
-          title: "Bulk Deletion Completed",
-          message: `Successfully removed ${targetId.length} book records from library database registers.`,
+          title: "Selected Books Deleted",
+          message: `Successfully deleted ${targetId.length} book records from the catalog.`,
           type: 'success'
         });
       } else if (type === 'clear-books') {
         onClearInventory();
         setSelectedBookIds([]);
         setAlertOverlay({
-          title: "Entire Catalog Cleared",
-          message: "All library book accounts, accession slots, and shelf allocation entries have been entirely erased.",
+          title: "Catalog Cleared",
+          message: "All books and shelf allocation entries have been successfully deleted from the catalog.",
           type: 'success'
         });
       } else if (type === 'delete-student' && typeof targetId === 'string') {
         const success = await onDeleteStudent(targetId);
         if (success) {
           setAlertOverlay({
-            title: "Student Deleted",
-            message: "Student registration credentials and portfolio logs have been permanently deleted from school registers.",
+            title: "Student Deleted Successfully",
+            message: "Student details have been successfully deleted from the school records.",
             type: 'success'
           });
         }
@@ -763,8 +789,8 @@ export default function LibrarianModule({
         if (success) {
           setSelectedStudentIds([]);
           setAlertOverlay({
-            title: "Bulk Roster Removal Success",
-            message: `Successfully deleted ${targetId.length} selected student registration accounts.`,
+            title: "Selected Students Deleted",
+            message: `Successfully deleted ${targetId.length} student records from the school records.`,
             type: 'success'
           });
         }
@@ -773,8 +799,8 @@ export default function LibrarianModule({
         if (success) {
           setSelectedStudentIds([]);
           setAlertOverlay({
-            title: "Registry Purged Completely",
-            message: "Every student account record, roll history, and passcode registration has been successfully cleared.",
+            title: "Student Roster Cleared",
+            message: "All student details and accounts have been successfully cleared from the system.",
             type: 'success'
           });
         }
@@ -792,8 +818,8 @@ export default function LibrarianModule({
       } else if (type === 'reset-database') {
         onResetDatabase?.();
         setAlertOverlay({
-          title: "Enterprise Reseed Completed",
-          message: "The library portal database was successfully factory reset to PM SHRI Bihar State government standard baseline parameters.",
+          title: "System Database Reset Completed",
+          message: "The library portal database was successfully reset to school standard baseline records.",
           type: 'success'
         });
         fetchDbInspectorStats();
@@ -821,8 +847,8 @@ export default function LibrarianModule({
       }
     } catch (err: any) {
       setAlertOverlay({
-        title: "Action Defect Error",
-        message: err.message || "An unexpected error occurred during database action invocation.",
+        title: "Operation Failed",
+        message: err.message || "An unexpected error occurred. Please try again.",
         type: 'error'
       });
     }
@@ -6713,10 +6739,10 @@ export default function LibrarianModule({
                 </div>
                 <button 
                   onClick={() => setSelectedProfileStudent(null)}
-                  className="w-8 h-8 rounded-full hover:bg-emerald-990 flex items-center justify-center text-emerald-200 hover:text-white transition-all cursor-pointer font-bold select-none"
-                  title="Close Modal"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 hover:text-white transition-all cursor-pointer font-extrabold text-xs select-none border border-emerald-800/50"
+                  title="Go Back"
                 >
-                  ✕
+                  <span>← {currentLang === 'HI' ? "वापस जाएं" : "Back to List"}</span>
                 </button>
               </div>
 
@@ -6977,9 +7003,9 @@ export default function LibrarianModule({
                 <button
                   type="button"
                   onClick={() => setSelectedProfileStudent(null)}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded shadow transition-all cursor-pointer select-none font-sans"
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded shadow transition-all cursor-pointer select-none font-sans flex items-center gap-1.5"
                 >
-                  Close Student History Register
+                  <span>← {currentLang === 'HI' ? "छात्र सूची पर वापस जाएं" : "Back to Student List"}</span>
                 </button>
               </div>
 

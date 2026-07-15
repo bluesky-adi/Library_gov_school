@@ -418,6 +418,8 @@ let requestsCache: any[] | null = null;
 let issueLogsCache: any[] | null = null;
 let auditLogsCache: any[] | null = null;
 let studyMaterialsCache: any[] | null = null;
+let feedbacksCache: any[] | null = null;
+let galleryCache: any[] | null = null;
 
 // Local File Helper functions to operate safely with concurrency
 function readLocalFile<T>(filePath: string): T[] {
@@ -427,6 +429,8 @@ function readLocalFile<T>(filePath: string): T[] {
   if (filePath === ISSUE_LOGS_FILE && issueLogsCache) return issueLogsCache as T[];
   if (filePath === AUDIT_LOGS_FILE && auditLogsCache) return auditLogsCache as T[];
   if (filePath === STUDY_MATERIALS_FILE && studyMaterialsCache) return studyMaterialsCache as T[];
+  if (filePath === FEEDBACK_FILE && feedbacksCache) return feedbacksCache as T[];
+  if (filePath === GALLERY_FILE && galleryCache) return galleryCache as T[];
 
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -437,6 +441,8 @@ function readLocalFile<T>(filePath: string): T[] {
     if (filePath === ISSUE_LOGS_FILE) issueLogsCache = parsed;
     if (filePath === AUDIT_LOGS_FILE) auditLogsCache = parsed;
     if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = parsed;
+    if (filePath === FEEDBACK_FILE) feedbacksCache = parsed;
+    if (filePath === GALLERY_FILE) galleryCache = parsed;
     return parsed;
   } catch (err) {
     return [];
@@ -450,6 +456,8 @@ function writeLocalFile<T>(filePath: string, data: T[]): void {
   if (filePath === ISSUE_LOGS_FILE) issueLogsCache = data;
   if (filePath === AUDIT_LOGS_FILE) auditLogsCache = data;
   if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = data;
+  if (filePath === FEEDBACK_FILE) feedbacksCache = data;
+  if (filePath === GALLERY_FILE) galleryCache = data;
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
@@ -461,11 +469,17 @@ export const dbService = {
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
-    if (isConnectedToMongo) {
-      return (await MongoBook.find().lean()) as Book[];
-    } else {
-      return readLocalFile<Book>(BOOKS_FILE);
+    if (booksCache) {
+      return booksCache;
     }
+    let list: Book[];
+    if (isConnectedToMongo) {
+      list = (await MongoBook.find().lean()) as Book[];
+    } else {
+      list = readLocalFile<Book>(BOOKS_FILE);
+    }
+    booksCache = list;
+    return list;
   },
   async getBooksOld(): Promise<Book[]> {
     let books: Book[];
@@ -616,6 +630,7 @@ export const dbService = {
 
     if (isConnectedToMongo) {
       await MongoBook.findOneAndUpdate({ bookId: book.bookId }, book, { upsert: true, new: true });
+      booksCache = null;
       return book;
     } else {
       const books = readLocalFile<Book>(BOOKS_FILE);
@@ -626,6 +641,7 @@ export const dbService = {
         books.unshift(book);
       }
       writeLocalFile(BOOKS_FILE, books);
+      booksCache = null;
       return book;
     }
   },
@@ -726,6 +742,7 @@ export const dbService = {
       writeLocalFile(BOOKS_FILE, books);
     }
 
+    booksCache = null;
     await this.updateImportStats(booksToInsert.length);
     return { saved: booksToInsert, skippedCount, skippedRows };
   },
@@ -738,26 +755,21 @@ export const dbService = {
     let issueLogsCount = 0;
     let activeIssuedCount = 0;
 
-    if (isConnectedToMongo) {
-      try {
-        booksCount = await MongoBook.countDocuments();
-        studentsCount = await MongoStudent.countDocuments();
-        requestsCount = await MongoBorrowRequest.countDocuments();
-        issueLogsCount = await MongoBookIssueLog.countDocuments();
-        activeIssuedCount = await MongoBookIssueLog.countDocuments({ status: 'Issued' });
-      } catch (err) {
-        mongoConnected = false;
-      }
-    }
-    
-    // Fallback or local file count
-    if (!mongoConnected) {
-      booksCount = readLocalFile<any>(BOOKS_FILE).length;
-      studentsCount = readLocalFile<any>(STUDENTS_FILE).length;
-      requestsCount = readLocalFile<any>(REQUESTS_FILE).length;
-      const logsList = readLocalFile<any>(ISSUE_LOGS_FILE);
+    try {
+      const bks = await this.getBooks();
+      booksCount = bks.length;
+
+      const studs = await this.getStudents();
+      studentsCount = studs.length;
+
+      const reqs = await this.getBorrowRequests();
+      requestsCount = reqs.length;
+
+      const logsList = await this.getIssueLogs();
       issueLogsCount = logsList.length;
-      activeIssuedCount = logsList.filter((l: any) => l.status === 'Issued').length;
+      activeIssuedCount = logsList.filter(l => l.status === 'Issued').length;
+    } catch (err) {
+      mongoConnected = false;
     }
 
     // Load last import stats
@@ -800,6 +812,7 @@ export const dbService = {
   },
 
   async deleteBook(id: string): Promise<boolean> {
+    booksCache = null;
     if (isConnectedToMongo) {
       const res = await MongoBook.deleteOne({ bookId: id });
       return res.deletedCount > 0;
@@ -815,6 +828,7 @@ export const dbService = {
   },
 
   async deleteBooksBulk(ids: string[]): Promise<number> {
+    booksCache = null;
     if (isConnectedToMongo) {
       const res = await MongoBook.deleteMany({ bookId: { $in: ids } });
       return res.deletedCount || 0;
@@ -828,6 +842,7 @@ export const dbService = {
   },
 
   async clearBooksInventory(): Promise<number> {
+    booksCache = null;
     if (isConnectedToMongo) {
       const res = await MongoBook.deleteMany({});
       return res.deletedCount || 0;
@@ -841,6 +856,9 @@ export const dbService = {
 
   // STUDENTS
   async getStudents(): Promise<Student[]> {
+    if (studentsCache) {
+      return studentsCache;
+    }
     let list: Student[] = [];
     if (isConnectedToMongo) {
       list = (await MongoStudent.find().lean()) as any[];
@@ -859,6 +877,7 @@ export const dbService = {
     if (modified && !isConnectedToMongo) {
       writeLocalFile(STUDENTS_FILE, mapped);
     }
+    studentsCache = mapped;
     return mapped;
   },
 
@@ -881,6 +900,7 @@ export const dbService = {
         throw new Error(`Data Integrity Guard: A student is already registered with Student ID "${genId}" in Class ${student.class}-${student.section}. Duplicate rolls are prohibited.`);
       }
       await MongoStudent.findOneAndUpdate({ studentId: genId }, student, { upsert: true, new: true });
+      studentsCache = null;
       return student;
     } else {
       const studentsList = readLocalFile<Student>(STUDENTS_FILE);
@@ -895,11 +915,13 @@ export const dbService = {
         studentsList.unshift(student);
       }
       writeLocalFile(STUDENTS_FILE, studentsList);
+      studentsCache = null;
       return student;
     }
   },
 
   async deleteStudent(studentId: string): Promise<boolean> {
+    studentsCache = null;
     if (isConnectedToMongo) {
       const res = await MongoStudent.deleteOne({ studentId });
       return res.deletedCount > 0;
@@ -915,6 +937,7 @@ export const dbService = {
   },
 
   async deleteStudentsBulk(ids: string[]): Promise<number> {
+    studentsCache = null;
     if (isConnectedToMongo) {
       const res = await MongoStudent.deleteMany({ studentId: { $in: ids } });
       return res.deletedCount || 0;
@@ -928,6 +951,7 @@ export const dbService = {
   },
 
   async clearStudentsRegistry(): Promise<number> {
+    studentsCache = null;
     if (isConnectedToMongo) {
       const res = await MongoStudent.deleteMany({});
       return res.deletedCount || 0;
@@ -989,15 +1013,23 @@ export const dbService = {
 
   // REQUESTS (BORROW)
   async getBorrowRequests(): Promise<BorrowRequest[]> {
-    if (isConnectedToMongo) {
-      return (await MongoBorrowRequest.find().lean()) as any[];
+    if (requestsCache) {
+      return requestsCache;
     }
-    return readLocalFile<BorrowRequest>(REQUESTS_FILE);
+    let list: BorrowRequest[];
+    if (isConnectedToMongo) {
+      list = (await MongoBorrowRequest.find().lean()) as any[];
+    } else {
+      list = readLocalFile<BorrowRequest>(REQUESTS_FILE);
+    }
+    requestsCache = list;
+    return list;
   },
 
   async saveBorrowRequest(req: BorrowRequest): Promise<BorrowRequest> {
     if (isConnectedToMongo) {
       await MongoBorrowRequest.findOneAndUpdate({ id: req.id }, req, { upsert: true, new: true });
+      requestsCache = null;
       return req;
     } else {
       const requests = readLocalFile<BorrowRequest>(REQUESTS_FILE);
@@ -1008,6 +1040,7 @@ export const dbService = {
         requests.unshift(req);
       }
       writeLocalFile(REQUESTS_FILE, requests);
+      requestsCache = null;
       return req;
     }
   },
@@ -1015,6 +1048,7 @@ export const dbService = {
   async updateBorrowRequestStatus(id: string, status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Hold'): Promise<BorrowRequest | null> {
     if (isConnectedToMongo) {
       const req = await MongoBorrowRequest.findOneAndUpdate({ id }, { status }, { new: true });
+      requestsCache = null;
       return req ? (req.toObject() as any) : null;
     } else {
       const requests = readLocalFile<BorrowRequest>(REQUESTS_FILE);
@@ -1022,6 +1056,7 @@ export const dbService = {
       if (idx !== -1) {
         requests[idx].status = status;
         writeLocalFile(REQUESTS_FILE, requests);
+        requestsCache = null;
         return requests[idx];
       }
       return null;
@@ -1030,15 +1065,24 @@ export const dbService = {
 
   // BOOK ISSUE LOGS (outstanding / history)
   async getIssueLogs(): Promise<BookIssueLog[]> {
-    if (isConnectedToMongo) {
-      return (await MongoBookIssueLog.find().lean()) as any[];
+    if (issueLogsCache) {
+      return issueLogsCache;
     }
-    return readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
+    let list: BookIssueLog[];
+    if (isConnectedToMongo) {
+      list = (await MongoBookIssueLog.find().lean()) as any[];
+    } else {
+      list = readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
+    }
+    issueLogsCache = list;
+    return list;
   },
 
   async saveIssueLog(log: BookIssueLog): Promise<BookIssueLog> {
     if (isConnectedToMongo) {
       await MongoBookIssueLog.findOneAndUpdate({ id: log.id }, log, { upsert: true, new: true });
+      issueLogsCache = null;
+      booksCache = null; // Reconciles copies too!
       return log;
     } else {
       const lgs = readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
@@ -1049,6 +1093,8 @@ export const dbService = {
         lgs.unshift(log);
       }
       writeLocalFile(ISSUE_LOGS_FILE, lgs);
+      issueLogsCache = null;
+      booksCache = null; // Reconciles copies too!
       return log;
     }
   },
@@ -1121,6 +1167,16 @@ export const dbService = {
       writeLocalFile(REQUESTS_FILE, requests);
       writeLocalFile(ISSUE_LOGS_FILE, issueLogs);
     }
+
+    booksCache = null;
+    studentsCache = null;
+    requestsCache = null;
+    issueLogsCache = null;
+    auditLogsCache = null;
+    studyMaterialsCache = null;
+    feedbacksCache = null;
+    galleryCache = null;
+
     return true;
   },
 
@@ -1159,15 +1215,23 @@ export const dbService = {
   },
 
   async getStudyMaterials(): Promise<any[]> {
-    if (isConnectedToMongo) {
-      return (await MongoStudyMaterial.find().lean()) as any[];
+    if (studyMaterialsCache) {
+      return studyMaterialsCache;
     }
-    return readLocalFile<any>(STUDY_MATERIALS_FILE);
+    let list: any[];
+    if (isConnectedToMongo) {
+      list = (await MongoStudyMaterial.find().lean()) as any[];
+    } else {
+      list = readLocalFile<any>(STUDY_MATERIALS_FILE);
+    }
+    studyMaterialsCache = list;
+    return list;
   },
 
   async saveStudyMaterial(material: any): Promise<any> {
     if (isConnectedToMongo) {
       await MongoStudyMaterial.findOneAndUpdate({ id: material.id }, material, { upsert: true, new: true });
+      studyMaterialsCache = null;
       return material;
     } else {
       const list = readLocalFile<any>(STUDY_MATERIALS_FILE);
@@ -1178,6 +1242,7 @@ export const dbService = {
         list.unshift(material);
       }
       writeLocalFile(STUDY_MATERIALS_FILE, list);
+      studyMaterialsCache = null;
       return material;
     }
   },
@@ -1185,12 +1250,14 @@ export const dbService = {
   async deleteStudyMaterial(id: string): Promise<boolean> {
     if (isConnectedToMongo) {
       const res = await MongoStudyMaterial.deleteOne({ id });
+      studyMaterialsCache = null;
       return res.deletedCount > 0;
     } else {
       const list = readLocalFile<any>(STUDY_MATERIALS_FILE);
       const filtered = list.filter(m => m.id !== id);
       if (filtered.length !== list.length) {
         writeLocalFile(STUDY_MATERIALS_FILE, filtered);
+        studyMaterialsCache = null;
         return true;
       }
       return false;
@@ -1198,15 +1265,23 @@ export const dbService = {
   },
 
   async getFeedbacks(): Promise<any[]> {
-    if (isConnectedToMongo) {
-      return (await MongoFeedback.find().lean()) as any[];
+    if (feedbacksCache) {
+      return feedbacksCache;
     }
-    return readLocalFile<any>(FEEDBACK_FILE);
+    let list: any[];
+    if (isConnectedToMongo) {
+      list = (await MongoFeedback.find().lean()) as any[];
+    } else {
+      list = readLocalFile<any>(FEEDBACK_FILE);
+    }
+    feedbacksCache = list;
+    return list;
   },
 
   async saveFeedback(feedback: any): Promise<any> {
     if (isConnectedToMongo) {
       await MongoFeedback.findOneAndUpdate({ id: feedback.id }, feedback, { upsert: true, new: true });
+      feedbacksCache = null;
       return feedback;
     } else {
       const list = readLocalFile<any>(FEEDBACK_FILE);
@@ -1217,6 +1292,7 @@ export const dbService = {
         list.unshift(feedback);
       }
       writeLocalFile(FEEDBACK_FILE, list);
+      feedbacksCache = null;
       return feedback;
     }
   },
@@ -1224,12 +1300,14 @@ export const dbService = {
   async deleteFeedback(id: string): Promise<boolean> {
     if (isConnectedToMongo) {
       const res = await MongoFeedback.deleteOne({ id });
+      feedbacksCache = null;
       return res.deletedCount > 0;
     } else {
       const list = readLocalFile<any>(FEEDBACK_FILE);
       const filtered = list.filter(f => f.id !== id);
       if (filtered.length !== list.length) {
         writeLocalFile(FEEDBACK_FILE, filtered);
+        feedbacksCache = null;
         return true;
       }
       return false;
@@ -1237,11 +1315,18 @@ export const dbService = {
   },
 
   async getGalleryImages(): Promise<any[]> {
-    if (isConnectedToMongo) {
-      return (await MongoGalleryImage.find().sort({ order: 1 }).lean()) as any[];
+    if (galleryCache) {
+      return galleryCache;
     }
-    const list = readLocalFile<any>(GALLERY_FILE);
-    return list.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+    let list: any[];
+    if (isConnectedToMongo) {
+      list = (await MongoGalleryImage.find().sort({ order: 1 }).lean()) as any[];
+    } else {
+      const rawList = readLocalFile<any>(GALLERY_FILE);
+      list = rawList.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+    }
+    galleryCache = list;
+    return list;
   },
 
   async saveGalleryImages(images: any[]): Promise<any[]> {
@@ -1250,9 +1335,11 @@ export const dbService = {
       if (images.length > 0) {
         await MongoGalleryImage.insertMany(images);
       }
+      galleryCache = null;
       return images;
     } else {
       writeLocalFile(GALLERY_FILE, images);
+      galleryCache = null;
       return images;
     }
   }
