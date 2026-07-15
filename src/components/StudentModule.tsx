@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial } from '../types';
 import { GoogleBookCover } from './PublicHome';
-import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle } from 'lucide-react';
+import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
@@ -62,7 +62,7 @@ interface StudentModuleProps {
   issueLogs: BookIssueLog[];
   loggedInStudent: Student;
   studyMaterials?: StudyMaterial[];
-  onAddRequest: (req: BorrowRequest) => void;
+  onAddRequest: (req: BorrowRequest) => Promise<{ success: boolean; error?: string }>;
   onCancelRequest: (id: string) => Promise<boolean>;
   currentLang: 'EN' | 'HI';
 }
@@ -88,6 +88,7 @@ export default function StudentModule({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [requestingBook, setRequestingBook] = useState<Book | null>(null);
   const [requestComment, setRequestComment] = useState<string>('');
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState<boolean>(false);
 
   // Student Feedback States inside StudentModule Dashboard
   const [myReview, setMyReview] = useState<any | null>(null);
@@ -415,9 +416,10 @@ export default function StudentModule({
     setRequestComment('');
   };
 
-  const submitRequestWithComment = () => {
-    if (!requestingBook) return;
+  const submitRequestWithComment = async () => {
+    if (!requestingBook || isSubmittingRequest) return;
 
+    setIsSubmittingRequest(true);
     const newReq: BorrowRequest = {
       id: `RQ-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`,
       studentName: loggedInStudent.name,
@@ -432,11 +434,19 @@ export default function StudentModule({
       comment: requestComment.trim().slice(0, 200) || undefined
     };
 
-    onAddRequest(newReq);
-    setSuccessMessage(t.requestedSuccess);
-    setTimeout(() => setSuccessMessage(null), 5000);
-    setRequestingBook(null);
-    setRequestComment('');
+    const result = await onAddRequest(newReq);
+    setIsSubmittingRequest(false);
+    if (result && result.success) {
+      setSuccessMessage(t.requestedSuccess);
+      setTimeout(() => setSuccessMessage(null), 5000);
+      setRequestingBook(null);
+      setRequestComment('');
+    } else {
+      alert(currentLang === 'EN' 
+        ? `Error submitting request: ${result?.error || "Unknown server error"}`
+        : `अनुरोध सबमिट करने में विफलता: ${result?.error || "अंतिम डेटाबेस त्रुटि"}`
+      );
+    }
   };
 
   return (
@@ -1356,9 +1366,21 @@ export default function StudentModule({
               <button
                 type="button"
                 onClick={submitRequestWithComment}
-                className="px-4 py-2 bg-[#0f172a] hover:bg-slate-800 text-white font-black text-xs rounded-lg transition-all cursor-pointer"
+                disabled={isSubmittingRequest}
+                className={`px-4 py-2 text-white font-black text-xs rounded-lg transition-all flex items-center gap-2 ${
+                  isSubmittingRequest
+                    ? 'bg-slate-500 cursor-not-allowed opacity-75'
+                    : 'bg-[#0f172a] hover:bg-slate-800 cursor-pointer'
+                }`}
               >
-                {currentLang === 'EN' ? "Submit Borrow Request" : "अनुरोध सबमिट करें"}
+                {isSubmittingRequest && (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                )}
+                <span>
+                  {isSubmittingRequest
+                    ? (currentLang === 'EN' ? "Submitting..." : "सबमिट हो रहा है...")
+                    : (currentLang === 'EN' ? "Submit Borrow Request" : "अनुरोध सबमिट करें")}
+                </span>
               </button>
             </div>
           </div>

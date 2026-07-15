@@ -77,11 +77,11 @@ interface LibrarianModuleProps {
   onDeleteBook: (bookId: string) => void;
   onDeleteBooksBulk: (ids: string[]) => void;
   onClearInventory: () => void;
-  onApproveRequest: (id: string, dueDate?: string) => void;
-  onRejectRequest: (id: string) => void;
-  onHoldRequest?: (id: string) => void;
-  onCancelRequest?: (id: string) => void;
-  onReturnBook: (logId: string) => void;
+  onApproveRequest: (id: string, dueDate?: string) => Promise<{ success: boolean; error?: string } | void>;
+  onRejectRequest: (id: string) => Promise<{ success: boolean; error?: string } | void>;
+  onHoldRequest?: (id: string) => Promise<{ success: boolean; error?: string } | void>;
+  onCancelRequest?: (id: string) => any;
+  onReturnBook: (logId: string) => Promise<{ success: boolean; error?: string } | void>;
   onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
   onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
   onAddRequest: (req: BorrowRequest) => void;
@@ -171,6 +171,11 @@ export default function LibrarianModule({
   const [requestSearch, setRequestSearch] = useState<string>('');
   const [materialSearch, setMaterialSearch] = useState<string>('');
   const [feedbackSearch, setFeedbackSearch] = useState<string>('');
+  const [isSubmittingAction, setIsSubmittingAction] = useState<boolean>(false);
+  const [circSearchQuery, setCircSearchQuery] = useState<string>('');
+  const [circFilterClass, setCircFilterClass] = useState<string>('');
+  const [circFilterSection, setCircFilterSection] = useState<string>('');
+  const [circFilterPreset, setCircFilterPreset] = useState<'all' | 'pending' | 'active' | 'overdue' | 'returned'>('pending');
 
   // Memoized Universal Search results mapping matching books, students, and issue logs
   const universalResults = useMemo(() => {
@@ -233,6 +238,9 @@ export default function LibrarianModule({
   const [booksPage, setBooksPage] = useState<number>(1);
   const [studentsPage, setStudentsPage] = useState<number>(1);
   const [activeLoansPage, setActiveLoansPage] = useState<number>(1);
+  const [circPendingPage, setCircPendingPage] = useState<number>(1);
+  const [circOverduePage, setCircOverduePage] = useState<number>(1);
+  const [circReturnedPage, setCircReturnedPage] = useState<number>(1);
 
   // Infinite scroll dynamic row limits for performance with very large datasets
   const [visibleBooksCount, setVisibleBooksCount] = useState<number>(30);
@@ -596,7 +604,7 @@ export default function LibrarianModule({
 
   // Custom high-fidelity non-blocking interactive overlay states
   const [confirmModal, setConfirmModal] = useState<{
-    type: 'delete-book' | 'delete-selected-books' | 'clear-books' | 'delete-student' | 'delete-selected-students' | 'clear-students' | 'restore-database' | 'reset-database';
+    type: 'delete-book' | 'delete-selected-books' | 'clear-books' | 'delete-student' | 'delete-selected-students' | 'clear-students' | 'restore-database' | 'reset-database' | 'return-book';
     title: string;
     message: string;
     confirmLabel: string;
@@ -789,6 +797,27 @@ export default function LibrarianModule({
           type: 'success'
         });
         fetchDbInspectorStats();
+      } else if (type === 'return-book' && typeof targetId === 'string') {
+        setIsSubmittingAction(true);
+        const result = await onReturnBook(targetId);
+        setIsSubmittingAction(false);
+        if (result && (result as any).success) {
+          setAlertOverlay({
+            title: currentLang === 'EN' ? "Book Returned" : "पुस्तक प्राप्त हुई",
+            message: currentLang === 'EN'
+              ? "The selected book has been successfully returned to the shelves and inventory counts have been replenished."
+              : "चयनित पुस्तक सफलतापूर्वक अलमारियों में वापस आ गई है और स्टॉक अपडेट हो गया है।",
+            type: 'success'
+          });
+        } else {
+          setAlertOverlay({
+            title: "Check-in Failed",
+            message: currentLang === 'EN'
+              ? `Error performing check-in: ${(result as any)?.error || "Server error"}`
+              : `चेक-इन करने में त्रुटि: ${(result as any)?.error || "सर्वर त्रुटि"}`,
+            type: 'error'
+          });
+        }
       }
     } catch (err: any) {
       setAlertOverlay({
@@ -1061,16 +1090,27 @@ export default function LibrarianModule({
     return diffTime > 0 ? Math.ceil(diffTime / (1000 * 60 * 60 * 24)) : 0;
   };
 
-  // Resolve Student demographic particulars from roll number, class and section
-  const getStudentProfile = (rollNumber: number, studentClass?: string, studentSection?: string) => {
+  // Resolve Student demographic particulars from roll number, class and section safely
+  const getStudentProfile = (rollNumber: any, studentClass?: string, studentSection?: string) => {
+    const cleanClass = (cls: any) => String(cls || '').replace(/\D/g, '');
+    const cleanSection = (sec: any) => String(sec || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+    
     const s = students.find(stud => {
+      const studRoll = Number(stud.rollNumber);
+      const targetRoll = Number(rollNumber);
+      if (studRoll !== targetRoll) return false;
+      
       if (studentClass && studentSection) {
-        return stud.rollNumber === rollNumber && 
-               String(stud.class).trim().toLowerCase() === String(studentClass).trim().toLowerCase() && 
-               String(stud.section).trim().toLowerCase() === String(studentSection).trim().toLowerCase();
+        const sClass = cleanClass(stud.class);
+        const tClass = cleanClass(studentClass);
+        const sSec = cleanSection(stud.section);
+        const tSec = cleanSection(studentSection);
+        if (sClass && tClass && sClass !== tClass) return false;
+        if (sSec && tSec && sSec !== tSec) return false;
       }
-      return stud.rollNumber === rollNumber;
+      return true;
     });
+
     return {
       name: s?.name || "Student Reader",
       class: s?.class || studentClass || "10",
@@ -1126,6 +1166,119 @@ export default function LibrarianModule({
   const overdueLogs = useMemo(() => {
     return activeLoans.filter(log => isOverdue(log.dueDate));
   }, [activeLoans]);
+
+  // Contextual circulation filtered lists for Requests/Desk tab
+  const filteredRequestsList = useMemo(() => {
+    let list = requests.filter(r => r.status === 'Pending');
+
+    if (circFilterClass) {
+      list = list.filter(r => String(r.class || '').trim() === circFilterClass.trim());
+    }
+    if (circFilterSection) {
+      list = list.filter(r => String(r.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
+    }
+
+    if (circSearchQuery.trim()) {
+      const q = circSearchQuery.toLowerCase().trim();
+      list = list.filter(r => {
+        const bk = books.find(b => b.bookId === r.bookId);
+        const nameStr = (r.studentName || "").toLowerCase();
+        const rollStr = String(r.rollNumber || "").toLowerCase();
+        const classStr = (r.class || "").toLowerCase();
+        const sectionStr = (r.section || "").toLowerCase();
+        const titleStr = (r.bookName || "").toLowerCase();
+        const idStr = (r.id || "").toLowerCase();
+
+        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
+        const bookMatch = titleStr.includes(q) || (r.bookId || "").toLowerCase().includes(q) || (bk && (
+          (bk.bookNumber || "").toLowerCase().includes(q) ||
+          (bk.accessionNumber || "").toLowerCase().includes(q) ||
+          (bk.callNumber || "").toLowerCase().includes(q) ||
+          (bk.author || "").toLowerCase().includes(q) ||
+          (bk.category || "").toLowerCase().includes(q)
+        ));
+
+        return studentMatch || bookMatch || idStr.includes(q);
+      });
+    }
+    return list;
+  }, [requests, books, circFilterClass, circFilterSection, circSearchQuery]);
+
+  const filteredActiveLoansList = useMemo(() => {
+    let list = issueLogs.filter(log => log.status === 'Issued');
+
+    if (circFilterClass) {
+      list = list.filter(log => String(log.class || '').trim() === circFilterClass.trim());
+    }
+    if (circFilterSection) {
+      list = list.filter(log => String(log.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
+    }
+
+    if (circSearchQuery.trim()) {
+      const q = circSearchQuery.toLowerCase().trim();
+      list = list.filter(log => {
+        const bk = books.find(b => b.bookId === log.bookId);
+        const nameStr = (log.studentName || "").toLowerCase();
+        const rollStr = String(log.rollNumber || "").toLowerCase();
+        const classStr = (log.class || "").toLowerCase();
+        const sectionStr = (log.section || "").toLowerCase();
+        const titleStr = (log.bookName || "").toLowerCase();
+        const idStr = (log.id || "").toLowerCase();
+
+        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
+        const bookMatch = titleStr.includes(q) || (log.bookId || "").toLowerCase().includes(q) || (bk && (
+          (bk.bookNumber || "").toLowerCase().includes(q) ||
+          (bk.accessionNumber || "").toLowerCase().includes(q) ||
+          (bk.callNumber || "").toLowerCase().includes(q) ||
+          (bk.author || "").toLowerCase().includes(q) ||
+          (bk.category || "").toLowerCase().includes(q)
+        ));
+
+        return studentMatch || bookMatch || idStr.includes(q);
+      });
+    }
+    return list;
+  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery]);
+
+  const filteredOverdueLoansList = useMemo(() => {
+    return filteredActiveLoansList.filter(log => isOverdue(log.dueDate));
+  }, [filteredActiveLoansList]);
+
+  const filteredReturnedLoansList = useMemo(() => {
+    let list = issueLogs.filter(log => log.status === 'Returned');
+
+    if (circFilterClass) {
+      list = list.filter(log => String(log.class || '').trim() === circFilterClass.trim());
+    }
+    if (circFilterSection) {
+      list = list.filter(log => String(log.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
+    }
+
+    if (circSearchQuery.trim()) {
+      const q = circSearchQuery.toLowerCase().trim();
+      list = list.filter(log => {
+        const bk = books.find(b => b.bookId === log.bookId);
+        const nameStr = (log.studentName || "").toLowerCase();
+        const rollStr = String(log.rollNumber || "").toLowerCase();
+        const classStr = (log.class || "").toLowerCase();
+        const sectionStr = (log.section || "").toLowerCase();
+        const titleStr = (log.bookName || "").toLowerCase();
+        const idStr = (log.id || "").toLowerCase();
+
+        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
+        const bookMatch = titleStr.includes(q) || (log.bookId || "").toLowerCase().includes(q) || (bk && (
+          (bk.bookNumber || "").toLowerCase().includes(q) ||
+          (bk.accessionNumber || "").toLowerCase().includes(q) ||
+          (bk.callNumber || "").toLowerCase().includes(q) ||
+          (bk.author || "").toLowerCase().includes(q) ||
+          (bk.category || "").toLowerCase().includes(q)
+        ));
+
+        return studentMatch || bookMatch || idStr.includes(q);
+      });
+    }
+    return list;
+  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery]);
 
   const filteredBooks = useMemo(() => {
     let list = books;
@@ -1250,8 +1403,23 @@ export default function LibrarianModule({
 
   const paginatedLoans = useMemo(() => {
     const startIdx = (activeLoansPage - 1) * 15;
-    return activeLoans.slice(startIdx, startIdx + 15);
-  }, [activeLoans, activeLoansPage]);
+    return filteredActiveLoansList.slice(startIdx, startIdx + 15);
+  }, [filteredActiveLoansList, activeLoansPage]);
+
+  const paginatedCircPending = useMemo(() => {
+    const startIdx = (circPendingPage - 1) * 15;
+    return filteredRequestsList.slice(startIdx, startIdx + 15);
+  }, [filteredRequestsList, circPendingPage]);
+
+  const paginatedCircOverdue = useMemo(() => {
+    const startIdx = (circOverduePage - 1) * 15;
+    return filteredOverdueLoansList.slice(startIdx, startIdx + 15);
+  }, [filteredOverdueLoansList, circOverduePage]);
+
+  const paginatedCircReturned = useMemo(() => {
+    const startIdx = (circReturnedPage - 1) * 15;
+    return filteredReturnedLoansList.slice(startIdx, startIdx + 15);
+  }, [filteredReturnedLoansList, circReturnedPage]);
 
   // Search timing benchmarking hooks
   useEffect(() => {
@@ -1648,6 +1816,58 @@ export default function LibrarianModule({
   const handleExcelStudentsImported = (imported: Student[]) => {
     onImportStudentsExcel(imported);
     alert(currentLang === 'EN' ? `Bulk imported ${imported.length} students successfully!` : `${imported.length} छात्र डेटा सफलतापूर्वक थोक में आयात किया गया!`);
+  };
+
+  const handleApproveAction = async (id: string, dueDate?: string) => {
+    if (isSubmittingAction) return;
+    setIsSubmittingAction(true);
+    const result = await onApproveRequest(id, dueDate);
+    setIsSubmittingAction(false);
+    if (result && (result as any).success) {
+      alert(currentLang === 'EN' ? "Borrow request approved successfully!" : "उधार अनुरोध सफलतापूर्वक स्वीकृत किया गया!");
+    } else {
+      alert(currentLang === 'EN' ? `Approval failed: ${(result as any)?.error || "Server error"}` : `स्वीकृति विफल: ${(result as any)?.error || "सर्वर त्रुटि"}`);
+    }
+  };
+
+  const handleRejectAction = async (id: string) => {
+    if (isSubmittingAction) return;
+    setIsSubmittingAction(true);
+    const result = await onRejectRequest(id);
+    setIsSubmittingAction(false);
+    if (result && (result as any).success) {
+      alert(currentLang === 'EN' ? "Borrow request rejected successfully." : "उधार अनुरोध सफलतापूर्वक खारिज कर दिया गया।");
+    } else {
+      alert(currentLang === 'EN' ? `Rejection failed: ${(result as any)?.error || "Server error"}` : `अस्वीकृति विफल: ${(result as any)?.error || "सर्वर त्रुटि"}`);
+    }
+  };
+
+  const handleHoldAction = async (id: string) => {
+    if (!onHoldRequest) return;
+    if (isSubmittingAction) return;
+    setIsSubmittingAction(true);
+    const result = await onHoldRequest(id);
+    setIsSubmittingAction(false);
+    if (result && (result as any).success) {
+      alert(currentLang === 'EN' ? "Request put on Hold status." : "अनुरोध को होल्ड स्थिति पर रख दिया गया है।");
+    } else {
+      alert(currentLang === 'EN' ? `Hold failed: ${(result as any)?.error || "Server error"}` : `होल्ड विफल: ${(result as any)?.error || "सर्वर त्रुटि"}`);
+    }
+  };
+
+  const handleReturnAction = (logId: string) => {
+    const loan = issueLogs.find(l => l.id === logId);
+    if (!loan) return;
+    
+    setConfirmModal({
+      type: 'return-book',
+      title: currentLang === 'EN' ? 'Confirm Book Return (Check-In)' : 'पुस्तक वापसी की पुष्टि करें',
+      message: currentLang === 'EN'
+        ? `Are you sure you want to check-in the book "${loan.bookName}" (ID: ${loan.bookId}) returned by ${loan.studentName} (Roll #${loan.rollNumber})?`
+        : `क्या आप सुनिश्चित हैं कि आप ${loan.studentName} (रॉल #${loan.rollNumber}) द्वारा लौटाई गई पुस्तक "${loan.bookName}" (ID: ${loan.bookId}) को जमा/चेक-इन करना चाहते हैं?`,
+      confirmLabel: currentLang === 'EN' ? 'Confirm and Check-In' : 'जमा करने की पुष्टि करें',
+      targetId: logId
+    });
   };
 
   const handlePrintAction = () => {
@@ -3218,251 +3438,408 @@ export default function LibrarianModule({
           
           <div className="lg:col-span-8 space-y-6">
             
-            {/* Pending Approvals Pool */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider block border-b border-slate-100 pb-1.5 select-none font-sans">
-                📜 Student Borrow Requests Awaiting Approval
-              </h3>
-
-              <div className="relative select-none">
-                <input
-                  type="text"
-                  placeholder="🔍 Search borrow requests by student, roll, or book title..."
-                  value={requestSearch}
-                  onChange={e => setRequestSearch(e.target.value)}
-                  className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl focus:ring-1 focus:ring-indigo-650 outline-none placeholder-slate-400 dark:placeholder-slate-500 font-medium"
-                />
+            {/* Contextual Circulation Desk Command Bar */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4 font-sans">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
+                    🏫 Circulation Desk & Student Loan Ledger
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PM SHRI Ramdiri +2 High School Library Circulation Workspace</p>
+                </div>
+                {isSubmittingAction && (
+                  <div className="flex items-center gap-1.5 text-xs text-indigo-650 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg border border-indigo-150 dark:border-indigo-900 animate-pulse font-black">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Synchronizing backend transaction...</span>
+                  </div>
+                )}
               </div>
 
-              <div className="divide-y divide-slate-150">
-                {requests.filter(r => {
-                  if (r.status !== 'Pending') return false;
-                  if (!requestSearch.trim()) return true;
-                  const q = requestSearch.toLowerCase().trim();
-                  
-                  // 1. Direct match on request properties
-                  if (
-                    (r.studentName || "").toLowerCase().includes(q) ||
-                    String(r.rollNumber || "").toLowerCase().includes(q) ||
-                    (r.bookName || "").toLowerCase().includes(q) ||
-                    (r.class || "").toLowerCase().includes(q) ||
-                    (r.section || "").toLowerCase().includes(q) ||
-                    (r.bookId || "").toLowerCase().includes(q) ||
-                    (r.id || "").toLowerCase().includes(q)
-                  ) {
-                    return true;
-                  }
+              {/* Contextual Command Bar Search and Filter Form */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div className="md:col-span-6 relative">
+                  <input
+                    type="text"
+                    placeholder="🔍 Search Student (Name, Roll) or Book (Title, Author, Accession #, Book #, Call #, Category)..."
+                    value={circSearchQuery}
+                    onChange={e => {
+                      setCircSearchQuery(e.target.value);
+                      setCircPendingPage(1);
+                      setActiveLoansPage(1);
+                      setCircOverduePage(1);
+                      setCircReturnedPage(1);
+                    }}
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-lg focus:ring-1 focus:ring-indigo-650 outline-none placeholder-slate-400 dark:placeholder-slate-500 font-medium"
+                  />
+                  {circSearchQuery && (
+                    <button
+                      onClick={() => setCircSearchQuery('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
 
-                  // 2. Student details match
-                  const stud = students.find(s => 
-                    s.rollNumber === r.rollNumber && 
-                    String(s.class).toLowerCase() === String(r.class || '').toLowerCase() && 
-                    String(s.section).toLowerCase() === String(r.section || '').toLowerCase()
-                  );
-                  if (stud) {
-                    if (
-                      (stud.name || "").toLowerCase().includes(q) ||
-                      String(stud.rollNumber || "").includes(q) ||
-                      (stud.class || "").toLowerCase().includes(q) ||
-                      (stud.section || "").toLowerCase().includes(q)
-                    ) {
-                      return true;
-                    }
-                  }
+                <div className="md:col-span-3">
+                  <select
+                    value={circFilterClass}
+                    onChange={e => {
+                      setCircFilterClass(e.target.value);
+                      setCircPendingPage(1);
+                      setActiveLoansPage(1);
+                      setCircOverduePage(1);
+                      setCircReturnedPage(1);
+                    }}
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-lg focus:ring-1 focus:ring-indigo-650 outline-none font-bold"
+                  >
+                    <option value="">🏫 Class Filter: All</option>
+                    {['6', '7', '8', '9', '10', '11', '12'].map(cls => (
+                      <option key={cls} value={cls}>Class {cls}</option>
+                    ))}
+                  </select>
+                </div>
 
-                  // 3. Book details match
-                  const bk = books.find(b => b.bookId === r.bookId);
-                  if (bk) {
-                    if (
-                      (bk.bookName || "").toLowerCase().includes(q) ||
-                      (bk.bookNumber || "").toLowerCase().includes(q) ||
-                      (bk.accessionNumber || "").toLowerCase().includes(q) ||
-                      (bk.callNumber || "").toLowerCase().includes(q) ||
-                      (bk.author || "").toLowerCase().includes(q) ||
-                      (bk.category || "").toLowerCase().includes(q)
-                    ) {
-                      return true;
-                    }
-                  }
+                <div className="md:col-span-3">
+                  <select
+                    value={circFilterSection}
+                    onChange={e => {
+                      setCircFilterSection(e.target.value);
+                      setCircPendingPage(1);
+                      setActiveLoansPage(1);
+                      setCircOverduePage(1);
+                      setCircReturnedPage(1);
+                    }}
+                    className="w-full text-xs text-slate-900 dark:text-slate-100 p-2.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-lg focus:ring-1 focus:ring-indigo-650 outline-none font-bold"
+                  >
+                    <option value="">🛡️ Section Filter: All</option>
+                    {['A', 'B', 'C', 'D'].map(sec => (
+                      <option key={sec} value={sec}>Section {sec}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                  return false;
-                }).map(req => {
-                  const currentApproveDate = approvalDates[req.id] || (() => {
-                    const d = new Date();
-                    d.setDate(d.getDate() + 14);
-                    return d.toISOString().split('T')[0];
-                  })();
-                  return (
-                    <div key={req.id} className="py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
-                      <div className="space-y-1 text-slate-900 font-sans">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 dark:text-slate-100">
-                            {highlightText(req.studentName, requestSearch)} (Roll #{highlightText(req.rollNumber, requestSearch)})
-                          </span>
-                          <span className="text-[10px] bg-slate-100 text-slate-800 px-1.5 rounded font-mono border">RQ ID: {highlightText(req.id, requestSearch)}</span>
-                        </div>
-                        <p className="text-slate-650">Requested: <b>{highlightText(req.bookName, requestSearch)}</b></p>
-                        {req.comment && (
-                          <div className="text-[11px] text-amber-700 bg-amber-50 dark:bg-amber-955/40 px-2.5 py-1 rounded border border-amber-100 font-medium italic mt-1 max-w-md">
-                            💡 Student Note: "{req.comment}"
+              {/* Preset Selector Tabs */}
+              <div className="flex flex-wrap gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button
+                  onClick={() => setCircFilterPreset('pending')}
+                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 border cursor-pointer select-none ${
+                    circFilterPreset === 'pending'
+                      ? 'bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-950 text-slate-700 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                  }`}
+                >
+                  <span>📜 Pending Requests</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-sans ${
+                    circFilterPreset === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}>
+                    {filteredRequestsList.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setCircFilterPreset('active')}
+                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 border cursor-pointer select-none ${
+                    circFilterPreset === 'active'
+                      ? 'bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-950 text-slate-700 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                  }`}
+                >
+                  <span>📚 Issued Books</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-sans ${
+                    circFilterPreset === 'active' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}>
+                    {filteredActiveLoansList.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setCircFilterPreset('overdue')}
+                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 border cursor-pointer select-none ${
+                    circFilterPreset === 'overdue'
+                      ? 'bg-red-500 border-red-500 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-950 text-red-600 border-red-100 dark:border-red-955 hover:bg-red-50/50 dark:hover:bg-red-955'
+                  }`}
+                >
+                  <span>⚠️ Overdue Books</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-sans ${
+                    circFilterPreset === 'overdue' ? 'bg-white/20 text-white' : 'bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-105'
+                  }`}>
+                    {filteredOverdueLoansList.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setCircFilterPreset('returned')}
+                  className={`px-3 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 border cursor-pointer select-none ${
+                    circFilterPreset === 'returned'
+                      ? 'bg-slate-900 dark:bg-slate-800 border-slate-900 dark:border-slate-700 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-950 text-slate-700 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'
+                  }`}
+                >
+                  <span>🕒 Returned History</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-sans ${
+                    circFilterPreset === 'returned' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                  }`}>
+                    {filteredReturnedLoansList.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* PRESET VIEW 1: Pending Requests Pool */}
+            {circFilterPreset === 'pending' && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1.5 select-none font-sans">
+                  📜 Borrow Requests Awaiting Approval ({filteredRequestsList.length})
+                </h3>
+
+                <div className="divide-y divide-slate-150 dark:divide-slate-800">
+                  {paginatedCircPending.map(req => {
+                    const currentApproveDate = approvalDates[req.id] || (() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 14);
+                      return d.toISOString().split('T')[0];
+                    })();
+                    return (
+                      <div key={req.id} className="py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
+                        <div className="space-y-1 text-slate-900 font-sans">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 dark:text-slate-100">
+                              {highlightText(req.studentName, circSearchQuery)} (Roll #{highlightText(req.rollNumber, circSearchQuery)})
+                            </span>
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 px-1.5 rounded font-mono border dark:border-slate-700">RQ ID: {highlightText(req.id, circSearchQuery)}</span>
                           </div>
-                        )}
-                        <span className="text-[10px] text-slate-400 font-mono block">Date: {req.requestDate}</span>
-                      </div>
+                           <p className="text-slate-650 dark:text-slate-400">Requested: <b>{highlightText(req.bookName, circSearchQuery)}</b></p>
+                           {req.comment && (
+                             <div className="text-[11px] text-amber-700 bg-amber-50 dark:bg-amber-955/40 px-2.5 py-1 rounded border border-amber-100 dark:border-amber-900/60 font-medium italic mt-1 max-w-md">
+                               💡 Student Note: "{req.comment}"
+                             </div>
+                           )}
+                           <span className="text-[10px] text-slate-400 font-mono block">Date: {req.requestDate}</span>
+                         </div>
 
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-center shrink-0 w-full sm:w-auto">
-                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border p-1 rounded">
-                          <span className="text-[9px] uppercase font-bold text-slate-500 block shrink-0">Due:</span>
-                          <input
-                            type="date"
-                            required
-                            value={currentApproveDate}
-                            onChange={(e) => setApprovalDates(prev => ({ ...prev, [req.id]: e.target.value }))}
-                            className="text-[10px] p-1 font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border rounded outline-none w-28"
-                          />
-                        </div>
+                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-center shrink-0 w-full sm:w-auto">
+                           <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 p-1 rounded">
+                             <span className="text-[9px] uppercase font-bold text-slate-500 block shrink-0">Due:</span>
+                             <input
+                               type="date"
+                               required
+                               value={currentApproveDate}
+                               onChange={(e) => setApprovalDates(prev => ({ ...prev, [req.id]: e.target.value }))}
+                               className="text-[10px] p-1 font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border dark:border-slate-800 rounded outline-none w-28"
+                             />
+                           </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0 font-sans">
-                          <button
-                            onClick={() => setSelectedRequestDetails(req)}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-755 font-bold text-xs rounded border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
-                            title="Verify Student & Book Location Specs"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Verify Details</span>
-                          </button>
-                          <button
-                            onClick={() => onApproveRequest(req.id, currentApproveDate)}
-                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Approve</span>
-                          </button>
-                          <button
-                            onClick={() => onRejectRequest(req.id)}
-                            className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Reject</span>
-                          </button>
-                          {onHoldRequest && (
-                            <button
-                              onClick={() => onHoldRequest(req.id)}
-                              className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-805 font-bold text-xs rounded transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
-                            >
-                              <Clock className="w-3.5 h-3.5 animate-pulse" />
-                              <span>Hold</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                           <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0 font-sans">
+                             <button
+                               onClick={() => setSelectedRequestDetails(req)}
+                               className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-755 dark:text-indigo-300 font-bold text-xs rounded border border-indigo-200 dark:border-indigo-800/60 transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
+                               title="Verify Student & Book Location Specs"
+                             >
+                               <Eye className="w-3.5 h-3.5" />
+                               <span>Verify Details</span>
+                             </button>
+                             <button
+                               disabled={isSubmittingAction}
+                               onClick={() => handleApproveAction(req.id, currentApproveDate)}
+                               className={`px-3 py-1.5 text-white font-bold text-xs rounded transition-all flex items-center gap-1 select-none flex-1 sm:flex-none justify-center ${
+                                 isSubmittingAction ? 'bg-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 cursor-pointer'
+                               }`}
+                             >
+                               <CheckCircle className="w-3.5 h-3.5" />
+                               <span>Approve</span>
+                             </button>
+                             <button
+                               disabled={isSubmittingAction}
+                               onClick={() => handleRejectAction(req.id)}
+                               className={`px-3 py-1.5 text-red-700 font-bold text-xs rounded transition-all flex items-center gap-1 select-none flex-1 sm:flex-none justify-center ${
+                                 isSubmittingAction ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-red-100 hover:bg-red-200 cursor-pointer'
+                               }`}
+                             >
+                               <XCircle className="w-3.5 h-3.5" />
+                               <span>Reject</span>
+                             </button>
+                             {onHoldRequest && (
+                               <button
+                                 disabled={isSubmittingAction}
+                                 onClick={() => handleHoldAction(req.id)}
+                                 className={`px-3 py-1.5 text-amber-805 font-bold text-xs rounded transition-all flex items-center gap-1 select-none flex-1 sm:flex-none justify-center ${
+                                   isSubmittingAction ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-amber-100 hover:bg-amber-200 cursor-pointer'
+                                 }`}
+                               >
+                                 <Clock className="w-3.5 h-3.5" />
+                                 <span>Hold</span>
+                               </button>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })}
 
-                {requests.filter(r => {
-                  if (r.status !== 'Pending') return false;
-                  if (!requestSearch.trim()) return true;
-                  const q = requestSearch.toLowerCase().trim();
-                  
-                  // 1. Direct match on request properties
-                  if (
-                    (r.studentName || "").toLowerCase().includes(q) ||
-                    String(r.rollNumber || "").toLowerCase().includes(q) ||
-                    (r.bookName || "").toLowerCase().includes(q) ||
-                    (r.class || "").toLowerCase().includes(q) ||
-                    (r.section || "").toLowerCase().includes(q) ||
-                    (r.bookId || "").toLowerCase().includes(q) ||
-                    (r.id || "").toLowerCase().includes(q)
-                  ) {
-                    return true;
-                  }
+                   {filteredRequestsList.length === 0 && (
+                     <p className="py-12 text-center text-slate-400 text-xs">No pending requests matched your criteria.</p>
+                   )}
+                 </div>
 
-                  // 2. Student details match
-                  const stud = students.find(s => 
-                    s.rollNumber === r.rollNumber && 
-                    String(s.class).toLowerCase() === String(r.class || '').toLowerCase() && 
-                    String(s.section).toLowerCase() === String(r.section || '').toLowerCase()
-                  );
-                  if (stud) {
-                    if (
-                      (stud.name || "").toLowerCase().includes(q) ||
-                      String(stud.rollNumber || "").includes(q) ||
-                      (stud.class || "").toLowerCase().includes(q) ||
-                      (stud.section || "").toLowerCase().includes(q)
-                    ) {
-                      return true;
-                    }
-                  }
+                 {renderPagination(circPendingPage, filteredRequestsList.length, 15, setCircPendingPage)}
+               </div>
+             )}
 
-                  // 3. Book details match
-                  const bk = books.find(b => b.bookId === r.bookId);
-                  if (bk) {
-                    if (
-                      (bk.bookName || "").toLowerCase().includes(q) ||
-                      (bk.bookNumber || "").toLowerCase().includes(q) ||
-                      (bk.accessionNumber || "").toLowerCase().includes(q) ||
-                      (bk.callNumber || "").toLowerCase().includes(q) ||
-                      (bk.author || "").toLowerCase().includes(q) ||
-                      (bk.category || "").toLowerCase().includes(q)
-                    ) {
-                      return true;
-                    }
-                  }
+             {/* PRESET VIEW 2: Active Issued Loans */}
+             {circFilterPreset === 'active' && (
+               <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
+                 <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1.5 select-none font-sans">
+                   📚 Active Issued Books ({filteredActiveLoansList.length})
+                 </h3>
 
-                  return false;
-                }).length === 0 && (
-                  <p className="py-6 text-center text-slate-400 text-xs">{t.noPenRequests}</p>
-                )}
-              </div>
-            </div>
+                 <div className="divide-y divide-slate-150 dark:divide-slate-800">
+                   {paginatedLoans.map(loan => {
+                     const outDemo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
+                     const isPastDue = isOverdue(loan.dueDate);
+                     return (
+                       <div key={loan.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs animate-fade-in">
+                         <div className="space-y-0.5">
+                           <div className="flex flex-wrap items-center gap-2">
+                             <span className="font-bold text-slate-900 dark:text-slate-100">
+                               {highlightText(loan.studentName, circSearchQuery)} (Roll #{highlightText(loan.rollNumber, circSearchQuery)})
+                             </span>
+                             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1 text-slate-600 dark:text-slate-300 font-bold font-sans">Class {outDemo.class}-{outDemo.section}</span>
+                             <span className="text-[11px] text-slate-500 font-mono">[{highlightText(loan.bookId, circSearchQuery)}]</span>
+                           </div>
+                           <p className="text-slate-650 dark:text-slate-400 font-medium mt-1">Title: <b className="text-slate-805 dark:text-slate-100">{highlightText(loan.bookName, circSearchQuery)}</b></p>
+                           <div className="flex gap-4 mt-0.5">
+                             <span className="text-[10px] text-slate-400 font-mono block">Issued date: {loan.issueDate}</span>
+                             <span className={`text-[10px] font-mono font-bold block ${isPastDue ? 'text-red-500' : 'text-slate-400'}`}>
+                               Due Date: {loan.dueDate} {isPastDue ? `(${getDaysOverdue(loan.dueDate)} Days Overdue!)` : ''}
+                             </span>
+                           </div>
+                         </div>
 
-            {/* Active Loans & Return checks list */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider block border-b border-slate-100 pb-1.5 select-none font-sans">
-                📚 Issued Books List
-              </h3>
+                         <button
+                           disabled={isSubmittingAction}
+                           onClick={() => handleReturnAction(loan.id)}
+                           className={`px-3.5 py-1.5 border text-[10.5px] font-extrabold rounded shadow-sm transition-all flex items-center gap-1 select-none shrink-0 self-start sm:self-center ${
+                             isSubmittingAction
+                               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                               : 'border-slate-200 dark:border-slate-800 text-slate-705 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer'
+                           }`}
+                         >
+                           <span>Check-In Book (Return)</span>
+                         </button>
+                       </div>
+                     );
+                   })}
 
-              <div className="divide-y divide-slate-150">
-                {paginatedLoans.map(loan => {
-                  const outDemo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
-                  const isPastDue = isOverdue(loan.dueDate);
-                  return (
-                    <div key={loan.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs animate-fade-in">
-                      <div className="space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-slate-900 dark:text-slate-100">{loan.studentName} (Roll #{loan.rollNumber})</span>
-                          <span className="text-[10px] bg-slate-100 px-1 text-slate-600 font-bold font-sans">Class {outDemo.class}-{outDemo.section}</span>
-                          <span className="text-[11px] text-slate-500 font-mono">[{loan.bookId}]</span>
-                        </div>
-                        <p className="text-slate-650 font-medium mt-1">Title: <b className="text-slate-805">{loan.bookName}</b></p>
-                        <div className="flex gap-4 mt-0.5">
-                          <span className="text-[10px] text-slate-400 font-mono block">Issued date: {loan.issueDate}</span>
-                          <span className={`text-[10px] font-mono font-bold block ${isPastDue ? 'text-red-500' : 'text-slate-400'}`}>
-                            Due Date: {loan.dueDate} {isPastDue ? `(${getDaysOverdue(loan.dueDate)} Days Overdue!)` : ''}
-                          </span>
-                        </div>
-                      </div>
+                   {filteredActiveLoansList.length === 0 && (
+                     <p className="py-12 text-center text-slate-400 text-xs">No active issued books found.</p>
+                   )}
+                 </div>
 
-                      <button
-                        onClick={() => onReturnBook(loan.id)}
-                        className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-55 text-[10.5px] font-extrabold text-slate-705 rounded shadow-sm transition-all flex items-center gap-1 cursor-pointer shrink-0 self-start sm:self-center select-none"
-                      >
-                        <span>Check-In Book (Return)</span>
-                      </button>
-                    </div>
-                  );
-                })}
+                 {renderPagination(activeLoansPage, filteredActiveLoansList.length, 15, setActiveLoansPage)}
+               </div>
+             )}
 
-                {activeLoans.length === 0 && (
-                  <p className="py-6 text-center text-slate-400 text-xs">0 active loans outstanding.</p>
-                )}
-              </div>
+             {/* PRESET VIEW 3: Overdue Books */}
+             {circFilterPreset === 'overdue' && (
+               <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
+                 <h3 className="text-xs font-black uppercase text-red-600 tracking-wider block border-b border-red-100 dark:border-red-955 pb-1.5 select-none font-sans">
+                   ⚠️ Overdue Books Outstanding ({filteredOverdueLoansList.length})
+                 </h3>
 
-              {renderPagination(activeLoansPage, activeLoans.length, 15, setActiveLoansPage)}
-            </div>
+                 <div className="divide-y divide-slate-150 dark:divide-slate-800">
+                   {paginatedCircOverdue.map(loan => {
+                     const outDemo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
+                     const isPastDue = isOverdue(loan.dueDate);
+                     return (
+                       <div key={loan.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs animate-fade-in">
+                         <div className="space-y-0.5">
+                           <div className="flex flex-wrap items-center gap-2">
+                             <span className="font-bold text-red-600 dark:text-red-400">
+                               {highlightText(loan.studentName, circSearchQuery)} (Roll #{highlightText(loan.rollNumber, circSearchQuery)})
+                             </span>
+                             <span className="text-[10px] bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 font-bold px-1 rounded font-sans">Class {outDemo.class}-{outDemo.section}</span>
+                             <span className="text-[11px] text-slate-500 font-mono">[{highlightText(loan.bookId, circSearchQuery)}]</span>
+                           </div>
+                           <p className="text-slate-650 dark:text-slate-400 font-medium mt-1">Title: <b className="text-slate-805 dark:text-slate-100">{highlightText(loan.bookName, circSearchQuery)}</b></p>
+                           <div className="flex gap-4 mt-0.5">
+                             <span className="text-[10px] text-slate-400 font-mono block">Issued date: {loan.issueDate}</span>
+                             <span className="text-[10px] font-mono font-bold block text-red-500">
+                               Due Date: {loan.dueDate} ({getDaysOverdue(loan.dueDate)} Days Overdue!)
+                             </span>
+                           </div>
+                         </div>
 
-          </div>
+                         <button
+                           disabled={isSubmittingAction}
+                           onClick={() => handleReturnAction(loan.id)}
+                           className={`px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[10.5px] font-extrabold rounded shadow-sm transition-all flex items-center gap-1 select-none shrink-0 self-start sm:self-center ${
+                             isSubmittingAction ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                           }`}
+                         >
+                           <span>Check-In Book (Return)</span>
+                         </button>
+                       </div>
+                     );
+                   })}
+
+                   {filteredOverdueLoansList.length === 0 && (
+                     <p className="py-12 text-center text-slate-400 text-xs">No overdue loans matched your criteria.</p>
+                   )}
+                 </div>
+
+                 {renderPagination(circOverduePage, filteredOverdueLoansList.length, 15, setCircOverduePage)}
+               </div>
+             )}
+
+             {/* PRESET VIEW 4: Completed Returns History */}
+             {circFilterPreset === 'returned' && (
+               <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
+                 <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1.5 select-none font-sans">
+                   🕒 Historical Book Return Receipts ({filteredReturnedLoansList.length})
+                 </h3>
+
+                 <div className="divide-y divide-slate-150 dark:divide-slate-800">
+                   {paginatedCircReturned.map(loan => {
+                     const outDemo = getStudentProfile(loan.rollNumber, loan.class, loan.section);
+                     return (
+                       <div key={loan.id} className="py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs animate-fade-in opacity-80">
+                         <div className="space-y-0.5">
+                           <div className="flex flex-wrap items-center gap-2">
+                             <span className="font-bold text-slate-900 dark:text-slate-100">
+                               {highlightText(loan.studentName, circSearchQuery)} (Roll #{highlightText(loan.rollNumber, circSearchQuery)})
+                             </span>
+                             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1 font-bold font-sans">Class {outDemo.class}-{outDemo.section}</span>
+                             <span className="text-[11px] text-slate-500 font-mono">[{highlightText(loan.bookId, circSearchQuery)}]</span>
+                           </div>
+                           <p className="text-slate-650 dark:text-slate-400 font-medium mt-1">Title: <b className="text-slate-805 dark:text-slate-100">{highlightText(loan.bookName, circSearchQuery)}</b></p>
+                           <div className="flex gap-4 mt-0.5">
+                             <span className="text-[10px] text-slate-400 font-mono block">Issued date: {loan.issueDate}</span>
+                             <span className="text-[10px] text-teal-600 font-bold block font-mono">
+                               Status: Returned on {loan.returnDate || loan.dueDate}
+                             </span>
+                           </div>
+                         </div>
+
+                         <div className="text-[11.5px] bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 px-3 py-1 rounded font-bold border border-teal-100 dark:border-teal-900 select-none">
+                           Checked In Successfully
+                         </div>
+                       </div>
+                     );
+                   })}
+
+                   {filteredReturnedLoansList.length === 0 && (
+                     <p className="py-12 text-center text-slate-400 text-xs">No historical returns matched your criteria.</p>
+                   )}
+                 </div>
+
+                 {renderPagination(circReturnedPage, filteredReturnedLoansList.length, 15, setCircReturnedPage)}
+               </div>
+             )}
+
+           </div>
 
           {/* Dedicated Desk Launchpad Card (4 cols) */}
           <div className="lg:col-span-4 self-start" id="direct-issue-form">

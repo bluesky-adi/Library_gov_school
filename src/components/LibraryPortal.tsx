@@ -26,14 +26,14 @@ interface LibraryPortalProps {
   onDeleteBook: (bookId: string) => void;
   onDeleteBooksBulk: (bookIds: string[]) => void;
   onClearInventory: () => void;
-  onApproveRequest: (id: string, dueDate?: string) => void;
-  onRejectRequest: (id: string) => void;
-  onHoldRequest?: (id: string) => void;
+  onApproveRequest: (id: string, dueDate?: string) => Promise<{ success: boolean; error?: string }>;
+  onRejectRequest: (id: string) => Promise<{ success: boolean; error?: string }>;
+  onHoldRequest?: (id: string) => Promise<{ success: boolean; error?: string }>;
   onCancelRequest: (id: string) => Promise<boolean>;
   studyMaterials?: StudyMaterial[];
   onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
   onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
-  onReturnBook: (logId: string) => void;
+  onReturnBook: (logId: string) => Promise<{ success: boolean; error?: string }>;
   onImportBooksExcel: (imported: Book[]) => void;
   onImportStudentsExcel: (imported: Student[]) => void;
   onAddStudent: (student: Student) => Promise<boolean>;
@@ -43,7 +43,7 @@ interface LibraryPortalProps {
   onClearStudentsRegistry?: () => Promise<boolean>;
   onBackupDatabase?: () => Promise<void>;
   onRestoreDatabase?: (payload: any) => Promise<boolean>;
-  onAddRequest: (req: BorrowRequest) => void;
+  onAddRequest: (req: BorrowRequest) => Promise<{ success: boolean; error?: string }>;
   onTriggerLoginClick: () => void;
   onResetDatabase: () => void;
   loggedInName?: string;

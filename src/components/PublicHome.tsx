@@ -841,7 +841,7 @@ export default function PublicHome({
               </div>
             </div>
           </div>
-        ) : isEditingProfileInline ? (
+        ) : (loggedInRole === 'Librarian' && isEditingProfileInline) ? (
           <form 
             onSubmit={async (e) => {
               e.preventDefault();

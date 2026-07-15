@@ -715,7 +715,7 @@ export default function App() {
   };
 
   // 6. Request a Checkout from Student Catalog
-  const handleAddRequest = async (req: BorrowRequest) => {
+  const handleAddRequest = async (req: BorrowRequest): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch('/api/requests', {
@@ -728,17 +728,19 @@ export default function App() {
       });
       if (resp.ok) {
         await refreshData();
+        return { success: true };
       } else {
         const err = await resp.json();
-        alert(`Request Denied: ${err.error}`);
+        return { success: false, error: err.error || "Request denied." };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Request creation failed:", err);
+      return { success: false, error: err.message || "Network error." };
     }
   };
 
   // 7. Approve a pending Borrow request
-  const handleApproveRequest = async (id: string, dueDate?: string) => {
+  const handleApproveRequest = async (id: string, dueDate?: string): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch(`/api/requests/${id}/approve`, {
@@ -751,17 +753,19 @@ export default function App() {
       });
       if (resp.ok) {
         await refreshData();
+        return { success: true };
       } else {
         const err = await resp.json();
-        alert(`Approval Denied: ${err.error}`);
+        return { success: false, error: err.error || "Approval denied." };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      return { success: false, error: err.message || "Network error." };
     }
   };
 
   // 8. Reject a pending borrow request
-  const handleRejectRequest = async (id: string) => {
+  const handleRejectRequest = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch(`/api/requests/${id}/reject`, {
@@ -772,14 +776,19 @@ export default function App() {
       });
       if (resp.ok) {
         await refreshData();
+        return { success: true };
+      } else {
+        const err = await resp.json();
+        return { success: false, error: err.error || "Rejection failed." };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      return { success: false, error: err.message || "Network error." };
     }
   };
 
   // 8.1 Hold a pending borrow request (Librarian)
-  const handleHoldRequest = async (id: string) => {
+  const handleHoldRequest = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch(`/api/requests/${id}/hold`, {
@@ -790,9 +799,14 @@ export default function App() {
       });
       if (resp.ok) {
         await refreshData();
+        return { success: true };
+      } else {
+        const err = await resp.json();
+        return { success: false, error: err.error || "Hold failed." };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      return { success: false, error: err.message || "Network error." };
     }
   };
 
@@ -869,7 +883,7 @@ export default function App() {
   };
 
   // 9. Process physical Check-In / Book Returns
-  const handleReturnBook = async (logId: string) => {
+  const handleReturnBook = async (logId: string): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
       const resp = await fetch(`/api/issue-logs/${logId}/return`, {
@@ -880,12 +894,14 @@ export default function App() {
       });
       if (resp.ok) {
         await refreshData();
+        return { success: true };
       } else {
         const err = await resp.json();
-        alert(`Return Check Failed: ${err.error}`);
+        return { success: false, error: err.error || "Return check-in failed." };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      return { success: false, error: err.message || "Network error." };
     }
   };
 
