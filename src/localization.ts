@@ -8,7 +8,7 @@ export const translations = {
     schoolName: "PM SHRI Ramdiri +2 High School",
     location: "Begusarai, Bihar, India",
     subtitle: "Digital Library Management Portal",
-    tagline: "Empowering education through digital exploration and seamless knowledge management.",
+    tagline: "A humble initiative of our school to modernize our village high school library, bringing books and simple technology together to inspire children and make knowledge easily accessible to every young reader in Ramdiri.",
     
     // Navigation
     navHome: "Home",
@@ -86,7 +86,7 @@ export const translations = {
     schoolName: "पीएम श्री रामदीरी +2 उच्च विद्यालय",
     location: "बेगूसराय, बिहार, भारत",
     subtitle: "डिजिटल पुस्तकालय प्रबंधन पोर्टल",
-    tagline: "डिजिटल अन्वेषण और सुगम ज्ञान प्रबंधन के माध्यम से शिक्षा को सशक्त बनाना।",
+    tagline: "हमारे ग्रामीण विद्यालय के पुस्तकालय को आधुनिक बनाने की एक छोटी सी कोशिश, जहाँ किताबें और तकनीक मिलकर बच्चों को प्रेरित कर सकें और रामदीरी के हर छात्र के लिए ज्ञान का मार्ग आसान बन सके।",
     
     // Navigation
     navHome: "मुख्य पृष्ठ",

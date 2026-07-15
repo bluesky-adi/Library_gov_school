@@ -202,6 +202,7 @@ export default function PublicHome({
       totalFeedbackCount: 0
     };
   });
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
 
   // Feedback states
   const [publicFeedbacks, setPublicFeedbacks] = useState<any[]>([]);
@@ -312,6 +313,7 @@ export default function PublicHome({
 
   useEffect(() => {
     // Fetch live public statistics
+    setIsStatsLoading(true);
     fetch('/api/public-stats')
       .then(res => res.json())
       .then(data => {
@@ -332,7 +334,10 @@ export default function PublicHome({
           }
         }
       })
-      .catch(err => console.warn("Could not load public statistics:", err));
+      .catch(err => console.warn("Could not load public statistics:", err))
+      .finally(() => {
+        setIsStatsLoading(false);
+      });
 
     // Fetch public feedbacks
     setFeedbackLoading(true);
@@ -345,7 +350,7 @@ export default function PublicHome({
       })
       .catch(err => console.warn("Could not load public feedbacks:", err))
       .finally(() => setFeedbackLoading(false));
-  }, [books.length, students.length, studyMaterials.length, feedbackRefreshTrigger]);
+  }, [books, students, studyMaterials, feedbackRefreshTrigger]);
 
   useEffect(() => {
     if (isLoggedIn && homeActiveTab === 'feedback') {
@@ -1250,9 +1255,9 @@ export default function PublicHome({
       {homeActiveTab === 'catalog' && (
         <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-6 sm:p-10 rounded-2xl shadow-md relative border border-slate-700">
           <div className="max-w-2xl space-y-3 relative z-10">
-            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block font-mono">★★ Begusarai District Scholars Portal ★★</span>
+            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-widest block font-mono">★★ PM SHRI Ramdiri High School Library ★★</span>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Connecting Tradition with Technology
+              Bridging Books and Young Minds
             </h2>
             <p className="text-slate-200 text-xs sm:text-sm leading-relaxed font-sans font-light">
               {t.tagline}
@@ -1863,36 +1868,36 @@ export default function PublicHome({
               ) : (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[500px] overflow-y-auto pr-1 space-y-4">
                   {publicFeedbacks.map((f) => (
-                    <div key={f.id} className="pt-4 first:pt-0 space-y-2">
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
-                            <span>{formatName(f.studentName)}</span>
-                            {(f.studentRole || f.role) && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-655 dark:text-slate-400 rounded">
-                                {f.studentRole || f.role}
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400 block">
-                            {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded text-amber-800 dark:text-amber-400 font-bold text-[11px]">
-                          <span>★</span>
-                          <span>{f.rating}</span>
-                        </div>
+                    <div key={f.id} className="pt-5 first:pt-0 pb-5 border-b last:border-0 border-slate-100 dark:border-slate-800 space-y-3">
+                      {/* Star Ratings */}
+                      <div className="flex text-amber-400 gap-0.5 text-xs">
+                        {Array.from({ length: f.rating || 5 }).map((_, idx) => (
+                          <span key={idx}>★</span>
+                        ))}
                       </div>
 
-                      <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-lg border border-slate-150 dark:border-slate-850">
-                        <span className="text-[10px] font-mono font-black uppercase text-indigo-650 block mb-1">
-                          [{f.type}]
+                      {/* Comment text */}
+                      <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-serif italic leading-relaxed">
+                        "{f.comment}"
+                      </p>
+
+                      {/* Author credentials block */}
+                      <div className="pl-1 space-y-0.5">
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-200">
+                          — {f.studentName}
+                        </p>
+                        {(f.studentRole || f.role) && (
+                          <p className="text-[10px] font-bold text-indigo-650 dark:text-indigo-400 font-mono tracking-wide">
+                            {f.studentRole || f.role}
+                          </p>
+                        )}
+                        <span className="text-[9px] text-slate-400 block font-mono">
+                          {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ""}
                         </span>
-                        {f.comment}
                       </div>
 
                       {f.reply && (
-                        <div className="ml-5 p-2.5 bg-indigo-50/50 dark:bg-slate-850 border-l-2 border-indigo-500 text-[11px] text-slate-800 dark:text-slate-200 rounded-r-lg space-y-1">
+                        <div className="ml-5 p-2.5 bg-indigo-50/50 dark:bg-indigo-950/25 border-l-2 border-indigo-500 text-[11px] text-slate-800 dark:text-slate-200 rounded-r-lg space-y-1">
                           <span className="text-[9px] font-black uppercase text-indigo-700 dark:text-indigo-400 block">
                             Response from Chief Librarian:
                           </span>
@@ -2164,7 +2169,7 @@ export default function PublicHome({
 
       {/* 7. STATISTICS PANEL */}
       {(() => {
-        const showSkeleton = books.length === 0 && liveStats.booksCount === 0;
+        const showSkeleton = isStatsLoading || (books.length === 0 && liveStats.booksCount === 0);
         return (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4" id="home-realtime-stats-grid">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between shadow-xs">

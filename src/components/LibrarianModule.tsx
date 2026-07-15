@@ -1143,7 +1143,7 @@ export default function LibrarianModule({
   // KPI calculations
   const totalBookCopies = books.reduce((sum, b) => sum + b.totalCopies, 0);
   const totalAvailableCopies = books.reduce((sum, b) => sum + b.availableCopies, 0);
-  const totalIssuedCopies = Math.max(0, totalBookCopies - totalAvailableCopies);
+  const totalIssuedCopies = issueLogs.filter(log => log.status === 'Issued').length;
   const pendingRequestsCount = requests.filter(r => r.status === 'Pending').length;
 
   // Active Loans status Issued List

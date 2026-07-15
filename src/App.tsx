@@ -225,6 +225,24 @@ export default function App() {
     }
   }, []);
 
+  // Intercept accidental exit or page refreshes during active user sessions
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      const msg = "Are you sure you want to leave the PM SHRI Ramdiri Digital Library?";
+      e.returnValue = msg;
+      return msg;
+    };
+
+    if (loggedInRole !== 'Guest') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [loggedInRole]);
+
   // Update dynamic logged-in student profile if student database changes with strict multi-coordinate isolation mapping
   useEffect(() => {
     if (loggedInRole === 'Student' && loggedInStudent) {
