@@ -1932,7 +1932,7 @@ export default function PublicHome({
                             
                             {/* User Role */}
                             <span className="text-indigo-600 dark:text-indigo-400 font-bold text-[10.5px] block truncate">
-                              {f.studentRole || f.role || "Student"}
+                              {f.studentRole || f.role || (f.studentId && f.studentId.toLowerCase().startsWith('visitor') ? 'Visitor' : f.studentId && f.studentId.toLowerCase().startsWith('teacher') ? 'Teacher' : f.studentId && f.studentId.toLowerCase().startsWith('parent') ? 'Parent' : f.studentId && f.studentId.toLowerCase().startsWith('alumni') ? 'Alumni' : 'Student')}
                             </span>
 
                             {/* Feedback Category */}
