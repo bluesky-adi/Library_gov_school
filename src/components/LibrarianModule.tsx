@@ -5779,22 +5779,28 @@ export default function LibrarianModule({
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                   const files = Array.from(e.dataTransfer.files);
                   files.forEach((file) => {
-                    if (file.type.startsWith('image/')) {
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        if (event.target?.result) {
-                          setLocalGalleryImages((prev) => [
-                            ...prev,
-                            {
-                              url: event.target!.result as string,
-                              caption: "",
-                              order: prev.length
-                            }
-                          ]);
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                    if (!file.type.startsWith('image/')) {
+                      alert(`File "${file.name}" is not a valid image. Only image files are supported.`);
+                      return;
                     }
+                    if (file.size > 5 * 1024 * 1024) {
+                      alert(`File "${file.name}" exceeds the 5MB size limit.`);
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      if (event.target?.result) {
+                        setLocalGalleryImages((prev) => [
+                          ...prev,
+                          {
+                            url: event.target!.result as string,
+                            caption: "",
+                            order: prev.length
+                          }
+                        ]);
+                      }
+                    };
+                    reader.readAsDataURL(file);
                   });
                 }
               }}
@@ -5807,6 +5813,14 @@ export default function LibrarianModule({
                   if (e.target.files) {
                     const files = Array.from(e.target.files);
                     files.forEach((file: any) => {
+                      if (!file.type.startsWith('image/')) {
+                        alert(`File "${file.name}" is not a valid image. Only image files are supported.`);
+                        return;
+                      }
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert(`File "${file.name}" exceeds the 5MB size limit.`);
+                        return;
+                      }
                       const reader = new FileReader();
                       reader.onload = (event) => {
                         if (event.target?.result) {
@@ -6133,6 +6147,10 @@ export default function LibrarianModule({
                               if (!file) return;
                               if (!file.type.startsWith('image/')) {
                                 setProfileError("Please select a valid image file.");
+                                return;
+                              }
+                              if (file.size > 5 * 1024 * 1024) {
+                                setProfileError("Maximum image file size is 5MB.");
                                 return;
                               }
                               const reader = new FileReader();

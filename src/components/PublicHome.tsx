@@ -996,6 +996,10 @@ export default function PublicHome({
                           setInlineProfileError("Please select a valid image file.");
                           return;
                         }
+                        if (file.size > 5 * 1024 * 1024) {
+                          setInlineProfileError("Maximum image file size is 5MB.");
+                          return;
+                        }
                         const reader = new FileReader();
                         reader.onload = (event) => {
                           const img = new Image();

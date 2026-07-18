@@ -614,6 +614,14 @@ app.get('/api/librarian/profile', async (req, res) => {
 
 app.post('/api/librarian/profile', authenticateToken, requireLibrarian, async (req, res) => {
   const { name, designation, biography, profilePhoto, yearsOfService } = req.body;
+  if (profilePhoto) {
+    if (!profilePhoto.startsWith('data:image/')) {
+      return res.status(400).json({ error: "Invalid profile photograph format. Only image files are supported." });
+    }
+    if (profilePhoto.length > 7000000) {
+      return res.status(400).json({ error: "Profile photo exceeds the 5MB size limit." });
+    }
+  }
   try {
     const config = await getLibrarianConfig();
     const updatedConfig = {
@@ -669,6 +677,16 @@ app.post('/api/gallery', authenticateToken, requireLibrarian, async (req, res) =
     const { images } = req.body;
     if (!Array.isArray(images)) {
       return res.status(400).json({ success: false, error: "images field must be an array" });
+    }
+    for (const img of images) {
+      if (img.url) {
+        if (!img.url.startsWith('data:image/') && !img.url.startsWith('http://') && !img.url.startsWith('https://')) {
+          return res.status(400).json({ success: false, error: "Invalid gallery image format. URL must be an image data URL or web address." });
+        }
+        if (img.url.startsWith('data:image/') && img.url.length > 7000000) {
+          return res.status(400).json({ success: false, error: "Gallery image exceeds the 5MB size limit." });
+        }
+      }
     }
     const saved = await dbService.saveGalleryImages(images);
     res.json({ success: true, images: saved, message: "Gallery updated successfully" });
@@ -1219,8 +1237,6 @@ app.get('/api/study-materials', async (req, res) => {
     
     if (token) {
       try {
-        const jwt = require('jsonwebtoken');
-        const JWT_SECRET = process.env.JWT_SECRET || "ramdiri-secret-key-1092-2025";
         reqUser = jwt.verify(token, JWT_SECRET);
       } catch (e) {
         // Ignore invalid token, treat as guest
@@ -1250,6 +1266,15 @@ app.post('/api/study-materials', authenticateToken, requireLibrarian, async (req
     const material = req.body;
     if (!material.title || !material.expiryDate || !material.visibleTo) {
       return res.status(400).json({ error: "Missing required study material fields." });
+    }
+    if (!material.pdfData) {
+      return res.status(400).json({ error: "Missing PDF file data." });
+    }
+    if (!material.pdfData.startsWith('data:application/pdf;base64,')) {
+      return res.status(400).json({ error: "Invalid file format. Only PDF files are supported for digital resources." });
+    }
+    if (material.pdfData.length > 7000000) {
+      return res.status(400).json({ error: "File exceeds the maximum size limit of 5MB." });
     }
     
     if (!material.id) {
