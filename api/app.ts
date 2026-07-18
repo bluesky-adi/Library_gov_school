@@ -95,6 +95,12 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Prevent browser/proxy caching for all API endpoints to guarantee real-time data accuracy
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  next();
+});
+
 // Ensure active MongoDB connection for every request to eliminate serverless cold-start race conditions.
 app.use(async (req, res, next) => {
   try {

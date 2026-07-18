@@ -424,26 +424,9 @@ let galleryCache: any[] | null = null;
 
 // Local File Helper functions to operate safely with concurrency
 function readLocalFile<T>(filePath: string): T[] {
-  if (filePath === BOOKS_FILE && booksCache) return booksCache as T[];
-  if (filePath === STUDENTS_FILE && studentsCache) return studentsCache as T[];
-  if (filePath === REQUESTS_FILE && requestsCache) return requestsCache as T[];
-  if (filePath === ISSUE_LOGS_FILE && issueLogsCache) return issueLogsCache as T[];
-  if (filePath === AUDIT_LOGS_FILE && auditLogsCache) return auditLogsCache as T[];
-  if (filePath === STUDY_MATERIALS_FILE && studyMaterialsCache) return studyMaterialsCache as T[];
-  if (filePath === FEEDBACK_FILE && feedbacksCache) return feedbacksCache as T[];
-  if (filePath === GALLERY_FILE && galleryCache) return galleryCache as T[];
-
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (filePath === BOOKS_FILE) booksCache = parsed;
-    if (filePath === STUDENTS_FILE) studentsCache = parsed;
-    if (filePath === REQUESTS_FILE) requestsCache = parsed;
-    if (filePath === ISSUE_LOGS_FILE) issueLogsCache = parsed;
-    if (filePath === AUDIT_LOGS_FILE) auditLogsCache = parsed;
-    if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = parsed;
-    if (filePath === FEEDBACK_FILE) feedbacksCache = parsed;
-    if (filePath === GALLERY_FILE) galleryCache = parsed;
     return parsed;
   } catch (err) {
     return [];
@@ -451,15 +434,6 @@ function readLocalFile<T>(filePath: string): T[] {
 }
 
 function writeLocalFile<T>(filePath: string, data: T[]): void {
-  if (filePath === BOOKS_FILE) booksCache = data;
-  if (filePath === STUDENTS_FILE) studentsCache = data;
-  if (filePath === REQUESTS_FILE) requestsCache = data;
-  if (filePath === ISSUE_LOGS_FILE) issueLogsCache = data;
-  if (filePath === AUDIT_LOGS_FILE) auditLogsCache = data;
-  if (filePath === STUDY_MATERIALS_FILE) studyMaterialsCache = data;
-  if (filePath === FEEDBACK_FILE) feedbacksCache = data;
-  if (filePath === GALLERY_FILE) galleryCache = data;
-
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -470,16 +444,12 @@ export const dbService = {
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
-    if (booksCache) {
-      return booksCache;
-    }
     let list: Book[];
     if (isConnectedToMongo) {
       list = (await MongoBook.find().lean()) as Book[];
     } else {
       list = readLocalFile<Book>(BOOKS_FILE);
     }
-    booksCache = list;
     return list;
   },
   async getBooksOld(): Promise<Book[]> {
@@ -857,9 +827,6 @@ export const dbService = {
 
   // STUDENTS
   async getStudents(): Promise<Student[]> {
-    if (studentsCache) {
-      return studentsCache;
-    }
     let list: Student[] = [];
     if (isConnectedToMongo) {
       list = (await MongoStudent.find().lean()) as any[];
@@ -881,7 +848,6 @@ export const dbService = {
     if (modified && !isConnectedToMongo) {
       writeLocalFile(STUDENTS_FILE, mapped);
     }
-    studentsCache = mapped;
     return mapped;
   },
 
@@ -1031,16 +997,12 @@ export const dbService = {
 
   // REQUESTS (BORROW)
   async getBorrowRequests(): Promise<BorrowRequest[]> {
-    if (requestsCache) {
-      return requestsCache;
-    }
     let list: BorrowRequest[];
     if (isConnectedToMongo) {
       list = (await MongoBorrowRequest.find().lean()) as any[];
     } else {
       list = readLocalFile<BorrowRequest>(REQUESTS_FILE);
     }
-    requestsCache = list;
     return list;
   },
 
@@ -1083,16 +1045,12 @@ export const dbService = {
 
   // BOOK ISSUE LOGS (outstanding / history)
   async getIssueLogs(): Promise<BookIssueLog[]> {
-    if (issueLogsCache) {
-      return issueLogsCache;
-    }
     let list: BookIssueLog[];
     if (isConnectedToMongo) {
       list = (await MongoBookIssueLog.find().lean()) as any[];
     } else {
       list = readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
     }
-    issueLogsCache = list;
     return list;
   },
 
@@ -1233,16 +1191,12 @@ export const dbService = {
   },
 
   async getStudyMaterials(): Promise<any[]> {
-    if (studyMaterialsCache) {
-      return studyMaterialsCache;
-    }
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoStudyMaterial.find().lean()) as any[];
     } else {
       list = readLocalFile<any>(STUDY_MATERIALS_FILE);
     }
-    studyMaterialsCache = list;
     return list;
   },
 
@@ -1283,16 +1237,12 @@ export const dbService = {
   },
 
   async getFeedbacks(): Promise<any[]> {
-    if (feedbacksCache) {
-      return feedbacksCache;
-    }
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoFeedback.find().lean()) as any[];
     } else {
       list = readLocalFile<any>(FEEDBACK_FILE);
     }
-    feedbacksCache = list;
     return list;
   },
 
@@ -1333,9 +1283,6 @@ export const dbService = {
   },
 
   async getGalleryImages(): Promise<any[]> {
-    if (galleryCache) {
-      return galleryCache;
-    }
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoGalleryImage.find().sort({ order: 1 }).lean()) as any[];
@@ -1343,7 +1290,6 @@ export const dbService = {
       const rawList = readLocalFile<any>(GALLERY_FILE);
       list = rawList.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
     }
-    galleryCache = list;
     return list;
   },
 

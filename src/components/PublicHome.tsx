@@ -323,11 +323,11 @@ export default function PublicHome({
   }, []);
 
   useEffect(() => {
-    // Fetch live public statistics
-    setIsStatsLoading(true);
-    fetch('/api/public-stats')
-      .then(res => res.json())
-      .then(data => {
+    const fetchStats = async (isSilent = false) => {
+      if (!isSilent) setIsStatsLoading(true);
+      try {
+        const res = await fetch('/api/public-stats');
+        const data = await res.json();
         if (data && !data.error) {
           const stats = {
             booksCount: typeof data.booksCount === 'number' ? data.booksCount : books.length,
@@ -344,23 +344,39 @@ export default function PublicHome({
             console.warn("Could not write cached stats:", e);
           }
         }
-      })
-      .catch(err => console.warn("Could not load public statistics:", err))
-      .finally(() => {
-        setIsStatsLoading(false);
-      });
+      } catch (err) {
+        console.warn("Could not load public statistics:", err);
+      } finally {
+        if (!isSilent) setIsStatsLoading(false);
+      }
+    };
 
-    // Fetch public feedbacks
-    setFeedbackLoading(true);
-    fetch('/api/feedback/public')
-      .then(res => res.json())
-      .then(data => {
+    const fetchFeedbacks = async (isSilent = false) => {
+      if (!isSilent) setFeedbackLoading(true);
+      try {
+        const res = await fetch('/api/feedback/public');
+        const data = await res.json();
         if (data && data.feedbacks) {
           setPublicFeedbacks(data.feedbacks);
         }
-      })
-      .catch(err => console.warn("Could not load public feedbacks:", err))
-      .finally(() => setFeedbackLoading(false));
+      } catch (err) {
+        console.warn("Could not load public feedbacks:", err);
+      } finally {
+        if (!isSilent) setFeedbackLoading(false);
+      }
+    };
+
+    // Run initially
+    fetchStats(false);
+    fetchFeedbacks(false);
+
+    // Set up silent polling every 3000ms
+    const pollInterval = setInterval(() => {
+      fetchStats(true);
+      fetchFeedbacks(true);
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
   }, [feedbackRefreshTrigger]);
 
   // Synchronize local states instantly based on parent props primitive lengths without network calls or skeleton loading
