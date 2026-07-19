@@ -234,23 +234,7 @@ export default function App() {
     }
   }, []);
 
-  // Intercept accidental exit or page refreshes during active user sessions
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      const msg = "Are you sure you want to leave the PM SHRI Ramdiri Digital Library?";
-      e.returnValue = msg;
-      return msg;
-    };
 
-    if (loggedInRole !== 'Guest') {
-      window.addEventListener('beforeunload', handleBeforeUnload);
-    }
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [loggedInRole]);
 
   // Update dynamic logged-in student profile if student database changes with strict multi-coordinate isolation mapping
   useEffect(() => {
@@ -272,6 +256,42 @@ export default function App() {
       }
     }
   }, [students, loggedInRole]);
+
+  // Synchronize state with URL hash for perfect Back button behavior on mobile devices
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.substring(1);
+      if (hash === 'docs') {
+        setActiveTab('docs');
+      } else if (hash === 'portal') {
+        setActiveTab('portal');
+      } else {
+        setActiveTab('home');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    // Initialize state from hash on mount
+    handleHashChange();
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  // Sync state changes to Hash
+  useEffect(() => {
+    const currentHash = window.location.hash.substring(1);
+    if (activeTab !== currentHash) {
+      if (activeTab === 'home') {
+        if (currentHash !== '') {
+          window.history.replaceState(null, '', ' ');
+        }
+      } else {
+        window.location.hash = activeTab;
+      }
+    }
+  }, [activeTab]);
 
   // --- Handle Login Completion ---
   const handleLoginSuccess = (role: 'Student' | 'Librarian', student?: Student) => {

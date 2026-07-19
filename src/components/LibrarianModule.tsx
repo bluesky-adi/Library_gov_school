@@ -8,7 +8,7 @@ import Fuse from 'fuse.js';
 import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
-import { searchBooksSmart, getDdcCategoryName } from '../lib/searchUtils';
+import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -5468,11 +5468,14 @@ export default function LibrarianModule({
                       <>
                         <button
                           onClick={() => {
-                            const w = window.open();
-                            if (w) {
-                              w.document.write(`<iframe src="${mat.pdfData}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
-                            } else {
-                              alert("Popup blocked! Please use the download button next to this button instead.");
+                            try {
+                              const blobUrl = base64ToBlobUrl(mat.pdfData, 'application/pdf');
+                              const w = window.open(blobUrl, '_blank');
+                              if (!w) {
+                                alert("Popup blocked! Please allow popups or use the download button instead.");
+                              }
+                            } catch (err) {
+                              alert("Error launching PDF preview.");
                             }
                           }}
                           className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-705 text-xs font-bold rounded flex items-center justify-center transition-all cursor-pointer"
@@ -5483,12 +5486,14 @@ export default function LibrarianModule({
                         <button
                           onClick={() => {
                             try {
-                              const linkSource = mat.pdfData;
+                              const blobUrl = base64ToBlobUrl(mat.pdfData, 'application/pdf');
                               const downloadLink = document.createElement("a");
                               const fileName = mat.pdfName || `${mat.title.replace(/\s+/g, '_')}.pdf`;
-                              downloadLink.href = linkSource;
+                              downloadLink.href = blobUrl;
                               downloadLink.download = fileName;
+                              document.body.appendChild(downloadLink);
                               downloadLink.click();
+                              document.body.removeChild(downloadLink);
                             } catch (e) {
                               alert("Error initiating PDF download.");
                             }

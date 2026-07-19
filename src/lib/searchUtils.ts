@@ -216,3 +216,43 @@ export function searchBooksSmart(
 
   return mergedResults.map(item => item.book);
 }
+
+/**
+ * Converts a base64 string to a durable, secure, high-performance Blob URL.
+ * Bypasses pop-up issues and browser constraints on extremely large Data URLs.
+ */
+export function base64ToBlobUrl(base64Data: string, contentType: string = 'application/pdf'): string {
+  if (!base64Data) return '';
+  // If it's already a standard web address URL, return it as-is
+  if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
+    return base64Data;
+  }
+  
+  let base64 = base64Data;
+  if (base64Data.includes(';base64,')) {
+    base64 = base64Data.split(';base64,')[1];
+  }
+  
+  try {
+    const sliceSize = 1024;
+    const byteCharacters = atob(base64.trim());
+    const byteArrays = [];
+    
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+      const slice = byteCharacters.slice(offset, offset + sliceSize);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    
+    const blob = new Blob(byteArrays, { type: contentType });
+    return URL.createObjectURL(blob);
+  } catch (err) {
+    console.error("Error converting base64 to Blob URL:", err);
+    return base64Data;
+  }
+}
+

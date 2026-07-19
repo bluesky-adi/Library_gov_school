@@ -444,13 +444,106 @@ export const dbService = {
   },
   // BOOKS
   async getBooks(): Promise<Book[]> {
+    if (booksCache) return booksCache;
     let list: Book[];
     if (isConnectedToMongo) {
       list = (await MongoBook.find().lean()) as Book[];
     } else {
       list = readLocalFile<Book>(BOOKS_FILE);
     }
-    return list;
+    
+    // Run simple on-the-fly DDC category mapping
+    const getDdcCategoryNameLocal = (ddcNumStr: string | undefined | null): string => {
+      if (!ddcNumStr) return "Needs Librarian Review";
+      const trimStr = String(ddcNumStr).trim();
+      if (trimStr === "") return "Needs Librarian Review";
+      
+      const numMatch = trimStr.match(/^\d+/);
+      if (!numMatch) return "Needs Librarian Review";
+      
+      const num = parseInt(numMatch[0], 10);
+      if (isNaN(num)) return "Needs Librarian Review";
+      
+      if (num >= 0 && num < 100) return "000 General Works";
+      if (num >= 100 && num < 200) return "100 Philosophy";
+      if (num >= 200 && num < 300) return "200 Religion";
+      if (num >= 300 && num < 400) return "300 Social Sciences";
+      if (num >= 400 && num < 500) return "400 Language";
+      if (num >= 500 && num < 600) return "500 Science";
+      if (num >= 600 && num < 700) return "600 Technology";
+      if (num >= 700 && num < 800) return "700 Arts";
+      if (num >= 800 && num < 900) return "800 Literature";
+      if (num >= 900 && num < 1000) return "900 History & Geography";
+      return "Needs Librarian Review";
+    };
+
+    let logs: BookIssueLog[] = [];
+    try {
+      logs = await this.getIssueLogs();
+    } catch (err) {
+      console.error("Failed to load issue logs for books reconciliation:", err);
+    }
+    const activeLoans = logs.filter(l => l.status === 'Issued');
+    const activeCountMap = new Map<string, number>();
+    for (const loan of activeLoans) {
+      const bId = loan.bookId;
+      if (bId) {
+        activeCountMap.set(bId, (activeCountMap.get(bId) || 0) + 1);
+      }
+    }
+
+    let modified = false;
+    const reconciled = list.map(book => {
+      let changed = false;
+      
+      let ddcNum = book.ddcNumber ? book.ddcNumber.trim() : "";
+      if (!ddcNum) {
+        const callNum = book.callNumber || "";
+        const match = callNum.trim().match(/^\d+(\.\d+)?/);
+        if (match) {
+          ddcNum = match[0];
+          book.ddcNumber = ddcNum;
+          changed = true;
+        }
+      }
+      
+      const expectedCat = getDdcCategoryNameLocal(book.ddcNumber);
+      if (book.ddcCategory !== expectedCat) {
+        book.ddcCategory = expectedCat;
+        changed = true;
+      }
+      if (book.category !== expectedCat) {
+        book.category = expectedCat;
+        changed = true;
+      }
+
+      const activeCount = activeCountMap.get(book.bookId) || 0;
+      const expectedAvailable = Math.max(0, book.totalCopies - activeCount);
+      if (book.availableCopies !== expectedAvailable) {
+        book.availableCopies = expectedAvailable;
+        changed = true;
+      }
+
+      if (changed) modified = true;
+      return book;
+    });
+
+    if (modified) {
+      if (isConnectedToMongo) {
+        const ops = reconciled.map(b => ({
+          updateOne: {
+            filter: { bookId: b.bookId },
+            update: { $set: { ddcNumber: b.ddcNumber, ddcCategory: b.ddcCategory, category: b.category, availableCopies: b.availableCopies } }
+          }
+        }));
+        MongoBook.bulkWrite(ops).catch((e: any) => console.error("On-the-fly book self-healing background save failed:", e));
+      } else {
+        writeLocalFile(BOOKS_FILE, reconciled);
+      }
+    }
+
+    booksCache = reconciled;
+    return reconciled;
   },
   async getBooksOld(): Promise<Book[]> {
     let books: Book[];
@@ -827,6 +920,7 @@ export const dbService = {
 
   // STUDENTS
   async getStudents(): Promise<Student[]> {
+    if (studentsCache) return studentsCache;
     let list: Student[] = [];
     if (isConnectedToMongo) {
       list = (await MongoStudent.find().lean()) as any[];
@@ -848,6 +942,7 @@ export const dbService = {
     if (modified && !isConnectedToMongo) {
       writeLocalFile(STUDENTS_FILE, mapped);
     }
+    studentsCache = mapped;
     return mapped;
   },
 
@@ -997,12 +1092,14 @@ export const dbService = {
 
   // REQUESTS (BORROW)
   async getBorrowRequests(): Promise<BorrowRequest[]> {
+    if (requestsCache) return requestsCache;
     let list: BorrowRequest[];
     if (isConnectedToMongo) {
       list = (await MongoBorrowRequest.find().lean()) as any[];
     } else {
       list = readLocalFile<BorrowRequest>(REQUESTS_FILE);
     }
+    requestsCache = list;
     return list;
   },
 
@@ -1045,12 +1142,14 @@ export const dbService = {
 
   // BOOK ISSUE LOGS (outstanding / history)
   async getIssueLogs(): Promise<BookIssueLog[]> {
+    if (issueLogsCache) return issueLogsCache;
     let list: BookIssueLog[];
     if (isConnectedToMongo) {
       list = (await MongoBookIssueLog.find().lean()) as any[];
     } else {
       list = readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
     }
+    issueLogsCache = list;
     return list;
   },
 
@@ -1191,12 +1290,14 @@ export const dbService = {
   },
 
   async getStudyMaterials(): Promise<any[]> {
+    if (studyMaterialsCache) return studyMaterialsCache;
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoStudyMaterial.find().lean()) as any[];
     } else {
       list = readLocalFile<any>(STUDY_MATERIALS_FILE);
     }
+    studyMaterialsCache = list;
     return list;
   },
 
@@ -1237,12 +1338,14 @@ export const dbService = {
   },
 
   async getFeedbacks(): Promise<any[]> {
+    if (feedbacksCache) return feedbacksCache;
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoFeedback.find().lean()) as any[];
     } else {
       list = readLocalFile<any>(FEEDBACK_FILE);
     }
+    feedbacksCache = list;
     return list;
   },
 
@@ -1283,6 +1386,7 @@ export const dbService = {
   },
 
   async getGalleryImages(): Promise<any[]> {
+    if (galleryCache) return galleryCache;
     let list: any[];
     if (isConnectedToMongo) {
       list = (await MongoGalleryImage.find().sort({ order: 1 }).lean()) as any[];
@@ -1290,6 +1394,7 @@ export const dbService = {
       const rawList = readLocalFile<any>(GALLERY_FILE);
       list = rawList.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
     }
+    galleryCache = list;
     return list;
   },
 

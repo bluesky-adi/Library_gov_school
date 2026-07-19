@@ -12,7 +12,7 @@ import {
   TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight, ZoomIn, ZoomOut, RotateCcw, Camera
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { searchBooksSmart } from '../lib/searchUtils';
+import { searchBooksSmart, base64ToBlobUrl } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -1667,10 +1667,13 @@ export default function PublicHome({
                             onClick={() => {
                               try {
                                 const fileSource = mat.pdfData || mat.fileUrl;
-                                const w = window.open();
-                                if (w) {
-                                  w.document.write(`<iframe src="${fileSource}" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
-                                } else {
+                                if (!fileSource) {
+                                  alert("PDF data is empty or invalid.");
+                                  return;
+                                }
+                                const blobUrl = base64ToBlobUrl(fileSource, 'application/pdf');
+                                const w = window.open(blobUrl, '_blank');
+                                if (!w) {
                                   alert("Pop-up blocker active! Please allow pop-ups to preview the document.");
                                 }
                               } catch (err) {
@@ -1687,11 +1690,18 @@ export default function PublicHome({
                             onClick={() => {
                               try {
                                 const linkSource = mat.pdfData || mat.fileUrl;
+                                if (!linkSource) {
+                                  alert("PDF data is empty or invalid.");
+                                  return;
+                                }
+                                const blobUrl = base64ToBlobUrl(linkSource, 'application/pdf');
                                 const downloadLink = document.createElement("a");
                                 const fileName = mat.pdfName || `${mat.title.replace(/\s+/g, '_')}.pdf`;
-                                downloadLink.href = linkSource;
+                                downloadLink.href = blobUrl;
                                 downloadLink.download = fileName;
+                                document.body.appendChild(downloadLink);
                                 downloadLink.click();
+                                document.body.removeChild(downloadLink);
                               } catch (err) {
                                 alert("Error initiating PDF download.");
                               }
