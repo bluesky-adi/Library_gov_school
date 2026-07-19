@@ -12,7 +12,7 @@ import {
   TrendingUp, Server, HardDrive, Sparkles, Clock, ArrowRight, ZoomIn, ZoomOut, RotateCcw, Camera
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { searchBooksSmart, base64ToBlobUrl } from '../lib/searchUtils';
+import { searchBooksSmart, base64ToBlobUrl, getDdcColor } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -1573,12 +1573,22 @@ export default function PublicHome({
                     
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] bg-indigo-50 text-indigo-800 dark:bg-slate-850 dark:text-slate-300 px-2 py-0.5 rounded font-black uppercase select-none tracking-wide">
-                          {book.category}
-                        </span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
-                          Shelf #{categorySerialsMap.get(book.bookId) || 1} • SR# {book.bookId}
-                        </span>
+                        {(() => {
+                          const ddcColor = getDdcColor(book.ddcNumber || book.callNumber);
+                          return (
+                            <span className={`text-[9.5px] px-2 py-0.5 rounded font-black uppercase select-none tracking-wide border ${ddcColor.bg} ${ddcColor.border}`}>
+                              {book.category}
+                            </span>
+                          );
+                        })()}
+                        {(() => {
+                          const ddcColor = getDdcColor(book.ddcNumber || book.callNumber);
+                          return (
+                            <span className={`text-[10px] font-extrabold font-mono ${ddcColor.text}`}>
+                              Shelf #{categorySerialsMap.get(book.bookId) || 1} • SR# {book.bookId}
+                            </span>
+                          );
+                        })()}
                       </div>
                       
                       <h4 className="font-extrabold text-slate-900 dark:text-slate-100 font-sans text-xs line-clamp-2 group-hover:text-indigo-600 transition-colors">
@@ -2755,9 +2765,14 @@ export default function PublicHome({
             {/* Header */}
             <div className="p-5 border-b border-slate-101 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
               <div>
-                <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900 text-indigo-805 dark:text-indigo-200 font-extrabold px-2.5 py-0.5 rounded uppercase tracking-wide">
-                  {selectedBookDetails.category}
-                </span>
+                {(() => {
+                  const ddcColor = getDdcColor(selectedBookDetails.ddcNumber || selectedBookDetails.callNumber);
+                  return (
+                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded uppercase tracking-wide border ${ddcColor.bg} ${ddcColor.border}`}>
+                      {selectedBookDetails.category}
+                    </span>
+                  );
+                })()}
                 <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">
                   Book Registration Ledger Details
                 </h3>
@@ -2785,8 +2800,15 @@ export default function PublicHome({
                   
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2 text-[11px] font-mono">
                     <div>
-                      <span className="text-slate-400 block text-[9px] uppercase tracking-wider text-emerald-650 dark:text-emerald-400">Shelf Number</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">#{categorySerialsMap.get(selectedBookDetails.bookId) || 1}</span>
+                      <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Shelf Number</span>
+                      {(() => {
+                        const ddcColor = getDdcColor(selectedBookDetails.ddcNumber || selectedBookDetails.callNumber);
+                        return (
+                          <span className={`font-extrabold ${ddcColor.text}`}>
+                            #{categorySerialsMap.get(selectedBookDetails.bookId) || 1}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div>
                       <span className="text-slate-405 block text-[9px] uppercase tracking-wider">Accession Number</span>

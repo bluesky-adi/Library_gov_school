@@ -7,7 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial, Notification } from '../types';
 import { GoogleBookCover } from './PublicHome';
 import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle, RefreshCw, Inbox, Check, Archive, Bell, ShieldAlert, FileText, CloudUpload } from 'lucide-react';
-import { searchBooksSmart } from '../lib/searchUtils';
+import { searchBooksSmart, getDdcColor } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -788,7 +788,38 @@ export default function StudentModule({
             ) : (
               <div>
                 {/* RENDER HIGH CONTRAST SIMPLIFIED GRID CARDS FOR STUDENTS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {paginatedBooks.map(book => {
+                    const isAvailable = book.availableCopies > 0;
+                    return (
+                      <div 
+                        key={book.bookId}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all duration-300"
+                      >
+                        <div 
+                          onClick={() => setSelectedBook(book)}
+                          className="aspect-[3/4] w-full overflow-hidden bg-slate-50 dark:bg-slate-950 rounded-md ring-1 ring-slate-100 dark:ring-slate-800 hover:scale-[1.02] transition-all duration-300 cursor-pointer flex items-center justify-center"
+                        >
+                          <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
+                        </div>
+                        
+                        <div className="flex-1 flex flex-col justify-between mt-3.5">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] bg-indigo-50 text-indigo-850 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                                {book.category}
+                              </span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                                SR# {book.bookId}
+                              </span>
+                            </div>
+                            
+                            <h3 
+                              onClick={() => setSelectedBook(book)}
+                              className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2 hover:text-indigo-650 cursor-pointer transition-colors"
+                            >
+                               {book.bookName}
+                            </h3> <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {paginatedBooks.map(book => {
                     const isAvailable = book.availableCopies > 0;
                     return (

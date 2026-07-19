@@ -8,7 +8,7 @@ import Fuse from 'fuse.js';
 import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial, Notification } from '../types';
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
-import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl } from '../lib/searchUtils';
+import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl, getDdcColor } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -506,12 +506,20 @@ export default function LibrarianModule({
         // ONLY use actual shelfNumber from MongoDB, never calculate or guess!
         const shelfLocation = book.shelfNumber || "";
 
+        // Add DDC Color-coded Spine bar on the left of the sticker
+        const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
+        const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 100;
+        const gVal = parseInt(ddcCol.hex.substring(3, 5), 16) || 100;
+        const bVal = parseInt(ddcCol.hex.substring(5, 7), 16) || 100;
+        doc.setFillColor(rVal, gVal, bVal);
+        doc.rect(x + 0.15, y + 0.15, 2.5, stickerHeight - 0.3, 'F');
+
         // Text settings - clean monospace courier font
         doc.setTextColor(20, 20, 20);
         doc.setFont('courier', 'bold');
         doc.setFontSize(7.5);
 
-        const textX = x + 3.5;
+        const textX = x + 5.0; // shifted right by 1.5mm to give breathing room for the colored bar
         const textYStart = y + 5.5;
         const lineSpacing = 4.3;
 

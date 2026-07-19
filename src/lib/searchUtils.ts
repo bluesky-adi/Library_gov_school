@@ -256,3 +256,107 @@ export function base64ToBlobUrl(base64Data: string, contentType: string = 'appli
   }
 }
 
+export interface DdcColor {
+  bg: string;
+  text: string;
+  border: string;
+  hex: string;
+}
+
+export function getDdcColor(ddcNumStr: string | undefined | null): DdcColor {
+  const ddcDefaults: DdcColor = {
+    bg: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200',
+    text: 'text-slate-700 dark:text-slate-300',
+    border: 'border-slate-200 dark:border-slate-700',
+    hex: '#64748b'
+  };
+  
+  if (!ddcNumStr) return ddcDefaults;
+  const trimStr = String(ddcNumStr).trim();
+  if (trimStr === "") return ddcDefaults;
+  
+  const numMatch = trimStr.match(/^\d+/);
+  if (!numMatch) return ddcDefaults;
+  
+  const num = parseInt(numMatch[0], 10);
+  if (isNaN(num)) return ddcDefaults;
+  
+  const mainClass = Math.floor(num / 100) * 100;
+  
+  switch(mainClass) {
+    case 0:
+      return {
+        bg: 'bg-slate-150 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
+        text: 'text-slate-600 dark:text-slate-400',
+        border: 'border-slate-300 dark:border-slate-750',
+        hex: '#94a3b8' // Light Gray
+      };
+    case 100:
+      return {
+        bg: 'bg-purple-100 text-purple-850 dark:bg-purple-950/40 dark:text-purple-200',
+        text: 'text-purple-700 dark:text-purple-300',
+        border: 'border-purple-200 dark:border-purple-900/50',
+        hex: '#a855f7' // Purple
+      };
+    case 200:
+      return {
+        bg: 'bg-amber-100 text-amber-905 dark:bg-amber-950/40 dark:text-amber-200',
+        text: 'text-amber-800 dark:text-amber-305',
+        border: 'border-amber-200 dark:border-amber-900/50',
+        hex: '#78350f' // Brown
+      };
+    case 300:
+      return {
+        bg: 'bg-red-100 text-red-850 dark:bg-red-950/40 dark:text-red-200',
+        text: 'text-red-700 dark:text-red-300',
+        border: 'border-red-200 dark:border-red-900/50',
+        hex: '#dc2626' // Crimson Red
+      };
+    case 400:
+      return {
+        bg: 'bg-orange-100 text-orange-850 dark:bg-orange-950/40 dark:text-orange-200',
+        text: 'text-orange-700 dark:text-orange-300',
+        border: 'border-orange-200 dark:border-orange-900/50',
+        hex: '#f97316' // Orange
+      };
+    case 500:
+      return {
+        bg: 'bg-emerald-100 text-emerald-850 dark:bg-emerald-950/40 dark:text-emerald-200',
+        text: 'text-emerald-700 dark:text-emerald-300',
+        border: 'border-emerald-200 dark:border-emerald-900/50',
+        hex: '#10b981' // Emerald Green
+      };
+    case 600:
+      return {
+        bg: 'bg-blue-105 text-blue-850 dark:bg-blue-950/40 dark:text-blue-200',
+        text: 'text-blue-700 dark:text-blue-300',
+        border: 'border-blue-200 dark:border-blue-900/50',
+        hex: '#2563eb' // Royal Blue
+      };
+    case 700:
+      return {
+        bg: 'bg-pink-100 text-pink-850 dark:bg-pink-955/40 dark:text-pink-200',
+        text: 'text-pink-705 dark:text-pink-300',
+        border: 'border-pink-200 dark:border-pink-900/50',
+        hex: '#db2777' // Pink
+      };
+    case 800:
+      return {
+        bg: 'bg-yellow-100 text-yellow-850 dark:bg-yellow-950/40 dark:text-yellow-200',
+        text: 'text-yellow-700 dark:text-yellow-300',
+        border: 'border-yellow-200 dark:border-yellow-900/50',
+        hex: '#eab308' // Golden Yellow
+      };
+    case 900:
+      return {
+        bg: 'bg-teal-100 text-teal-855 dark:bg-teal-950/40 dark:text-teal-200',
+        text: 'text-teal-705 dark:text-teal-300',
+        border: 'border-teal-200 dark:border-teal-900/50',
+        hex: '#0d9488' // Teal
+      };
+    default:
+      return ddcDefaults;
+  }
+}
+
+
