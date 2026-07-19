@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Fuse from 'fuse.js';
-import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
+import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial, Notification } from '../types';
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
 import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl } from '../lib/searchUtils';
@@ -60,7 +60,7 @@ import {
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
   Key, Eye, EyeOff, Shield, Sliders, AlertCircle, User, Database, RefreshCw, Upload, Clock,
-  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star, Camera
+  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star, Camera, Inbox, Check, Archive, Bell
 } from 'lucide-react';
 
 interface LibrarianModuleProps {
@@ -70,6 +70,10 @@ interface LibrarianModuleProps {
   issueLogs: BookIssueLog[];
   auditLogs: LibraryAuditLog[];
   studyMaterials?: StudyMaterial[];
+  notifications?: Notification[];
+  onMarkNotificationRead?: (id: string) => Promise<boolean>;
+  onArchiveNotification?: (id: string) => Promise<boolean>;
+  onMarkAllNotificationsRead?: () => Promise<boolean>;
   onRefreshInputLogs?: () => void;
   currentLang: 'EN' | 'HI';
   onAddBook: (book: Book) => void;
@@ -114,6 +118,10 @@ export default function LibrarianModule({
   issueLogs: rawIssueLogs,
   auditLogs: rawAuditLogs,
   studyMaterials: rawStudyMaterials = [],
+  notifications = [],
+  onMarkNotificationRead,
+  onArchiveNotification,
+  onMarkAllNotificationsRead,
   onRefreshInputLogs,
   currentLang,
   onAddBook,
@@ -150,7 +158,11 @@ export default function LibrarianModule({
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
   const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
-  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback' | 'gallery'>('books');
+  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback' | 'gallery' | 'notifications'>('books');
+  const [notificationFilter, setNotificationFilter] = useState<'active' | 'archived'>('active');
+  const unreadNotificationsCount = useMemo(() => {
+    return notifications.filter(n => n.status === 'Unread').length;
+  }, [notifications]);
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
@@ -2523,6 +2535,23 @@ export default function LibrarianModule({
         >
           <Camera className="w-4 h-4 shrink-0" />
           <span>Library Gallery</span>
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('notifications'); }}
+          className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 relative ${
+            activeTab === 'notifications'
+              ? 'border-slate-800 text-slate-900 dark:text-white font-extrabold bg-slate-11 border-b-slate-80 bg-slate-100 dark:bg-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Bell className="w-4 h-4 shrink-0" />
+          <span>Librarian Inbox</span>
+          {unreadNotificationsCount > 0 && (
+            <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold animate-pulse">
+              {unreadNotificationsCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -6327,6 +6356,178 @@ export default function LibrarianModule({
                 <span>Save Gallery Layout</span>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ADMINISTRATIVE NOTIFICATION INBOX PANEL */}
+      {activeTab === 'notifications' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-xl space-y-6 shadow-xs animate-fade-in font-sans" id="librarian-notifications-tab">
+          {/* Header row */}
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Bell className="w-5 h-5 text-indigo-600 shrink-0" />
+                <span>Librarian Administrative Notification Panel</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-normal">
+                All administrative notification logs from real-time events (student registrations, feedback moderation classifications, book checkins, bulk excel uploads) are privately archived here.
+              </p>
+            </div>
+
+            {/* Filter toggler & bulk action */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-750">
+                <button
+                  onClick={() => setNotificationFilter('active')}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
+                    notificationFilter === 'active'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Active Inbox
+                </button>
+                <button
+                  onClick={() => setNotificationFilter('archived')}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${
+                    notificationFilter === 'archived'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Archived Logs
+                </button>
+              </div>
+
+              {unreadNotificationsCount > 0 && onMarkAllNotificationsRead && (
+                <button
+                  onClick={async () => {
+                    await onMarkAllNotificationsRead();
+                  }}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-755 text-[10px] font-black rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Mark All Read</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Notifications List */}
+          <div className="space-y-3">
+            {(() => {
+              const filtered = notifications.filter(n => {
+                if (notificationFilter === 'archived') {
+                  return n.status === 'Archived';
+                } else {
+                  return n.status !== 'Archived';
+                }
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-16 text-slate-400 text-xs flex flex-col items-center justify-center gap-2.5">
+                    <Inbox className="w-10 h-10 text-slate-350 stroke-[1.2]" />
+                    <p className="font-extrabold text-slate-500 text-sm">
+                      Librarian Inbox is Clear!
+                    </p>
+                    <p className="text-[11px] text-slate-400 max-w-sm">
+                      {notificationFilter === 'active' 
+                        ? "Any critical administrative system logs, Excel bulk uploads, auto-moderation spam triggers, or contact mail will compile here in real-time."
+                        : "Archived audit logs are stored securely for record keeping."
+                      }
+                    </p>
+                  </div>
+                );
+              }
+
+              // Sort chronologically (newest first)
+              const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+              return sorted.map(item => {
+                let badgeBg = "bg-slate-105 border-slate-205 text-slate-600";
+                let IconComponent = Bell;
+
+                if (item.icon === 'alert') {
+                  badgeBg = "bg-red-50 border-red-100 text-red-700";
+                  IconComponent = AlertCircle;
+                } else if (item.icon === 'success' || item.icon === 'book') {
+                  badgeBg = "bg-emerald-50 border-emerald-100 text-emerald-700";
+                  IconComponent = CheckCircle;
+                } else if (item.icon === 'upload') {
+                  badgeBg = "bg-blue-50 border-blue-100 text-blue-700";
+                  IconComponent = Upload;
+                } else if (item.icon === 'message') {
+                  badgeBg = "bg-violet-50 border-violet-100 text-violet-700";
+                  IconComponent = MessageSquare;
+                } else if (item.icon === 'user') {
+                  badgeBg = "bg-indigo-50 border-indigo-100 text-indigo-700";
+                  IconComponent = User;
+                }
+
+                return (
+                  <div 
+                    key={item.id} 
+                    className={`p-4 border rounded-xl flex items-start justify-between gap-4 transition-all ${
+                      item.status === 'Unread'
+                        ? 'bg-slate-50/50 border-slate-300'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div className={`p-2 rounded-lg border shrink-0 ${badgeBg}`}>
+                        <IconComponent className="w-4 h-4 stroke-[2]" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-xs text-slate-900 leading-tight">
+                            {item.title}
+                          </span>
+                          {item.status === 'Unread' && (
+                            <span className="bg-indigo-650 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider animate-pulse shrink-0">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                          {item.message}
+                        </p>
+                        <span className="text-[9.5px] text-slate-400 font-mono font-semibold block">
+                          📅 {new Date(item.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {item.status === 'Unread' && onMarkNotificationRead && (
+                        <button
+                          onClick={async () => {
+                            await onMarkNotificationRead(item.id);
+                          }}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-550 hover:text-indigo-600 transition-all cursor-pointer font-bold text-xs"
+                          title="Mark as Read"
+                        >
+                          <Check className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                      )}
+                      {item.status !== 'Archived' && onArchiveNotification && (
+                        <button
+                          onClick={async () => {
+                            await onArchiveNotification(item.id);
+                          }}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+                          title="Archive"
+                        >
+                          <Archive className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       )}

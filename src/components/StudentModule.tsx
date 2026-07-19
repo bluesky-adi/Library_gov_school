@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial } from '../types';
+import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial, Notification } from '../types';
 import { GoogleBookCover } from './PublicHome';
-import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle, RefreshCw, Inbox, Check, Archive, Bell, ShieldAlert, FileText, CloudUpload } from 'lucide-react';
 import { searchBooksSmart } from '../lib/searchUtils';
 
 interface InfiniteScrollSentinelProps {
@@ -62,6 +62,10 @@ interface StudentModuleProps {
   issueLogs: BookIssueLog[];
   loggedInStudent: Student;
   studyMaterials?: StudyMaterial[];
+  notifications?: Notification[];
+  onMarkNotificationRead?: (id: string) => Promise<boolean>;
+  onArchiveNotification?: (id: string) => Promise<boolean>;
+  onMarkAllNotificationsRead?: () => Promise<boolean>;
   onAddRequest: (req: BorrowRequest) => Promise<{ success: boolean; error?: string }>;
   onCancelRequest: (id: string) => Promise<boolean>;
   currentLang: 'EN' | 'HI';
@@ -73,6 +77,10 @@ export default function StudentModule({
   issueLogs: rawIssueLogs = [],
   loggedInStudent,
   studyMaterials = [],
+  notifications = [],
+  onMarkNotificationRead,
+  onArchiveNotification,
+  onMarkAllNotificationsRead,
   onAddRequest,
   onCancelRequest,
   currentLang
@@ -81,7 +89,13 @@ export default function StudentModule({
   const requests = Array.isArray(rawRequests) ? rawRequests : [];
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile' | 'study-materials' | 'contact-librarian'>('catalogue');
+  const unreadNotificationsCount = useMemo(() => {
+    return notifications.filter(n => n.status === 'Unread').length;
+  }, [notifications]);
+
+  const [notificationFilter, setNotificationFilter] = useState<'active' | 'archived'>('active');
+
+  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile' | 'study-materials' | 'contact-librarian' | 'notifications'>('catalogue');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -640,6 +654,21 @@ export default function StudentModule({
           }`}
         >
           💬 {currentLang === 'EN' ? "Contact Librarian" : "पुस्तकालयाध्यक्ष संपर्क"}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('notifications')}
+          className={`px-5 py-3 text-xs font-extrabold tracking-wide uppercase border-b-2 transition-all flex items-center gap-2 ${
+            activeSubTab === 'notifications'
+              ? 'border-slate-850 text-slate-900 dark:text-slate-100 font-black'
+              : 'border-transparent text-slate-400 hover:text-slate-655'
+          }`}
+        >
+          <span>🔔 {currentLang === 'EN' ? "Notifications" : "अधिसूचनाएं"}</span>
+          {unreadNotificationsCount > 0 && (
+            <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold animate-pulse">
+              {unreadNotificationsCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -1484,6 +1513,182 @@ export default function StudentModule({
                     : "✉️ संदेशों की जांच रोजाना पुस्तकालय प्रशासन कर्मचारियों द्वारा की जाती है।"}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : activeSubTab === 'notifications' ? (
+        /* Notifications Tab - Private Personal Notification Center */
+        <div className="space-y-6 animate-fade-in" id="student-notifications-tab">
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-5 rounded-xl space-y-4 shadow-xs">
+            {/* Header row */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800 font-sans">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-5.5 h-5.5 text-indigo-600 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm select-none">
+                    🔔 {currentLang === 'EN' ? "Personal Notification Center" : "व्यक्तिगत अधिसूचना केंद्र"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {currentLang === 'EN' 
+                      ? "All personal activity, requests status updates, returns receipts, and system alerts are catalogued here privately." 
+                      : "सभी व्यक्तिगत गतिविधियां, अनुरोधों की स्थिति, वापसी रसीदें और अलर्ट निजी तौर पर यहाँ रखे जाते हैं।"}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Filter toggler & bulk action */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => setNotificationFilter('active')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                      notificationFilter === 'active'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {currentLang === 'EN' ? "Active Inbox" : "सक्रिय इनबॉक्स"}
+                  </button>
+                  <button
+                    onClick={() => setNotificationFilter('archived')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                      notificationFilter === 'archived'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {currentLang === 'EN' ? "Archived" : "संग्रहीत"}
+                  </button>
+                </div>
+
+                {unreadNotificationsCount > 0 && onMarkAllNotificationsRead && (
+                  <button
+                    onClick={async () => {
+                      await onMarkAllNotificationsRead();
+                    }}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-extrabold rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{currentLang === 'EN' ? "Mark All Read" : "सभी को पढ़ा हुआ चिह्नित करें"}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Notifications List */}
+            <div className="space-y-3">
+              {(() => {
+                const filtered = notifications.filter(n => {
+                  if (notificationFilter === 'archived') {
+                    return n.status === 'Archived';
+                  } else {
+                    return n.status !== 'Archived';
+                  }
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="text-center py-14 text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                      <Inbox className="w-10 h-10 text-slate-350 stroke-[1.2]" />
+                      <p className="font-extrabold text-slate-500">
+                        {currentLang === 'EN' ? "Your notification stream is clean!" : "आपका अधिसूचना इनबॉक्स खाली है!"}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {notificationFilter === 'active' 
+                          ? (currentLang === 'EN' ? "New event notifications will arrive here in real-time." : "नई घटना सूचनाएं यहाँ वास्तविक समय में दिखाई देंगी।")
+                          : (currentLang === 'EN' ? "Archived notification logs are saved for historical receipts." : "पुराने रसीदों के लिए आर्काइव किए गए लॉग यहाँ सहेजे जाते हैं।")
+                        }
+                      </p>
+                    </div>
+                  );
+                }
+
+                // Sort chronologically (newest first)
+                const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                return sorted.map(item => {
+                  let badgeBg = "bg-slate-105 border-slate-205 text-slate-600";
+                  let IconComponent = Bell;
+
+                  if (item.icon === 'alert') {
+                    badgeBg = "bg-red-50 border-red-100 text-red-700";
+                    IconComponent = AlertCircle;
+                  } else if (item.icon === 'success' || item.icon === 'book') {
+                    badgeBg = "bg-emerald-50 border-emerald-100 text-emerald-700";
+                    IconComponent = CheckCircle;
+                  } else if (item.icon === 'upload') {
+                    badgeBg = "bg-blue-50 border-blue-100 text-blue-700";
+                    IconComponent = CloudUpload;
+                  } else if (item.icon === 'message') {
+                    badgeBg = "bg-violet-50 border-violet-100 text-violet-700";
+                    IconComponent = MessageSquare;
+                  } else if (item.icon === 'user') {
+                    badgeBg = "bg-indigo-50 border-indigo-100 text-indigo-700";
+                    IconComponent = User;
+                  }
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`p-4 border rounded-xl flex items-start justify-between gap-4 transition-all ${
+                        item.status === 'Unread'
+                          ? 'bg-slate-50/50 border-slate-300'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg border shrink-0 ${badgeBg}`}>
+                          <IconComponent className="w-4 h-4 stroke-[2]" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-xs text-slate-900 leading-tight">
+                              {item.title}
+                            </span>
+                            {item.status === 'Unread' && (
+                              <span className="bg-indigo-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider animate-pulse shrink-0">
+                                {currentLang === 'EN' ? "New" : "नया"}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                            {item.message}
+                          </p>
+                          <span className="text-[9.5px] text-slate-400 font-mono font-semibold block">
+                            📅 {new Date(item.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.status === 'Unread' && onMarkNotificationRead && (
+                          <button
+                            onClick={async () => {
+                              await onMarkNotificationRead(item.id);
+                            }}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-550 hover:text-indigo-600 transition-all cursor-pointer"
+                            title={currentLang === 'EN' ? "Mark as Read" : "पढ़ा हुआ चिह्नित करें"}
+                          >
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                        )}
+                        {item.status !== 'Archived' && onArchiveNotification && (
+                          <button
+                            onClick={async () => {
+                              await onArchiveNotification(item.id);
+                            }}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+                            title={currentLang === 'EN' ? "Archive" : "संग्रहीत करें"}
+                          >
+                            <Archive className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>

@@ -8,7 +8,7 @@ import Header from './components/Header';
 import PublicHome from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
 import { translations } from './localization';
-import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial } from './types';
+import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial, Notification } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
 import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export default function App() {
   const [issueLogs, setIssueLogs] = useState<BookIssueLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<LibraryAuditLog[]>([]);
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // --- Dynamic Layout Configuration States ---
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
@@ -78,13 +79,14 @@ export default function App() {
       }
 
       if (role === 'Librarian') {
-        const [dataBooks, dataMaterials, studentsData, requestsData, logsData, auditData] = await Promise.all([
+        const [dataBooks, dataMaterials, studentsData, requestsData, logsData, auditData, dataNotifications] = await Promise.all([
           handleSafeFetch('/api/books'),
           handleSafeFetch('/api/study-materials', { headers }),
           handleSafeFetch('/api/students', { headers }),
           handleSafeFetch('/api/requests', { headers }),
           handleSafeFetch('/api/issue-logs', { headers }),
-          handleSafeFetch('/api/audit-logs', { headers })
+          handleSafeFetch('/api/audit-logs', { headers }),
+          handleSafeFetch('/api/notifications', { headers })
         ]);
 
         if (dataBooks) setBooks(dataBooks);
@@ -93,18 +95,21 @@ export default function App() {
         if (requestsData) setRequests(requestsData);
         if (logsData) setIssueLogs(logsData);
         if (auditData) setAuditLogs(auditData);
+        if (dataNotifications) setNotifications(dataNotifications);
       } else if (role === 'Student') {
-        const [dataBooks, dataMaterials, requestsData, logsData] = await Promise.all([
+        const [dataBooks, dataMaterials, requestsData, logsData, dataNotifications] = await Promise.all([
           handleSafeFetch('/api/books'),
           handleSafeFetch('/api/study-materials', { headers }),
           handleSafeFetch('/api/requests', { headers }),
-          handleSafeFetch('/api/issue-logs', { headers })
+          handleSafeFetch('/api/issue-logs', { headers }),
+          handleSafeFetch('/api/notifications', { headers })
         ]);
 
         if (dataBooks) setBooks(dataBooks);
         if (dataMaterials) setStudyMaterials(dataMaterials);
         if (requestsData) setRequests(requestsData);
         if (logsData) setIssueLogs(logsData);
+        if (dataNotifications) setNotifications(dataNotifications);
       } else {
         const [dataBooks, dataMaterials] = await Promise.all([
           handleSafeFetch('/api/books'),
@@ -113,6 +118,7 @@ export default function App() {
 
         if (dataBooks) setBooks(dataBooks);
         if (dataMaterials) setStudyMaterials(dataMaterials);
+        setNotifications([]);
       }
     } finally {
       isSyncingRef.current = false;
@@ -1005,6 +1011,71 @@ export default function App() {
     }
   };
 
+  // --- Notifications Interactive Handlers ---
+  const handleMarkNotificationRead = async (id: string): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/notifications/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Read' })
+      });
+      if (resp.ok) {
+        await refreshData(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Mark notification read failed:", err);
+      return false;
+    }
+  };
+
+  const handleArchiveNotification = async (id: string): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/notifications/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Archived' })
+      });
+      if (resp.ok) {
+        await refreshData(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Archive notification failed:", err);
+      return false;
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async (): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Mark all notifications read failed:", err);
+      return false;
+    }
+  };
+
   // --- Dynamic Stats calculation for homepage highlights ---
   const statsSummary = {
     totalBooks: books.reduce((sum, b) => sum + b.totalCopies, 0),
@@ -1217,6 +1288,10 @@ export default function App() {
                 issueLogs={issueLogs}
                 auditLogs={auditLogs}
                 studyMaterials={studyMaterials}
+                notifications={notifications}
+                onMarkNotificationRead={handleMarkNotificationRead}
+                onArchiveNotification={handleArchiveNotification}
+                onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
                 onRefreshData={refreshData}
                 onAddBook={handleAddBook}
                 onEditBook={handleEditBook}

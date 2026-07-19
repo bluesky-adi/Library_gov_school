@@ -727,6 +727,10 @@ app.post('/api/books/bulk', authenticateToken, requireLibrarian, async (req, res
     }
     const { saved, skippedCount, skippedRows } = await dbService.saveBooksBulk(records);
     await addAuditLog(req, 'Book Added', `Bulk imported ${saved.length} books into catalog register. Skipped ${skippedCount} duplicate Accession items.`);
+    
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'Excel Book Import Complete', `Successfully bulk imported ${saved.length} books, skipped ${skippedCount} duplicate items.`, 'success');
+
     res.json({ success: true, count: saved.length, skippedCount, skippedRows, records: saved });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -826,6 +830,10 @@ app.post('/api/students', authenticateToken, requireLibrarian, async (req, res) 
   try {
     const newStudent = await dbService.saveStudent(req.body, false);
     await addAuditLog(req, 'Student Added', `Enrolled new student '${newStudent.name}' (Class: ${newStudent.class}, Sec: ${newStudent.section}, Roll: ${newStudent.rollNumber})`);
+    
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'New Student Enrolled', `Enrolled student ${newStudent.name} in Class ${newStudent.class}-${newStudent.section} (Roll: ${newStudent.rollNumber})`, 'user');
+
     res.status(201).json(newStudent);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -860,6 +868,10 @@ app.post('/api/students/bulk', authenticateToken, requireLibrarian, async (req, 
     }
     const { saved, skippedCount, updatedCount, errorCount, errors } = await dbService.saveStudentsBulk(records);
     await addAuditLog(req, 'Student Added', `Bulk imported list of students from enrollment Excel sheet. Saved: ${saved.length}, Updated: ${updatedCount}, Skipped: ${skippedCount}, Failed: ${errorCount}.`);
+    
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'Excel Student Import Complete', `Student import complete: ${saved.length} registered, ${updatedCount} updated, ${skippedCount} skipped, ${errorCount} failed.`, 'success');
+
     res.json({ 
       success: true, 
       count: saved.length, 
@@ -944,6 +956,7 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
     }
 
     const created = await dbService.saveBorrowRequest(reqBody);
+    await createSystemNotification('Librarian', '', 'New Borrow Request', `Student ${created.studentName} (Roll: ${created.rollNumber}) has requested "${created.bookName}" (ID: ${created.bookId})`, 'book');
     res.status(201).json(created);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -1022,6 +1035,11 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
 
     const savedLog = await dbService.saveIssueLog(issueLog);
     await addAuditLog(req, 'Book Issued', `Issued book '${borrowReq.bookName}' (ID: ${borrowReq.bookId}) to student ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`);
+    
+    // Trigger real-time synchronized notifications
+    await createSystemNotification('Student', studentIdVal, 'Borrow Request Approved', `Your borrow request for "${borrowReq.bookName}" has been approved! Due date: ${dueDateStr}`, 'success');
+    await createSystemNotification('Librarian', '', 'Book Issued Successfully', `Issued "${borrowReq.bookName}" to ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`, 'success');
+    
     res.json({ success: true, log: savedLog });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1034,6 +1052,11 @@ app.post('/api/requests/:id/reject', authenticateToken, requireLibrarian, async 
     if (!reqStatus) {
       return res.status(404).json({ error: "Borrow request code not discovered." });
     }
+    
+    // Trigger real-time private student notification
+    const studSId = reqStatus.studentId || `${reqStatus.class}-${reqStatus.section}-${reqStatus.rollNumber}`;
+    await createSystemNotification('Student', studSId, 'Borrow Request Rejected', `Your request for "${reqStatus.bookName}" was rejected by the Librarian.`, 'alert');
+    
     res.json({ success: true, request: reqStatus });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1217,6 +1240,11 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
     }
 
     await addAuditLog(req, 'Book Returned', `Returned book '${log.bookName}' (ID: ${log.bookId}) from student ${log.studentName} (Roll: ${log.rollNumber})`);
+    
+    // Trigger real-time synchronized notifications
+    await createSystemNotification('Student', log.studentId, 'Book Returned Successfully', `You have successfully returned "${log.bookName}" on ${log.returnDate}.`, 'success');
+    await createSystemNotification('Librarian', '', 'Book Returned', `Student ${log.studentName} (Roll: ${log.rollNumber}) returned "${log.bookName}"`, 'success');
+
     res.json({ success: true, log });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1286,6 +1314,22 @@ app.post('/api/study-materials', authenticateToken, requireLibrarian, async (req
     
     const saved = await dbService.saveStudyMaterial(material);
     await addAuditLog(req, 'Book Added', `Uploaded study material '${material.title}' (Visible to: ${material.visibleTo})`);
+    
+    // Trigger real-time synchronized notifications
+    await createSystemNotification('Librarian', '', 'Digital Resource Uploaded', `Study Material "${saved.title}" successfully uploaded and categorized under Class ${saved.visibleTo}.`, 'upload');
+    
+    try {
+      const studentsList = await dbService.getStudents();
+      for (const std of studentsList) {
+        if (saved.visibleTo === 'All' || String(std.class) === String(saved.visibleTo)) {
+          const stdSId = std.studentId || `${std.class}-${std.section}-${std.rollNumber}`;
+          await createSystemNotification('Student', stdSId, 'New Digital Resource Available', `A new study material "${saved.title}" has been uploaded for Class ${saved.visibleTo}.`, 'upload');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to notify students of study material upload:", err);
+    }
+
     res.status(201).json(saved);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1356,6 +1400,9 @@ app.post('/api/feedback', async (req, res) => {
 
     const savedFeedback = await dbService.saveFeedback(newFeedback);
     console.log(`Created new community feedback for ${name} (${role}). Status set to: ${computedStatus}`);
+
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'New Feedback Submitted', `Feedback received from ${savedFeedback.studentName} (${savedFeedback.studentRole}): "${savedFeedback.comment.slice(0, 50)}..."`, 'feedback');
 
     res.status(201).json({
       ...savedFeedback,
@@ -1510,6 +1557,10 @@ app.post('/api/contact-messages', authenticateToken, async (req, res) => {
     };
 
     const savedMessage = await dbService.saveContactMessage(newMessage);
+    
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'New Direct Message', `Message from ${savedMessage.studentName} (Roll: ${savedMessage.rollNumber}): "${savedMessage.message.slice(0, 50)}..."`, 'message');
+
     res.status(201).json({ success: true, message: savedMessage });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1580,6 +1631,139 @@ app.delete('/api/contact-messages/:id', authenticateToken, requireLibrarian, asy
 });
 
 
+// ---- SYSTEM NOTIFICATIONS CONTROLLERS & ENDPOINTS ----
+
+async function createSystemNotification(
+  recipientRole: 'Librarian' | 'Student',
+  studentId: string,
+  title: string,
+  message: string,
+  icon: string = 'info'
+) {
+  try {
+    const notification = {
+      id: `NT-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
+      recipientRole,
+      studentId: studentId || "",
+      title,
+      message,
+      icon,
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    };
+    await dbService.saveNotification(notification);
+    console.log(`[NOTIFICATION SYSTEM] Created ${recipientRole} notification: "${title}"`);
+  } catch (error) {
+    console.error("[NOTIFICATION SYSTEM] Failed to save notification:", error);
+  }
+}
+
+// 1. Get notifications matching the logged-in role
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+
+    const allNotifications = await dbService.getNotifications();
+
+    if (reqUser.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+      const filtered = allNotifications.filter((n: any) => {
+        return n.recipientRole === 'Student' && n.studentId && n.studentId.trim().toUpperCase() === userSId.toUpperCase();
+      });
+      return res.json(filtered);
+    }
+
+    if (reqUser.role === 'Librarian') {
+      const filtered = allNotifications.filter((n: any) => n.recipientRole === 'Librarian');
+      return res.json(filtered);
+    }
+
+    res.json([]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Update status of notification (Read/Archived)
+app.put('/api/notifications/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+
+    const { status } = req.body;
+    if (status !== 'Read' && status !== 'Unread' && status !== 'Archived') {
+      return res.status(400).json({ error: "Invalid status option. Must be 'Read', 'Unread', or 'Archived'." });
+    }
+
+    const allNotifications = await dbService.getNotifications();
+    const notification = allNotifications.find((n: any) => n.id === req.params.id);
+
+    if (!notification) {
+      return res.status(404).json({ error: "Notification record not found." });
+    }
+
+    // Strict privacy role boundaries
+    if (reqUser.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+      if (notification.recipientRole !== 'Student' || !notification.studentId || notification.studentId.toUpperCase() !== userSId.toUpperCase()) {
+        return res.status(403).json({ error: "Access denied: Students can only update their own private notifications." });
+      }
+    } else if (reqUser.role === 'Librarian') {
+      if (notification.recipientRole !== 'Librarian') {
+        return res.status(403).json({ error: "Access denied: Librarians can only update librarian notifications." });
+      }
+    }
+
+    notification.status = status;
+    const saved = await dbService.saveNotification(notification);
+    res.json(saved);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Mark all as Read for current user context
+app.post('/api/notifications/mark-all-read', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+
+    const allNotifications = await dbService.getNotifications();
+    let updatedCount = 0;
+
+    if (reqUser.role === 'Student') {
+      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+      for (const n of allNotifications) {
+        if (n.recipientRole === 'Student' && n.studentId && n.studentId.toUpperCase() === userSId.toUpperCase() && n.status === 'Unread') {
+          n.status = 'Read';
+          await dbService.saveNotification(n);
+          updatedCount++;
+        }
+      }
+    } else if (reqUser.role === 'Librarian') {
+      for (const n of allNotifications) {
+        if (n.recipientRole === 'Librarian' && n.status === 'Unread') {
+          n.status = 'Read';
+          await dbService.saveNotification(n);
+          updatedCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, updatedCount });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // ---- SYSTEM DATABASE RESET CONTROL ROUTE ----
 app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req, res) => {
   try {
@@ -1594,6 +1778,7 @@ app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req,
       await mongooseConnection.db?.collection('students').deleteMany({});
       await mongooseConnection.db?.collection('borrowrequests').deleteMany({});
       await mongooseConnection.db?.collection('bookissuelogs').deleteMany({});
+      await mongooseConnection.db?.collection('notifications').deleteMany({});
       
       const baselineBooks = [
         {
@@ -1689,6 +1874,7 @@ app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req,
     const STUDENTS_FILE = path.join(LOCAL_DB_DIR, 'students.json');
     const REQUESTS_FILE = path.join(LOCAL_DB_DIR, 'requests.json');
     const ISSUE_LOGS_FILE = path.join(LOCAL_DB_DIR, 'issue_logs.json');
+    const NOTIFICATIONS_FILE = path.join(LOCAL_DB_DIR, 'notifications.json');
 
     const seedBooksDefault = [
       {
@@ -1778,6 +1964,7 @@ app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req,
       fs.writeFileSync(STUDENTS_FILE, JSON.stringify(seedStudentsDefault, null, 2));
       fs.writeFileSync(REQUESTS_FILE, JSON.stringify(seedRequestsDefault, null, 2));
       fs.writeFileSync(ISSUE_LOGS_FILE, JSON.stringify(seedLogsDefault, null, 2));
+      fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify([], null, 2));
     } catch (e) {
       console.error("Warning: Failed to write seeded database files to filesystem:", e);
     }
@@ -1831,6 +2018,10 @@ app.post('/api/database/restore', authenticateToken, requireLibrarian, async (re
   try {
     const payload = req.body;
     await dbService.restoreFullDatabase(payload);
+    
+    // Trigger real-time librarian notification
+    await createSystemNotification('Librarian', '', 'Database Restored', 'The entire library system database was successfully restored from a secure backup.', 'success');
+
     res.json({ success: true, message: "Database state completely restored successfully." });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

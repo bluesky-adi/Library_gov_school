@@ -30,6 +30,7 @@ const STUDY_MATERIALS_FILE = path.join(LOCAL_DB_DIR, 'study_materials.json');
 const FEEDBACK_FILE = path.join(LOCAL_DB_DIR, 'feedback.json');
 const GALLERY_FILE = path.join(LOCAL_DB_DIR, 'gallery.json');
 const CONTACT_MESSAGES_FILE = path.join(LOCAL_DB_DIR, 'contact_messages.json');
+const NOTIFICATIONS_FILE = path.join(LOCAL_DB_DIR, 'notifications.json');
 
 // Copy bundled databases to writable /tmp directory if running in a serverless environment
 function ensureWritableDatabaseFiles() {
@@ -42,7 +43,8 @@ function ensureWritableDatabaseFiles() {
     'study_materials.json', 
     'feedback.json', 
     'gallery.json',
-    'contact_messages.json'
+    'contact_messages.json',
+    'notifications.json'
   ];
   for (const filename of filesToCopy) {
     const destPath = path.join(LOCAL_DB_DIR, filename);
@@ -145,6 +147,14 @@ try {
   }
 } catch (e) {
   console.warn("Operational database initialization notice (Gallery):", e);
+}
+
+try {
+  if (!fs.existsSync(NOTIFICATIONS_FILE) || fs.readFileSync(NOTIFICATIONS_FILE, 'utf8').trim() === '') {
+    fs.writeFileSync(NOTIFICATIONS_FILE, JSON.stringify([], null, 2));
+  }
+} catch (e) {
+  console.warn("Operational database initialization notice (Notifications):", e);
 }
 
 // Unified MongoDB / Mongoose Configurations
@@ -318,6 +328,22 @@ GalleryImageSchema.index({ order: 1 });
 
 const MongoGalleryImage = (mongoose.models.GalleryImage || mongoose.model('GalleryImage', GalleryImageSchema)) as any;
 
+const NotificationSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  recipientRole: { type: String, required: true, enum: ['Librarian', 'Student'] },
+  studentId: { type: String, default: "" },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  icon: { type: String, default: "" },
+  status: { type: String, required: true, enum: ['Unread', 'Read', 'Archived'], default: 'Unread' },
+  createdAt: { type: String, required: true }
+});
+NotificationSchema.index({ id: 1 });
+NotificationSchema.index({ recipientRole: 1, studentId: 1, status: 1 });
+NotificationSchema.index({ createdAt: -1 });
+
+const MongoNotification = (mongoose.models.Notification || mongoose.model('Notification', NotificationSchema)) as any;
+
 let cachedConnection: Promise<any> | null = null;
 
 export async function connectDatabase() {
@@ -449,6 +475,7 @@ let studyMaterialsCache: any[] | null = null;
 let feedbacksCache: any[] | null = null;
 let galleryCache: any[] | null = null;
 let contactMessagesCache: any[] | null = null;
+let notificationsCache: any[] | null = null;
 
 // Local File Helper functions to operate safely with concurrency
 function readLocalFile<T>(filePath: string): T[] {
@@ -1280,6 +1307,7 @@ export const dbService = {
     feedbacksCache = null;
     galleryCache = null;
     contactMessagesCache = null;
+    notificationsCache = null;
 
     return true;
   },
@@ -1486,6 +1514,55 @@ export const dbService = {
       if (filtered.length !== list.length) {
         writeLocalFile(CONTACT_MESSAGES_FILE, filtered);
         contactMessagesCache = null;
+        return true;
+      }
+      return false;
+    }
+  },
+
+  async getNotifications(): Promise<any[]> {
+    if (notificationsCache) return notificationsCache;
+    let list: any[];
+    if (isConnectedToMongo) {
+      list = (await MongoNotification.find().lean()) as any[];
+    } else {
+      list = readLocalFile<any>(NOTIFICATIONS_FILE);
+    }
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    notificationsCache = list;
+    return list;
+  },
+
+  async saveNotification(notification: any): Promise<any> {
+    if (isConnectedToMongo) {
+      await MongoNotification.findOneAndUpdate({ id: notification.id }, notification, { upsert: true, new: true });
+      notificationsCache = null;
+      return notification;
+    } else {
+      const list = readLocalFile<any>(NOTIFICATIONS_FILE);
+      const idx = list.findIndex((n: any) => n.id === notification.id);
+      if (idx !== -1) {
+        list[idx] = notification;
+      } else {
+        list.push(notification);
+      }
+      writeLocalFile(NOTIFICATIONS_FILE, list);
+      notificationsCache = null;
+      return notification;
+    }
+  },
+
+  async deleteNotification(id: string): Promise<boolean> {
+    if (isConnectedToMongo) {
+      const res = await MongoNotification.deleteOne({ id });
+      notificationsCache = null;
+      return res.deletedCount > 0;
+    } else {
+      const list = readLocalFile<any>(NOTIFICATIONS_FILE);
+      const filtered = list.filter((n: any) => n.id !== id);
+      if (filtered.length !== list.length) {
+        writeLocalFile(NOTIFICATIONS_FILE, filtered);
+        notificationsCache = null;
         return true;
       }
       return false;

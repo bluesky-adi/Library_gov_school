@@ -133,3 +133,15 @@ export interface ContactMessage {
   createdAt: string;
 }
 
+export interface Notification {
+  id: string;
+  recipientRole: 'Librarian' | 'Student';
+  studentId?: string; // empty/null if librarian notification
+  title: string;
+  message: string;
+  icon?: string; // e.g., 'book', 'message', 'alert', 'user', 'feedback', 'success', 'upload'
+  status: 'Unread' | 'Read' | 'Archived';
+  createdAt: string;
+}
+
+

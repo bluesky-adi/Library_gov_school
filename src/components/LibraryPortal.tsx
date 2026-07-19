@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { translations } from '../localization';
-import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial } from '../types';
+import { UserRole, Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMaterial, Notification } from '../types';
 import StudentModule from './StudentModule';
 import LibrarianModule from './LibrarianModule';
 import ErrorBoundary from './ErrorBoundary';
@@ -20,6 +20,10 @@ interface LibraryPortalProps {
   requests: BorrowRequest[];
   issueLogs: BookIssueLog[];
   auditLogs?: LibraryAuditLog[];
+  notifications: Notification[];
+  onMarkNotificationRead: (id: string) => Promise<boolean>;
+  onArchiveNotification: (id: string) => Promise<boolean>;
+  onMarkAllNotificationsRead: () => Promise<boolean>;
   onRefreshData?: () => void;
   onAddBook: (book: Book) => void;
   onEditBook: (book: Book) => void;
@@ -67,6 +71,10 @@ export default function LibraryPortal({
   requests,
   issueLogs,
   auditLogs,
+  notifications,
+  onMarkNotificationRead,
+  onArchiveNotification,
+  onMarkAllNotificationsRead,
   onRefreshData,
   onAddBook,
   onEditBook,
@@ -141,6 +149,10 @@ export default function LibraryPortal({
             loggedInStudent={loggedInStudent}
             issueLogs={issueLogs}
             studyMaterials={studyMaterials || []}
+            notifications={notifications}
+            onMarkNotificationRead={onMarkNotificationRead}
+            onArchiveNotification={onArchiveNotification}
+            onMarkAllNotificationsRead={onMarkAllNotificationsRead}
           />
         </ErrorBoundary>
       ) : currentRole === 'Librarian' ? (
@@ -152,6 +164,10 @@ export default function LibraryPortal({
             issueLogs={issueLogs}
             auditLogs={auditLogs || []}
             studyMaterials={studyMaterials || []}
+            notifications={notifications}
+            onMarkNotificationRead={onMarkNotificationRead}
+            onArchiveNotification={onArchiveNotification}
+            onMarkAllNotificationsRead={onMarkAllNotificationsRead}
             onRefreshInputLogs={onRefreshData}
             onAddBook={onAddBook}
             onEditBook={onEditBook}
