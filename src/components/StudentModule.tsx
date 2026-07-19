@@ -81,7 +81,7 @@ export default function StudentModule({
   const requests = Array.isArray(rawRequests) ? rawRequests : [];
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
 
-  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile' | 'study-materials'>('catalogue');
+  const [activeSubTab, setActiveSubTab] = useState<'catalogue' | 'profile' | 'study-materials' | 'contact-librarian'>('catalogue');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -97,6 +97,74 @@ export default function StudentModule({
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState<boolean>(false);
+
+  // Contact Librarian States & Functions
+  const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [contactMessagesLoading, setContactMessagesLoading] = useState<boolean>(false);
+  const [contactForm, setContactForm] = useState({ category: 'General Question', message: '' });
+  const [contactSuccess, setContactSuccess] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactSubmitting, setContactSubmitting] = useState<boolean>(false);
+
+  const fetchContactMessages = () => {
+    setContactMessagesLoading(true);
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch('/api/contact-messages', {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setContactMessages(data);
+        }
+      })
+      .catch(err => console.error("Error loading contact messages:", err))
+      .finally(() => setContactMessagesLoading(false));
+  };
+
+  React.useEffect(() => {
+    if (activeSubTab === 'contact-librarian') {
+      fetchContactMessages();
+    }
+  }, [activeSubTab]);
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactForm.message.trim()) {
+      setContactError("Please write a message.");
+      return;
+    }
+    setContactSubmitting(true);
+    setContactSuccess(null);
+    setContactError(null);
+
+    const token = localStorage.getItem("ramdiri_library_token");
+    fetch('/api/contact-messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(contactForm)
+    })
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to submit message.");
+        }
+        setContactSuccess("Your message was successfully sent to the Librarian!");
+        setContactForm({ category: 'General Question', message: '' });
+        fetchContactMessages();
+      })
+      .catch(err => {
+        setContactError(err.message || "Error sending message.");
+      })
+      .finally(() => {
+        setContactSubmitting(false);
+      });
+  };
 
   const fetchMyReview = () => {
     setMyReviewLoading(true);
@@ -326,7 +394,7 @@ export default function StudentModule({
       result = result.filter(b => !/[\u0900-\u097F]/.test(b.bookName || b.author || ""));
     }
     if (searchTerm) {
-      result = searchBooksSmart(result, searchTerm);
+      result = searchBooksSmart(result, searchTerm, categorySerialsMap);
     }
     if (sortByFilter === 'title-asc') {
       result.sort((a, b) => (a.bookName || "").localeCompare(b.bookName || "", undefined, { sensitivity: 'base' }));
@@ -563,6 +631,16 @@ export default function StudentModule({
         >
           👤 {t.profileTab}
         </button>
+        <button
+          onClick={() => setActiveSubTab('contact-librarian')}
+          className={`px-5 py-3 text-xs font-extrabold tracking-wide uppercase border-b-2 transition-all ${
+            activeSubTab === 'contact-librarian'
+              ? 'border-slate-850 text-slate-900 dark:text-slate-100 font-black'
+              : 'border-transparent text-slate-400 hover:text-slate-655'
+          }`}
+        >
+          💬 {currentLang === 'EN' ? "Contact Librarian" : "पुस्तकालयाध्यक्ष संपर्क"}
+        </button>
       </div>
 
       {successMessage && (
@@ -662,8 +740,8 @@ export default function StudentModule({
               </div>
 
               {/* Layout view controls & status info */}
-              <div className="flex flex-wrap items-center justify-between border-t border-slate-100 pt-3 gap-2">
-                <span className="text-xs font-extrabold text-slate-700 font-mono">
+              <div className="flex flex-wrap items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 gap-2">
+                <span className="text-xs font-extrabold text-slate-705 dark:text-slate-300 font-mono">
                   Showing {filteredBooks.length} / {books.length} Books
                 </span>
                 <span className="text-[10px] bg-[#0f172a] text-amber-400 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
@@ -674,62 +752,91 @@ export default function StudentModule({
 
             {/* Content Display: Cards Grid */}
             {filteredBooks.length === 0 ? (
-              <div className="text-center py-12 p-4 text-slate-500 bg-white border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+              <div className="text-center py-12 p-4 text-slate-500 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
                 <BookOpen className="w-10 h-10 mx-auto text-slate-300 mb-2" />
                 <p className="text-xs font-extrabold">{t.noBooks}</p>
               </div>
             ) : (
               <div>
                 {/* RENDER HIGH CONTRAST SIMPLIFIED GRID CARDS FOR STUDENTS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {paginatedBooks.map(book => {
                     const isAvailable = book.availableCopies > 0;
                     return (
                       <div 
                         key={book.bookId}
-                        className="bg-white dark:bg-slate-900 border-2 border-slate-205 dark:border-slate-800 rounded-xl p-4 flex gap-4 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition-colors"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all duration-300"
                       >
-                        <div className="w-24 shrink-0">
+                        <div 
+                          onClick={() => setSelectedBook(book)}
+                          className="aspect-[3/4] w-full overflow-hidden bg-slate-50 dark:bg-slate-950 rounded-md ring-1 ring-slate-100 dark:ring-slate-800 hover:scale-[1.02] transition-all duration-300 cursor-pointer flex items-center justify-center"
+                        >
                           <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
                         </div>
                         
-                        <div className="flex-1 flex flex-col justify-between">
-                          <div className="space-y-1">
+                        <div className="flex-1 flex flex-col justify-between mt-3.5">
+                          <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[9px] bg-indigo-50 dark:bg-slate-800 text-indigo-850 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase">
+                              <span className="text-[9px] bg-indigo-50 text-indigo-850 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase tracking-wider">
                                 {book.category}
+                              </span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                                SR# {book.bookId}
                               </span>
                             </div>
                             
-                            <h3 className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2">
+                            <h3 
+                              onClick={() => setSelectedBook(book)}
+                              className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2 hover:text-indigo-650 cursor-pointer transition-colors"
+                            >
                                {book.bookName}
                             </h3>
-                            <p className="text-[11px] text-slate-600 dark:text-slate-450 italic font-medium line-clamp-1">
+                            <p className="text-[11px] text-slate-500 italic font-medium line-clamp-1">
                               by {book.author}
                             </p>
+
+                            {/* Metadata Details Grid block */}
+                            <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[9.5px] font-mono border border-slate-150 dark:border-slate-800/80 my-2 select-none">
+                              <div>
+                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Accession No</span>
+                                <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.accessionNumber || "N/A"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Call Number</span>
+                                <span className="text-indigo-600 dark:text-indigo-400 font-black block truncate">{book.callNumber || book.ddcNumber || "N/A"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Book Number</span>
+                                <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.bookNumber || "N/A"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Shelf Location</span>
+                                <span className="text-emerald-700 dark:text-emerald-400 font-black block truncate">Shelf #{categorySerialsMap.get(book.bookId) || 1}</span>
+                              </div>
+                            </div>
                             
-                            <div className="pt-2 flex items-center gap-1.5">
-                              <span className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
+                            <div className="pt-1 flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
                               <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-350">
                                 {isAvailable ? `${t.copiesAvailable} ${book.availableCopies} / ${book.totalCopies}` : t.unavailable}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex gap-1.5 pt-2.5 border-t border-slate-150 dark:border-slate-800 mt-2">
+                          <div className="flex gap-1.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 mt-2.5">
                             <button
                               onClick={() => setSelectedBook(book)}
-                              className="px-2.5 py-1.5 border-2 border-slate-250 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10.5px] font-bold text-slate-755 dark:text-slate-300 rounded transition-all cursor-pointer"
+                              className="px-2 py-1.5 border border-slate-300 hover:bg-slate-50 dark:border-slate-800 text-[10px] font-bold text-slate-755 dark:text-slate-300 rounded-lg transition-all cursor-pointer"
                             >
                               {t.bookDetails}
                             </button>
                             <button
                               onClick={() => handleRequestClick(book)}
                               disabled={!isAvailable}
-                              className={`flex-1 px-2.5 py-1.5 text-[10.5px] font-black rounded border-2 transition-all cursor-pointer text-center ${
+                              className={`flex-1 px-2 py-1.5 text-[10px] font-black rounded-lg border border-transparent transition-all cursor-pointer text-center ${
                                 isAvailable
-                                  ? 'bg-[#0f172a] hover:bg-slate-800 text-white border-[#0f172a] shadow-xs'
-                                  : 'bg-slate-100 text-slate-400 border-slate-205 cursor-not-allowed'
+                                  ? 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                               }`}
                             >
                               {t.requestBook}
@@ -1242,6 +1349,144 @@ export default function StudentModule({
             )}
           </div>
         </div>
+      ) : activeSubTab === 'contact-librarian' ? (
+        /* Contact Librarian Tab */
+        <div className="space-y-6 animate-fade-in" id="student-contact-librarian-tab">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl space-y-4 shadow-xs">
+            <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100 dark:border-slate-800 font-sans">
+              <MessageSquare className="w-5.5 h-5.5 text-indigo-600 shrink-0" />
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm select-none">
+                  💬 {currentLang === 'EN' ? "Contact Librarian" : "पुस्तकालयाध्यक्ष से संपर्क करें"}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {currentLang === 'EN' 
+                    ? "Send direct messages, suggestions, questions, or book recommendations to the school librarian." 
+                    : "पुस्तकालयाध्यक्ष को सीधे संदेश, सुझाव, प्रश्न या पुस्तक सिफारिशें भेजें।"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              {/* Submission Form */}
+              <div className="md:col-span-7 space-y-3.5">
+                <form onSubmit={handleContactSubmit} className="space-y-4">
+                  {contactSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs animate-fade-in font-medium">
+                      {contactSuccess}
+                    </div>
+                  )}
+                  {contactError && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-100 border border-red-200 dark:border-red-800 rounded-xl text-xs animate-fade-in font-medium">
+                      {contactError}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      {currentLang === 'EN' ? "Message Category" : "संदेश श्रेणी"}
+                    </label>
+                    <select
+                      value={contactForm.category}
+                      onChange={(e) => setContactForm(c => ({ ...c, category: e.target.value }))}
+                      className="w-full text-xs font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-955 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none"
+                    >
+                      <option value="General Question">{currentLang === 'EN' ? "General Question" : "सामान्य प्रश्न"}</option>
+                      <option value="Suggestion">{currentLang === 'EN' ? "Suggestion" : "सुझाव"}</option>
+                      <option value="Report an Issue">{currentLang === 'EN' ? "Report an Issue" : "समस्या की रिपोर्ट करें"}</option>
+                      <option value="Book Recommendation">{currentLang === 'EN' ? "Book Recommendation" : "पुस्तक की सिफारिश"}</option>
+                      <option value="Other">{currentLang === 'EN' ? "Other" : "अन्य"}</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                      {currentLang === 'EN' ? "Your Message" : "आपका संदेश"}
+                    </label>
+                    <textarea
+                      rows={5}
+                      required
+                      value={contactForm.message}
+                      onChange={(e) => setContactForm(c => ({ ...c, message: e.target.value }))}
+                      placeholder={
+                        currentLang === 'EN'
+                          ? "Write your message or book recommendation here..."
+                          : "यहाँ अपना संदेश या पुस्तक की सिफारिश लिखें..."
+                      }
+                      className="w-full text-xs font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-955 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 focus:ring-1 focus:ring-indigo-600 outline-none leading-relaxed"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={contactSubmitting}
+                    className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {contactSubmitting 
+                        ? (currentLang === 'EN' ? "Sending message..." : "संदेश भेजा जा रहा है...") 
+                        : (currentLang === 'EN' ? "Send Message to Librarian" : "पुस्तकालयाध्यक्ष को संदेश भेजें")}
+                    </span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Sent Messages History */}
+              <div className="md:col-span-5 bg-slate-50 dark:bg-slate-950/45 p-4 border border-slate-150 dark:border-slate-800/85 rounded-xl flex flex-col justify-between space-y-4">
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px]">
+                  <span className="text-[10px] font-black uppercase text-slate-500 block">
+                    {currentLang === 'EN' ? "My Sent Messages" : "मेरे भेजे गए संदेश"}
+                  </span>
+
+                  {contactMessagesLoading ? (
+                    <div className="text-center py-6 text-xs text-slate-400 font-mono animate-pulse">
+                      Loading messages...
+                    </div>
+                  ) : contactMessages.length > 0 ? (
+                    <div className="space-y-3">
+                      {contactMessages.map((msg) => (
+                        <div key={msg.id} className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] bg-slate-100 text-slate-705 px-2 py-0.5 rounded font-bold font-mono">
+                              {msg.category}
+                            </span>
+                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                              msg.status === 'Read' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+                            }`}>
+                              {msg.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap leading-relaxed">
+                            "{msg.message}"
+                          </p>
+                          <span className="text-[8.5px] font-mono text-slate-400 block">
+                            Sent: {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+                      <MessageSquare className="w-8 h-8 text-slate-300 stroke-[1.5]" />
+                      <p className="font-bold leading-normal">
+                        {currentLang === 'EN' 
+                          ? "No messages sent yet." 
+                          : "अभी तक कोई संदेश नहीं भेजा गया है।"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-slate-400 leading-snug border-t border-slate-100 dark:border-slate-800 pt-2 font-mono">
+                  {currentLang === 'EN' 
+                    ? "✉️ Messages are checked daily by the library administration staff." 
+                    : "✉️ संदेशों की जांच रोजाना पुस्तकालय प्रशासन कर्मचारियों द्वारा की जाती है।"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* DETAILED BOOK DIALOG MODAL */}
@@ -1281,16 +1526,32 @@ export default function StudentModule({
                   {selectedBook.description}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-[11px] border-t border-slate-150 pt-3">
+                <div className="grid grid-cols-2 gap-3.5 text-[11px] border-t border-slate-150 pt-3">
                   <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[9px] tracking-wide font-mono">Category</span>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Category</span>
                     <span className="font-bold text-[#0f172a] dark:text-indigo-400 block mt-0.5">{selectedBook.category}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[9px] tracking-wide font-mono">Availability State</span>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Availability State</span>
                     <span className={`font-extrabold block mt-0.5 ${selectedBook.availableCopies > 0 ? 'text-emerald-700 font-bold' : 'text-red-655'}`}>
-                      {selectedBook.availableCopies > 0 ? `${t.available} (${selectedBook.availableCopies} Copies)` : t.unavailable}
+                      {selectedBook.availableCopies > 0 ? `${t.available} (${selectedBook.availableCopies} of ${selectedBook.totalCopies} Copies)` : t.unavailable}
                     </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Accession Number</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5">{selectedBook.accessionNumber || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Call / Book Number</span>
+                    <span className="font-bold text-indigo-650 dark:text-indigo-400 block mt-0.5">{selectedBook.callNumber || selectedBook.ddcNumber || "N/A"} / {selectedBook.bookNumber || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Publisher</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5 truncate">{selectedBook.publisher || "Ramdiri Library Publications"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Shelf Location</span>
+                    <span className="font-bold text-emerald-700 dark:text-emerald-400 block mt-0.5">Shelf #{categorySerialsMap.get(selectedBook.bookId) || 1}</span>
                   </div>
                 </div>
 

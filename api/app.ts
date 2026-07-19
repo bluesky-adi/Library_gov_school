@@ -1478,6 +1478,108 @@ app.delete('/api/feedback/:id', authenticateToken, requireLibrarian, async (req,
 });
 
 
+// ---- CONTACT LIBRARIAN ENDPOINTS ----
+// 1. Submit contact message (Students only, or general authenticated)
+app.post('/api/contact-messages', authenticateToken, async (req, res) => {
+  try {
+    const { category, message } = req.body;
+    if (!category || !message) {
+      return res.status(400).json({ error: "Missing required fields: category and message are required." });
+    }
+    const allowedCategories = ['General Question', 'Suggestion', 'Report an Issue', 'Book Recommendation', 'Other'];
+    if (!allowedCategories.includes(category)) {
+      return res.status(400).json({ error: "Invalid contact category." });
+    }
+
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+
+    const msgId = `MSG-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
+    const newMessage = {
+      id: msgId,
+      studentName: reqUser.name || "Student",
+      class: (reqUser.class || "").toString().trim().toUpperCase() || "N/A",
+      section: (reqUser.section || "").toString().trim().toUpperCase() || "N/A",
+      rollNumber: Number(reqUser.rollNumber) || 0,
+      category,
+      message: message.trim(),
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    };
+
+    const savedMessage = await dbService.saveContactMessage(newMessage);
+    res.status(201).json({ success: true, message: savedMessage });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Get contact messages (Librarians see all, Students see their own)
+app.get('/api/contact-messages', authenticateToken, async (req, res) => {
+  try {
+    const reqUser = (req as any).user;
+    if (!reqUser) {
+      return res.status(401).json({ error: "Unauthorized access context." });
+    }
+
+    const allMessages = await dbService.getContactMessages();
+
+    if (reqUser.role === 'Student') {
+      const filtered = allMessages.filter((m: any) => {
+        return (
+          m.studentName?.toLowerCase() === reqUser.name?.toLowerCase() &&
+          String(m.class).toUpperCase() === String(reqUser.class).toUpperCase() &&
+          String(m.section).toUpperCase() === String(reqUser.section).toUpperCase() &&
+          Number(m.rollNumber) === Number(reqUser.rollNumber)
+        );
+      });
+      return res.json(filtered);
+    }
+
+    res.json(allMessages);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Update status of contact message (Librarians only)
+app.put('/api/contact-messages/:id/status', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (status !== 'Read' && status !== 'Unread') {
+      return res.status(400).json({ error: "Invalid status option. Must be 'Read' or 'Unread'." });
+    }
+
+    const allMessages = await dbService.getContactMessages();
+    const msg = allMessages.find((m: any) => m.id === req.params.id);
+    if (!msg) {
+      return res.status(404).json({ error: "Contact message record not found." });
+    }
+
+    msg.status = status;
+    const saved = await dbService.saveContactMessage(msg);
+    res.json(saved);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Delete contact message (Librarians only)
+app.delete('/api/contact-messages/:id', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const success = await dbService.deleteContactMessage(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: "Contact message not found." });
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // ---- SYSTEM DATABASE RESET CONTROL ROUTE ----
 app.post('/api/database/reset', authenticateToken, requireLibrarian, async (req, res) => {
   try {

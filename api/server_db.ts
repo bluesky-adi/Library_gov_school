@@ -29,10 +29,21 @@ const AUDIT_LOGS_FILE = path.join(LOCAL_DB_DIR, 'audit_logs.json');
 const STUDY_MATERIALS_FILE = path.join(LOCAL_DB_DIR, 'study_materials.json');
 const FEEDBACK_FILE = path.join(LOCAL_DB_DIR, 'feedback.json');
 const GALLERY_FILE = path.join(LOCAL_DB_DIR, 'gallery.json');
+const CONTACT_MESSAGES_FILE = path.join(LOCAL_DB_DIR, 'contact_messages.json');
 
 // Copy bundled databases to writable /tmp directory if running in a serverless environment
 function ensureWritableDatabaseFiles() {
-  const filesToCopy = ['books.json', 'students.json', 'requests.json', 'issue_logs.json', 'audit_logs.json', 'study_materials.json', 'feedback.json', 'gallery.json'];
+  const filesToCopy = [
+    'books.json', 
+    'students.json', 
+    'requests.json', 
+    'issue_logs.json', 
+    'audit_logs.json', 
+    'study_materials.json', 
+    'feedback.json', 
+    'gallery.json',
+    'contact_messages.json'
+  ];
   for (const filename of filesToCopy) {
     const destPath = path.join(LOCAL_DB_DIR, filename);
     const srcPath = path.join(BUNDLED_DB_DIR, filename);
@@ -270,6 +281,20 @@ FeedbackSchema.index({ id: 1 });
 FeedbackSchema.index({ status: 1 });
 FeedbackSchema.index({ createdAt: -1 });
 
+const ContactMessageSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  studentName: { type: String, required: true },
+  class: { type: String, required: true },
+  section: { type: String, required: true },
+  rollNumber: { type: Number, required: true },
+  category: { type: String, required: true, enum: ['General Question', 'Suggestion', 'Report an Issue', 'Book Recommendation', 'Other'] },
+  message: { type: String, required: true },
+  status: { type: String, required: true, enum: ['Unread', 'Read'], default: 'Unread' },
+  createdAt: { type: String, required: true }
+});
+ContactMessageSchema.index({ id: 1 });
+ContactMessageSchema.index({ createdAt: -1 });
+
 const MongoBook = (mongoose.models.Book || mongoose.model('Book', BookSchema)) as any;
 const MongoStudent = (mongoose.models.Student || mongoose.model('Student', StudentSchema)) as any;
 const MongoBorrowRequest = (mongoose.models.BorrowRequest || mongoose.model('BorrowRequest', BorrowRequestSchema)) as any;
@@ -278,6 +303,8 @@ const MongoLibraryAuditLog = (mongoose.models.LibraryAuditLog || mongoose.model(
 const MongoLibrarianConfig = (mongoose.models.LibrarianConfig || mongoose.model('LibrarianConfig', LibrarianConfigSchema)) as any;
 const MongoStudyMaterial = (mongoose.models.StudyMaterial || mongoose.model('StudyMaterial', StudyMaterialSchema)) as any;
 const MongoFeedback = (mongoose.models.Feedback || mongoose.model('Feedback', FeedbackSchema)) as any;
+const MongoContactMessage = (mongoose.models.ContactMessage || mongoose.model('ContactMessage', ContactMessageSchema)) as any;
+
 
 const GalleryImageSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -421,6 +448,7 @@ let auditLogsCache: any[] | null = null;
 let studyMaterialsCache: any[] | null = null;
 let feedbacksCache: any[] | null = null;
 let galleryCache: any[] | null = null;
+let contactMessagesCache: any[] | null = null;
 
 // Local File Helper functions to operate safely with concurrency
 function readLocalFile<T>(filePath: string): T[] {
@@ -1251,6 +1279,7 @@ export const dbService = {
     studyMaterialsCache = null;
     feedbacksCache = null;
     galleryCache = null;
+    contactMessagesCache = null;
 
     return true;
   },
@@ -1410,6 +1439,56 @@ export const dbService = {
       writeLocalFile(GALLERY_FILE, images);
       galleryCache = null;
       return images;
+    }
+  },
+
+  async getContactMessages(): Promise<any[]> {
+    if (contactMessagesCache) return contactMessagesCache;
+    let list: any[];
+    if (isConnectedToMongo) {
+      list = (await MongoContactMessage.find().lean()) as any[];
+    } else {
+      list = readLocalFile<any>(CONTACT_MESSAGES_FILE);
+    }
+    // Sort by newest first
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    contactMessagesCache = list;
+    return list;
+  },
+
+  async saveContactMessage(msg: any): Promise<any> {
+    if (isConnectedToMongo) {
+      await MongoContactMessage.findOneAndUpdate({ id: msg.id }, msg, { upsert: true, new: true });
+      contactMessagesCache = null;
+      return msg;
+    } else {
+      const list = readLocalFile<any>(CONTACT_MESSAGES_FILE);
+      const idx = list.findIndex(m => m.id === msg.id);
+      if (idx !== -1) {
+        list[idx] = msg;
+      } else {
+        list.push(msg);
+      }
+      writeLocalFile(CONTACT_MESSAGES_FILE, list);
+      contactMessagesCache = null;
+      return msg;
+    }
+  },
+
+  async deleteContactMessage(id: string): Promise<boolean> {
+    if (isConnectedToMongo) {
+      const res = await MongoContactMessage.deleteOne({ id });
+      contactMessagesCache = null;
+      return res.deletedCount > 0;
+    } else {
+      const list = readLocalFile<any>(CONTACT_MESSAGES_FILE);
+      const filtered = list.filter(m => m.id !== id);
+      if (filtered.length !== list.length) {
+        writeLocalFile(CONTACT_MESSAGES_FILE, filtered);
+        contactMessagesCache = null;
+        return true;
+      }
+      return false;
     }
   }
 };

@@ -120,3 +120,16 @@ export interface AppState {
   currentRole: UserRole | null;
   loggedInStudent?: Student;
 }
+
+export interface ContactMessage {
+  id: string;
+  studentName: string;
+  class: string;
+  section: string;
+  rollNumber: number;
+  category: 'General Question' | 'Suggestion' | 'Report an Issue' | 'Book Recommendation' | 'Other';
+  message: string;
+  status: 'Unread' | 'Read';
+  createdAt: string;
+}
+
