@@ -31,6 +31,7 @@ export interface Book {
   remarks?: string;
   ddcCategory?: string;
   ddcNumber?: string;
+  shelfNumber?: string;
 }
 
 export interface StudyMaterial {

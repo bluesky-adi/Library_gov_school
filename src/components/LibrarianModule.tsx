@@ -56,11 +56,268 @@ function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelPr
     </div>
   );
 }
+
+import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
+
+interface StickerElementProps {
+  book: Book;
+  accessionNo: string;
+  callNo: string;
+  bookNo: string;
+  shelfLocation: string;
+  isPreview?: boolean;
+}
+
+function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, isPreview = false }: StickerElementProps) {
+  const [qrUrl, setQrUrl] = useState<string>('');
+
+  useEffect(() => {
+    const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
+    QRCode.toDataURL(targetUrl, { 
+      margin: 1, 
+      width: 150,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    })
+      .then(url => setQrUrl(url))
+      .catch(err => console.error("Error generating sticker QR:", err));
+  }, [accessionNo]);
+
+  if (isPreview) {
+    return (
+      <div className="sticker-preview-item bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 p-2 rounded-xl shadow-xs flex flex-row justify-between items-center select-none font-mono text-slate-900 dark:text-white transition-all hover:border-indigo-500">
+        <div className="flex-1 flex flex-col justify-between h-full pr-1 overflow-hidden">
+          <div className="text-[10px] leading-tight font-extrabold tracking-tight truncate flex">
+            <span className="w-11 text-slate-400 dark:text-slate-500 font-bold">ACC</span>
+            <span>: <b className="text-slate-900 dark:text-slate-100">{accessionNo}</b></span>
+          </div>
+          <div className="text-[10px] leading-tight font-extrabold tracking-tight truncate flex mt-1">
+            <span className="w-11 text-slate-400 dark:text-slate-500 font-bold">CALL</span>
+            <span>: <b className="text-slate-900 dark:text-slate-100">{callNo}</b></span>
+          </div>
+          <div className="text-[10px] leading-tight font-extrabold tracking-tight truncate flex mt-1">
+            <span className="w-11 text-slate-400 dark:text-slate-500 font-bold">BOOK</span>
+            <span>: <b className="text-slate-900 dark:text-slate-100">{bookNo}</b></span>
+          </div>
+          <div className="text-[10px] leading-tight font-extrabold tracking-tight truncate flex mt-1">
+            <span className="w-11 text-slate-400 dark:text-slate-500 font-bold">SHELF</span>
+            <span>: <b className="text-emerald-600 dark:text-emerald-450 font-black">{shelfLocation}</b></span>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center justify-center p-1 bg-white rounded-lg border border-slate-100" style={{ width: '52px', height: '52px' }}>
+          {qrUrl ? (
+            <img 
+              src={qrUrl} 
+              alt="QR Code" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-full h-full bg-slate-100 animate-pulse rounded"></div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sticker-item bg-white text-black p-1.5 flex flex-row justify-between items-center overflow-hidden font-mono border border-dashed border-slate-300" style={{ width: '64mm', height: '24mm' }}>
+      <div className="flex-1 flex flex-col justify-between h-full pr-1 overflow-hidden animate-fade-in" style={{ width: '42mm' }}>
+        <div className="text-[8px] leading-none font-extrabold tracking-tight truncate flex text-black">
+          <span className="w-9 text-slate-500 font-bold">ACC</span>
+          <span className="font-black">: {accessionNo}</span>
+        </div>
+        <div className="text-[8px] leading-none font-extrabold tracking-tight truncate flex mt-0.5 text-black">
+          <span className="w-9 text-slate-500 font-bold">CALL</span>
+          <span className="font-black">: {callNo}</span>
+        </div>
+        <div className="text-[8px] leading-none font-extrabold tracking-tight truncate flex mt-0.5 text-black">
+          <span className="w-9 text-slate-500 font-bold">BOOK</span>
+          <span className="font-black">: {bookNo}</span>
+        </div>
+        <div className="text-[8px] leading-none font-extrabold tracking-tight truncate flex mt-0.5 text-black">
+          <span className="w-9 text-slate-500 font-bold">SHELF</span>
+          <span className="font-black">: {shelfLocation}</span>
+        </div>
+      </div>
+      <div className="shrink-0 flex items-center justify-center bg-white" style={{ width: '18mm', height: '18mm' }}>
+        {qrUrl ? (
+          <img 
+            src={qrUrl} 
+            alt="QR Code" 
+            className="w-full h-full object-contain"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="w-full h-full bg-slate-100 animate-pulse rounded"></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StickerPreviewSectionProps {
+  books: Book[];
+  categorySerialsMap: Map<string, number>;
+  stickerPrintedIds: Set<string>;
+  onPrintSingle: (booksList: Book[]) => void;
+}
+
+function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, onPrintSingle }: StickerPreviewSectionProps) {
+  const [filterMode, setFilterMode] = useState<'all' | 'unprinted'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [previewPage, setPreviewPage] = useState<number>(1);
+  const itemsPerPage = 12;
+
+  const filtered = useMemo(() => {
+    let list = books;
+    if (filterMode === 'unprinted') {
+      list = list.filter(b => !stickerPrintedIds.has(b.bookId));
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(b => 
+        b.bookName.toLowerCase().includes(q) ||
+        (b.accessionNumber && b.accessionNumber.toLowerCase().includes(q)) ||
+        b.bookId.toLowerCase().includes(q) ||
+        (b.callNumber && b.callNumber.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [books, filterMode, searchQuery, stickerPrintedIds]);
+
+  // Reset page on search or filter change
+  useEffect(() => {
+    setPreviewPage(1);
+  }, [filterMode, searchQuery]);
+
+  const paginated = useMemo(() => {
+    const start = (previewPage - 1) * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage);
+  }, [filtered, previewPage]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+
+  return (
+    <div className="space-y-4">
+      {/* Filtering and search row */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between no-print bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setFilterMode('all')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              filterMode === 'all'
+                ? 'bg-indigo-600 text-white font-extrabold'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-655 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            All Catalog ({books.length})
+          </button>
+          <button
+            onClick={() => setFilterMode('unprinted')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              filterMode === 'unprinted'
+                ? 'bg-emerald-600 text-white font-extrabold'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-655 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            🆕 New Unprinted ({books.filter(b => !stickerPrintedIds.has(b.bookId)).length})
+          </button>
+        </div>
+        <div className="w-full sm:w-64 relative">
+          <input
+            type="text"
+            placeholder="Search preview by title / ACC / CALL..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-8 text-slate-400 text-xs font-sans">
+          No matching books found for this preview filter.
+        </div>
+      ) : (
+        <>
+          {/* Sticker Preview Grid */}
+          <div className="sticker-preview-grid">
+            {paginated.map(book => {
+              const accessionNo = book.accessionNumber || book.bookId || "N/A";
+              const callNo = book.callNumber || "N/A";
+              const bookNo = book.bookNumber || "N/A";
+              const shelfLocation = book.shelfNumber || "";
+              const isPrinted = stickerPrintedIds.has(book.bookId);
+
+              return (
+                <div key={book.bookId} className="relative group">
+                  <StickerElement 
+                    book={book}
+                    accessionNo={accessionNo}
+                    callNo={callNo}
+                    bookNo={bookNo}
+                    shelfLocation={shelfLocation}
+                    isPreview={true}
+                  />
+                  {/* Absolute positioning of sticker row indicator badge & action buttons */}
+                  <div className="absolute top-1.5 right-1.5 flex gap-1 items-center bg-white/95 dark:bg-slate-900/95 p-0.5 rounded shadow-xs opacity-80 group-hover:opacity-100 transition-opacity">
+                    <span className={`px-1 py-0.2 text-[8px] font-black rounded ${
+                      isPrinted 
+                        ? 'bg-slate-100 text-slate-500' 
+                        : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                    }`}>
+                      {isPrinted ? 'Printed' : 'New'}
+                    </span>
+                    <button
+                      onClick={() => onPrintSingle([book])}
+                      className="p-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-650 dark:text-indigo-400 hover:bg-indigo-100 text-[9px] font-bold flex items-center gap-0.5"
+                      title="Direct Print Single Sticker"
+                    >
+                      <Printer className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800 no-print select-none text-[11px] text-slate-500 font-bold">
+              <span>Showing preview page {previewPage} of {totalPages} (Total matching: {filtered.length})</span>
+              <div className="flex gap-1.5 font-sans">
+                <button
+                  disabled={previewPage === 1}
+                  onClick={() => setPreviewPage(prev => Math.max(1, prev - 1))}
+                  className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-655 dark:text-slate-350 font-bold rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  ◀ Prev
+                </button>
+                <button
+                  disabled={previewPage === totalPages}
+                  onClick={() => setPreviewPage(prev => Math.min(totalPages, prev + 1))}
+                  className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-655 dark:text-slate-350 font-bold rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next ▶
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 import { 
   PlusCircle, Edit, Trash2, CheckCircle, XCircle, FileText, FolderPlus,
   BookOpen, Users, ClipboardCheck, Printer, Search, Download, AlertTriangle, ArrowUpRight,
   Key, Eye, EyeOff, Shield, Sliders, AlertCircle, User, Database, RefreshCw, Upload, Clock,
-  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star, Camera, Inbox, Check, Archive, Bell
+  Grid, LayoutGrid, ArrowUpDown, MessageSquare, Star, Camera, Inbox, Check, Archive, Bell, Tag
 } from 'lucide-react';
 
 interface LibrarianModuleProps {
@@ -158,7 +415,7 @@ export default function LibrarianModule({
   const issueLogs = Array.isArray(rawIssueLogs) ? rawIssueLogs : [];
   const auditLogs = Array.isArray(rawAuditLogs) ? rawAuditLogs : [];
   // Tabs config
-  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback' | 'gallery' | 'notifications'>('books');
+  const [activeTab, setActiveTab] = useState<'books' | 'students' | 'requests' | 'reports' | 'security' | 'database' | 'study-materials' | 'feedback' | 'gallery' | 'notifications' | 'stickers'>('books');
   const [notificationFilter, setNotificationFilter] = useState<'active' | 'archived'>('active');
   const unreadNotificationsCount = useMemo(() => {
     return notifications.filter(n => n.status === 'Unread').length;
@@ -167,6 +424,142 @@ export default function LibrarianModule({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
   const [studentModalView, setStudentModalView] = useState<'timeline' | 'table'>('timeline');
+  
+  // --- STICKER GENERATOR STATE ---
+  const [isPrintModeActive, setIsPrintModeActive] = useState<boolean>(false);
+  const [booksToPrint, setBooksToPrint] = useState<Book[]>([]);
+  const [stickerPrintedIds, setStickerPrintedIds] = useState<Set<string>>(() => {
+    try {
+      const data = localStorage.getItem('ramdiri_stickers_printed');
+      if (data) {
+        const arr = JSON.parse(data);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return new Set<string>();
+  });
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+
+  const markAsPrinted = (bookIds: string[]) => {
+    const next = new Set(stickerPrintedIds);
+    bookIds.forEach(id => next.add(id));
+    setStickerPrintedIds(next);
+    try {
+      localStorage.setItem('ramdiri_stickers_printed', JSON.stringify(Array.from(next)));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownloadPDF = async (booksList: Book[]) => {
+    if (booksList.length === 0) return;
+    setIsGeneratingPdf(true);
+    markAsPrinted(booksList.map(b => b.bookId));
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const stickerWidth = 64;
+      const stickerHeight = 24;
+      const cols = 3;
+      const rows = 11;
+      const stickersPerPage = cols * rows;
+
+      // Centered on A4 (210 mm x 297 mm)
+      // Columns: 3 cols * 64 mm = 192 mm. Remaining: 18 mm. Left margin = 9 mm.
+      // Rows: 11 rows * 24 mm = 264 mm. Remaining: 33 mm. Top margin = 16.5 mm.
+      const leftMargin = 9;
+      const topMargin = 16.5;
+
+      const colGap = 0;
+      const rowGap = 0;
+
+      for (let i = 0; i < booksList.length; i++) {
+        const pageIndex = Math.floor(i / stickersPerPage);
+        const stickerIndexOnPage = i % stickersPerPage;
+
+        if (pageIndex > 0 && stickerIndexOnPage === 0) {
+          doc.addPage();
+        }
+
+        const col = stickerIndexOnPage % cols;
+        const row = Math.floor(stickerIndexOnPage / cols);
+
+        const x = leftMargin + col * (stickerWidth + colGap);
+        const y = topMargin + row * (stickerHeight + rowGap);
+
+        // Draw light grey cutting guidelines
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.15);
+        doc.rect(x, y, stickerWidth, stickerHeight);
+
+        const book = booksList[i];
+        const accessionNo = book.accessionNumber || book.bookId || "N/A";
+        const callNo = book.callNumber || "N/A";
+        const bookNo = book.bookNumber || "N/A";
+        // ONLY use actual shelfNumber from MongoDB, never calculate or guess!
+        const shelfLocation = book.shelfNumber || "";
+
+        // Text settings - clean monospace courier font
+        doc.setTextColor(20, 20, 20);
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(7.5);
+
+        const textX = x + 3.5;
+        const textYStart = y + 5.5;
+        const lineSpacing = 4.3;
+
+        doc.text(`ACC  : ${accessionNo}`, textX, textYStart);
+        doc.text(`CALL : ${callNo}`, textX, textYStart + lineSpacing);
+        doc.text(`BOOK : ${bookNo}`, textX, textYStart + 2 * lineSpacing);
+        doc.text(`SHELF: ${shelfLocation}`, textX, textYStart + 3 * lineSpacing);
+
+        // Generate and add QR Code
+        const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
+        try {
+          const qrDataUrl = await QRCode.toDataURL(targetUrl, {
+            margin: 1,
+            width: 150,
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            }
+          });
+          
+          // Position QR on the right side of the sticker
+          // QR size: 16mm x 16mm. Right-aligned with some padding.
+          const qrX = x + stickerWidth - 16 - 3;
+          const qrY = y + (stickerHeight - 16) / 2;
+          doc.addImage(qrDataUrl, 'PNG', qrX, qrY, 16, 16);
+        } catch (err) {
+          console.error("Error drawing QR on PDF:", err);
+        }
+      }
+
+      doc.save(`ramdiri_library_stickers_${booksList.length}.pdf`);
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+      alert("An error occurred during PDF generation.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleTriggerPrint = (booksList: Book[]) => {
+    if (booksList.length === 0) return;
+    setBooksToPrint(booksList);
+    setIsPrintModeActive(true);
+    markAsPrinted(booksList.map(b => b.bookId));
+    setTimeout(() => {
+      window.print();
+    }, 800);
+  };
   
   // Universal Search query state
   const [universalQuery, setUniversalQuery] = useState<string>('');
@@ -607,6 +1000,7 @@ export default function LibrarianModule({
   const [formSource, setFormSource] = useState('');
   const [formRemarks, setFormRemarks] = useState('');
   const [formDdcNumber, setFormDdcNumber] = useState('');
+  const [formShelfNumber, setFormShelfNumber] = useState('');
 
   // --- Study Materials State Hooks ---
   const [matTitle, setMatTitle] = useState('');
@@ -1719,7 +2113,8 @@ export default function LibrarianModule({
       bookNumber: formBookNumber.trim(),
       source: formSource.trim(),
       remarks: formRemarks.trim(),
-      ddcNumber: formDdcNumber.trim()
+      ddcNumber: formDdcNumber.trim(),
+      shelfNumber: formShelfNumber.trim()
     };
 
     if (editingBook) {
@@ -1754,6 +2149,7 @@ export default function LibrarianModule({
     setFormSource('');
     setFormRemarks('');
     setFormDdcNumber('');
+    setFormShelfNumber('');
     setShowBookForm(false);
   };
 
@@ -1778,6 +2174,7 @@ export default function LibrarianModule({
     setFormSource(book.source || '');
     setFormRemarks(book.remarks || '');
     setFormDdcNumber(book.ddcNumber || '');
+    setFormShelfNumber(book.shelfNumber || '');
     setShowBookForm(true);
   };
 
@@ -2478,6 +2875,18 @@ export default function LibrarianModule({
         </button>
 
         <button
+          onClick={() => { setActiveTab('stickers'); }}
+          className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'stickers'
+              ? 'border-slate-800 text-slate-900 dark:text-white font-extrabold bg-slate-10 border-b-slate-80 bg-slate-100 dark:bg-slate-800'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Tag className="w-4 h-4 shrink-0" />
+          <span>Sticker Generator</span>
+        </button>
+
+        <button
           onClick={() => { setActiveTab('study-materials'); }}
           className={`px-4.5 py-2 rounded-t-lg font-bold text-xs transition-all border-b-2 flex items-center gap-2 ${
             activeTab === 'study-materials'
@@ -3175,6 +3584,13 @@ export default function LibrarianModule({
                         </td>
                         <td className="p-3 text-right border border-slate-200 dark:border-slate-850">
                           <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => handleDownloadPDF([book])}
+                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 transition-all cursor-pointer"
+                              title="Print Single Sticker PDF"
+                            >
+                              <Tag className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={() => openBookEdit(book)}
                               className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-405 transition-all cursor-pointer"
@@ -4589,7 +5005,7 @@ export default function LibrarianModule({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
                 <div className="space-y-1">
                   <label className="text-[10px] font-extrabold text-slate-550 uppercase block">Call Number</label>
                   <input
@@ -4605,7 +5021,7 @@ export default function LibrarianModule({
                         }
                       }
                     }}
-                    placeholder="e.g. 510/NCERT"
+                    placeholder="e.g. 823.54 PRE"
                     className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none font-mono text-indigo-600"
                   />
                 </div>
@@ -4616,8 +5032,19 @@ export default function LibrarianModule({
                     type="text"
                     value={formBookNumber}
                     onChange={(e) => setFormBookNumber(e.target.value)}
-                    placeholder="e.g. B-012"
+                    placeholder="e.g. B0215"
                     className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Shelf Number</label>
+                  <input
+                    type="text"
+                    value={formShelfNumber}
+                    onChange={(e) => setFormShelfNumber(e.target.value)}
+                    placeholder="e.g. S08"
+                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-800 font-bold"
                   />
                 </div>
 
@@ -4835,6 +5262,313 @@ export default function LibrarianModule({
             </form>
 
           </div>
+        </div>
+      )}
+
+      {/* --- STICKER GENERATOR TAB PANEL --- */}
+      {activeTab === 'stickers' && (
+        <div className="space-y-6 animate-fade-in" id="librarian-stickers-view">
+          
+          {/* Header Block */}
+          <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-5 items-start md:items-center justify-between select-none">
+            <div className="space-y-1">
+              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Tag className="w-5 h-5 text-indigo-600 shrink-0" />
+                Automated Sticker & Barcode Engine
+              </h2>
+              <p className="text-xs text-slate-500 max-w-2xl leading-normal">
+                Generate and print precision-aligned sticker labels (64mm × 24mm) matching standard A4 printable sheets. Each sticker automatically embeds a secure, permanent QR code pointing to the live book details page.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.removeItem('ramdiri_stickers_printed');
+                    setStickerPrintedIds(new Set<string>());
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="px-3.5 py-2 text-[10px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-655 dark:text-slate-350 font-extrabold uppercase rounded-lg tracking-wider cursor-pointer"
+                title="Reset 'Printed' tag status and treat all catalog items as newly added"
+              >
+                Reset printed cache
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            
+            {/* KPI 1: Selected Books */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold block">Selected Books</span>
+                <span className="text-2xl font-black text-indigo-650 dark:text-indigo-450 block">{selectedBookIds.length}</span>
+                <span className="text-[10px] text-slate-400 block font-medium">Checked in book inventory roster</span>
+              </div>
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl">
+                <CheckCircle className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+            </div>
+
+            {/* KPI 2: Newly Added (Unprinted) */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold block">Newly Added (Unprinted)</span>
+                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-450 block">
+                  {books.filter(b => !stickerPrintedIds.has(b.bookId)).length}
+                </span>
+                <span className="text-[10px] text-slate-400 block font-medium">Auto-detected pending print sticker</span>
+              </div>
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl">
+                <PlusCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-405" />
+              </div>
+            </div>
+
+            {/* KPI 3: Total Library Catalog */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-xs">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold block">Total Library Books</span>
+                <span className="text-2xl font-black text-slate-800 dark:text-slate-100 block">{books.length}</span>
+                <span className="text-[10px] text-slate-400 block font-medium">Active catalog item profiles</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
+                <BookOpen className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Action Trigger Panels */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl space-y-6 shadow-xs">
+            <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-3">
+              Print Configuration & Generation Controls
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5">
+              
+              {/* Option A: Print Selected */}
+              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all bg-slate-50/30 dark:bg-slate-950/20">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[11px] font-black text-indigo-650 dark:text-indigo-400">A</span>
+                    Generate Selected Stickers
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    Prints stickers only for books currently checked in the primary Book Catalog list checkboxes.
+                  </p>
+                </div>
+                <button
+                  disabled={selectedBookIds.length === 0}
+                  onClick={() => {
+                    const toPrint = books.filter(b => selectedBookIds.includes(b.bookId));
+                    handleDownloadPDF(toPrint);
+                  }}
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Checked ({selectedBookIds.length})</span>
+                </button>
+              </div>
+
+              {/* Option B: Print Newly Added */}
+              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-emerald-200 dark:hover:border-emerald-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-[11px] font-black text-emerald-600 dark:text-emerald-405">B</span>
+                    Generate Newly Added Books
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    Prints stickers for all book records created or imported that do not yet have their sticker status marked as printed.
+                  </p>
+                </div>
+                <button
+                  disabled={books.filter(b => !stickerPrintedIds.has(b.bookId)).length === 0}
+                  onClick={() => {
+                    const toPrint = books.filter(b => !stickerPrintedIds.has(b.bookId));
+                    handleDownloadPDF(toPrint);
+                  }}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Newly Added ({books.filter(b => !stickerPrintedIds.has(b.bookId)).length})</span>
+                </button>
+              </div>
+
+              {/* Option C: Print Entire Catalog */}
+              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-amber-200 dark:hover:border-amber-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-[11px] font-black text-amber-600 dark:text-amber-405">C</span>
+                    Generate Entire Library
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-normal">
+                    Prints stickers for all {books.length} books in the catalog. Best for initial setup or total library audits.
+                  </p>
+                </div>
+                <button
+                  disabled={books.length === 0}
+                  onClick={() => handleDownloadPDF(books)}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-white dark:bg-slate-800 dark:hover:bg-slate-700 font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Entire Catalog ({books.length})</span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Print Parameters Details Banner */}
+            <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 dark:border-indigo-950 text-slate-700 dark:text-slate-350 space-y-1.5 select-none leading-relaxed text-xs">
+              <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Avery Standard Alignment):</span>
+              <p className="text-[11px]">
+                Each generated print layout centers a grid of <strong>3 columns × 11 rows = 33 stickers</strong> per page with fine guide boundaries.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
+                <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
+                  <span className="text-slate-400 block text-[9px]">Sticker Size</span>
+                  64 mm × 24 mm
+                </div>
+                <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
+                  <span className="text-slate-400 block text-[9px]">A4 Sheet Columns</span>
+                  3 Columns (64mm × 3 = 192mm)
+                </div>
+                <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
+                  <span className="text-slate-400 block text-[9px]">Sheet Side Margins</span>
+                  9 mm (Left & Right margins)
+                </div>
+                <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
+                  <span className="text-slate-400 block text-[9px]">Target QR link</span>
+                  /book/[ACCESSION_NUMBER]
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Sticker Preview Grid Section */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl space-y-5 shadow-xs">
+            <div className="flex justify-between items-center select-none">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                Live Interactive Sheet Preview
+              </h3>
+              <p className="text-[11px] text-slate-450 italic">
+                Showing preview of catalog items with live scannable QR codes
+              </p>
+            </div>
+            
+            {books.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-150 dark:border-slate-800 rounded-xl space-y-2 select-none">
+                <Tag className="w-8 h-8 text-slate-350 mx-auto animate-pulse" />
+                <p className="text-xs font-extrabold text-slate-750 dark:text-slate-300">No books in catalog to preview.</p>
+                <p className="text-[10px] text-slate-450">Add a book in the Book Catalog first to see sticker layout models.</p>
+              </div>
+            ) : (
+              <StickerPreviewSection 
+                books={books} 
+                categorySerialsMap={categorySerialsMap} 
+                stickerPrintedIds={stickerPrintedIds}
+                onPrintSingle={handleDownloadPDF}
+              />
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+      {/* --- PRINT SYSTEM OVERLAYS & PORTAL MARKUPS --- */}
+      {isPrintModeActive && (
+        <div className="fixed inset-0 bg-slate-900/95 z-[999999] flex flex-col items-center justify-center p-4 text-center select-none no-print-wrapper animate-fade-in font-sans">
+          <div className="max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 border-2 border-indigo-500 shadow-2xl space-y-5">
+            <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center mx-auto animate-bounce">
+              <Tag className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-base font-extrabold text-slate-950 dark:text-white uppercase tracking-wider">
+                Sticker Print Layout Loaded
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed dark:text-slate-400">
+                Generated <strong className="text-indigo-600 dark:text-indigo-400">{booksToPrint.length} sticker labels</strong> aligned perfectly for A4 sticker sheets (3 columns x 11 rows).
+              </p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-left border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-655 dark:text-slate-350 leading-relaxed font-mono">
+              <div className="flex gap-2 items-start">
+                <span className="font-extrabold text-indigo-650 dark:text-indigo-400">1.</span>
+                <span>Ensure printer scale is set to <strong>100% (Default)</strong> with margins set to <strong>None</strong>.</span>
+              </div>
+              <div className="flex gap-2 items-start">
+                <span className="font-extrabold text-indigo-650 dark:text-indigo-400">2.</span>
+                <span>Make sure <strong>Background graphics</strong> is checked in printer options so layout displays correctly.</span>
+              </div>
+              <div className="flex gap-2 items-start">
+                <span className="font-extrabold text-indigo-650 dark:text-indigo-400">3.</span>
+                <span>The browser's print utility should launch automatically. Click below to re-trigger.</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-505 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Open Print Utility</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadPDF(booksToPrint)}
+                  disabled={isGeneratingPdf}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-505 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-55"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isGeneratingPdf ? 'Generating...' : 'Download A4 PDF'}</span>
+                </button>
+              </div>
+              <button
+                onClick={() => setIsPrintModeActive(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Close Print View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Actual Physical CSS Sticker Print-Only Layout (Centrally formatted, non-rendered on screen) */}
+      {isPrintModeActive && (
+        <div className="print-only-layout hidden">
+          {(() => {
+            const pages: Book[][] = [];
+            for (let i = 0; i < booksToPrint.length; i += 33) {
+              pages.push(booksToPrint.slice(i, i + 33));
+            }
+            return pages.map((pageBooks, pageIdx) => (
+              <div key={pageIdx} className="sticker-page">
+                <div className="sticker-grid">
+                  {pageBooks.map(book => {
+                    const accessionNo = book.accessionNumber || book.bookId || "N/A";
+                    const callNo = book.callNumber || "N/A";
+                    const bookNo = book.bookNumber || "N/A";
+                    const shelfLocation = book.shelfNumber || "";
+                    
+                    return (
+                      <StickerElement 
+                        key={book.bookId}
+                        book={book}
+                        accessionNo={accessionNo}
+                        callNo={callNo}
+                        bookNo={bookNo}
+                        shelfLocation={shelfLocation}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       )}
 

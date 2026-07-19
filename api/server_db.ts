@@ -188,7 +188,8 @@ const BookSchema = new mongoose.Schema({
   source: { type: String, default: "" },
   remarks: { type: String, default: "" },
   ddcCategory: { type: String, default: "" },
-  ddcNumber: { type: String, default: "" }
+  ddcNumber: { type: String, default: "" },
+  shelfNumber: { type: String, default: "" }
 });
 
 const StudyMaterialSchema = new mongoose.Schema({
@@ -829,7 +830,8 @@ export const dbService = {
         bookNumber: book.bookNumber || "",
         source: book.source || "",
         remarks: book.remarks || "",
-        ddcCategory: book.ddcCategory || ""
+        ddcCategory: book.ddcCategory || "",
+        shelfNumber: book.shelfNumber || ""
       };
 
       booksToInsert.push(modifiedBook);

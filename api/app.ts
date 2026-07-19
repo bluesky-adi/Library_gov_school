@@ -697,6 +697,61 @@ app.post('/api/gallery', authenticateToken, requireLibrarian, async (req, res) =
 
 
 // ---- BOOKS REST API ENDPOINTS ----
+app.get('/api/books/by-accession/:accessionNumber', async (req, res) => {
+  const { accessionNumber } = req.params;
+  console.log(`[API ROUTE] GET /api/books/by-accession/${accessionNumber} requested.`);
+  try {
+    const books = await dbService.getBooks();
+    const cleanAcc = accessionNumber.trim().toLowerCase();
+    const book = books.find(b => 
+      (b.accessionNumber && b.accessionNumber.trim().toLowerCase() === cleanAcc) ||
+      (b.bookId && b.bookId.trim().toLowerCase() === cleanAcc)
+    );
+
+    if (!book) {
+      return res.status(404).json({ success: false, error: "Book not found" });
+    }
+
+    let hasPendingRequest = false;
+    let hasActiveLoan = false;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const reqUser = jwt.verify(token, JWT_SECRET) as any;
+        if (reqUser && reqUser.role === 'Student') {
+          const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
+          
+          const requests = await dbService.getBorrowRequests();
+          hasPendingRequest = requests.some(r => {
+            const rId = r.studentId || `${(r.class || '').toString().trim().toUpperCase()}-${(r.section || '').toString().trim().toUpperCase()}-${r.rollNumber}`;
+            return rId.toUpperCase() === userSId.toUpperCase() && r.bookId === book.bookId && r.status === 'Pending';
+          });
+
+          const logs = await dbService.getIssueLogs();
+          hasActiveLoan = logs.some(l => {
+            const lId = l.studentId || `${(l.class || '').toString().trim().toUpperCase()}-${(l.section || '').toString().trim().toUpperCase()}-${l.rollNumber}`;
+            return lId.toUpperCase() === userSId.toUpperCase() && l.bookId === book.bookId && l.status === 'Issued';
+          });
+        }
+      } catch (e) {
+        // Ignore token errors for public reads
+      }
+    }
+
+    res.json({
+      success: true,
+      book,
+      hasPendingRequest,
+      hasActiveLoan
+    });
+  } catch (error: any) {
+    console.error(`[API ROUTE ERROR] GET /api/books/by-accession exception:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/api/books', async (req, res) => {
   console.log(`[API ROUTE] GET /api/books requested. Mongo Link Status: ${dbService.getMongoConnectionState()}`);
   try {

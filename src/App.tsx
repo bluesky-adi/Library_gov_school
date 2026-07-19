@@ -5,12 +5,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
-import PublicHome from './components/PublicHome';
+import PublicHome, { GoogleBookCover } from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
 import { translations } from './localization';
 import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial, Notification } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
-import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark } from 'lucide-react';
+import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   // --- Back-End Synced Database States ---
@@ -22,6 +22,43 @@ export default function App() {
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isBooksLoading, setIsBooksLoading] = useState<boolean>(true);
+
+  // --- QR/Barcode Scan Navigation Route State ---
+  const [scannedAccession, setScannedAccession] = useState<string | null>(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/book/')) {
+      return decodeURIComponent(path.substring(6));
+    }
+    return null;
+  });
+
+  const [scannedBook, setScannedBook] = useState<Book | null>(null);
+  const [scannedBookLoading, setScannedBookLoading] = useState<boolean>(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState<boolean>(false);
+  const [hasActiveLoan, setHasActiveLoan] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleLocationCheck = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/book/')) {
+        setScannedAccession(decodeURIComponent(path.substring(6)));
+      } else {
+        setScannedAccession(null);
+      }
+    };
+    window.addEventListener('popstate', handleLocationCheck);
+    window.addEventListener('hashchange', handleLocationCheck);
+    return () => {
+      window.removeEventListener('popstate', handleLocationCheck);
+      window.removeEventListener('hashchange', handleLocationCheck);
+    };
+  }, []);
+
+  const handleCloseScannedBook = () => {
+    window.history.pushState(null, '', '/');
+    setScannedAccession(null);
+    setActiveTab('home');
+  };
 
   // --- Dynamic Layout Configuration States ---
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
@@ -48,6 +85,38 @@ export default function App() {
 
   // Refresh all system metrics and records from servers safely
   const refreshData = async (force: boolean = true) => {
+    if (scannedAccession !== null) {
+      if (scannedBookLoading) return;
+      setScannedBookLoading(true);
+      try {
+        const token = localStorage.getItem("ramdiri_library_token");
+        const headers: any = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(`/api/books/by-accession/${encodeURIComponent(scannedAccession)}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setScannedBook(data.book);
+            setHasPendingRequest(data.hasPendingRequest);
+            setHasActiveLoan(data.hasActiveLoan);
+          } else {
+            setScannedBook(null);
+          }
+        } else {
+          setScannedBook(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch scanned book details:", err);
+        setScannedBook(null);
+      } finally {
+        setScannedBookLoading(false);
+        setIsBooksLoading(false);
+      }
+      return;
+    }
+
     if (isSyncingRef.current && !force) return;
     isSyncingRef.current = true;
     try {
@@ -127,13 +196,22 @@ export default function App() {
     }
   };
 
-  // Sync operations on mount and role transitions
+  // Sync operations on mount, role transitions, and scanned accession route changes
   useEffect(() => {
     refreshData();
-  }, [loggedInRole]);
+  }, [loggedInRole, scannedAccession]);
+
+  useEffect(() => {
+    if (scannedAccession === null) {
+      setScannedBook(null);
+      setHasPendingRequest(false);
+      setHasActiveLoan(false);
+    }
+  }, [scannedAccession]);
 
   // Automated background retry to resolve cold-start race conditions seamlessly
   useEffect(() => {
+    if (scannedAccession !== null) return;
     if (books.length > 0) {
       setIsBooksLoading(false);
       return;
@@ -169,17 +247,18 @@ export default function App() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [books.length]);
+  }, [books.length, scannedAccession]);
 
   // Real-time synchronization poll for students and librarians (Critical Issue 5)
   useEffect(() => {
+    if (scannedAccession !== null) return;
     // Poll every 3000ms to ensure real-time synchronization of state without stale data or manual refreshes
     const interval = setInterval(() => {
       refreshData(false);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [scannedAccession]);
 
   // Try to restore session on boot
   useEffect(() => {
@@ -1090,6 +1169,268 @@ export default function App() {
     issuedBooks: Math.max(0, books.reduce((sum, b) => sum + (b.totalCopies - b.availableCopies), 0)),
     activeReaders: students.length
   };
+
+  const [requestSubmitting, setRequestSubmitting] = useState<boolean>(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestSuccess, setRequestSuccess] = useState<boolean>(false);
+
+  const handleScannedBookRequest = async () => {
+    if (!scannedBook || loggedInRole !== 'Student' || !loggedInStudent) return;
+    setRequestSubmitting(true);
+    setRequestError(null);
+    setRequestSuccess(false);
+
+    const token = localStorage.getItem("ramdiri_library_token");
+    const reqPayload: BorrowRequest = {
+      id: "REQ-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+      studentName: loggedInStudent.name,
+      rollNumber: loggedInStudent.rollNumber,
+      class: loggedInStudent.class,
+      section: loggedInStudent.section,
+      studentId: loggedInStudent.studentId,
+      bookId: scannedBook.bookId,
+      bookName: scannedBook.bookName,
+      requestDate: new Date().toISOString().split('T')[0],
+      status: 'Pending'
+    };
+
+    try {
+      const resp = await fetch('/api/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(reqPayload)
+      });
+      if (resp.ok) {
+        setRequestSuccess(true);
+        setHasPendingRequest(true);
+        // Instantly decrement locally in UI to avoid stale views
+        setScannedBook(prev => prev ? {
+          ...prev,
+          availableCopies: Math.max(0, prev.availableCopies - 1)
+        } : null);
+      } else {
+        const data = await resp.json();
+        setRequestError(data.error || "Failed to submit borrow request.");
+      }
+    } catch (err: any) {
+      console.error("Scanned book request failed:", err);
+      setRequestError(err.message || "Network error occurred.");
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
+  if (scannedAccession !== null) {
+    const matchedBook = scannedBook;
+
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none justify-between">
+        {/* Tricolor Government visual band */}
+        <div className="h-1.5 shrink-0 flex select-none" role="presentation">
+          <div className="bg-[#f97316] w-1/3"></div>
+          <div className="bg-white w-1/3"></div>
+          <div className="bg-[#16a34a] w-1/3"></div>
+        </div>
+
+        {/* Header bar */}
+        <header className="px-6 py-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0 shadow">
+              <Landmark className="w-5 text-slate-950" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-xs text-white uppercase tracking-wider">PM SHRI RAMDIRI +2 HIGH SCHOOL</h1>
+              <span className="text-[10px] text-amber-400 font-mono tracking-wider block">Digital Library Scanner Portal</span>
+            </div>
+          </div>
+          <button
+            onClick={handleCloseScannedBook}
+            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Go to Portal Home</span>
+          </button>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-grow p-4 md:p-8 flex items-center justify-center max-w-4xl mx-auto w-full">
+          {scannedBookLoading ? (
+            <div className="text-center py-12 space-y-3">
+              <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="text-xs text-slate-400 font-mono">Synchronizing dynamic book register details...</p>
+            </div>
+          ) : !matchedBook ? (
+            <div className="bg-slate-950/40 border border-slate-800 rounded-2xl p-8 max-w-md text-center space-y-4 shadow-xl">
+              <div className="w-12 h-12 rounded-full bg-red-950/35 border border-red-800/50 flex items-center justify-center mx-auto text-red-500 text-2xl font-black">
+                ✕
+              </div>
+              <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">Book Entry Not Registered</h3>
+              <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                No active catalog record was found matching accession number <strong className="text-amber-400 font-mono">"{scannedAccession}"</strong>.
+              </p>
+              <p className="text-[11px] text-slate-500 leading-normal">
+                Please verify the printed label accession number or register this entry inside the Librarian Portal.
+              </p>
+              <button
+                onClick={handleCloseScannedBook}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow transition-all cursor-pointer"
+              >
+                Return to Library Homepage
+              </button>
+            </div>
+          ) : (
+            <div className="bg-slate-950/40 border border-slate-850 rounded-2xl overflow-hidden shadow-2xl w-full flex flex-col md:flex-row gap-6 md:gap-8 p-6 md:p-8">
+              {/* Cover Image */}
+              <div className="w-40 sm:w-48 mx-auto md:mx-0 shrink-0 aspect-[3/4] rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-md">
+                <GoogleBookCover 
+                  bookName={matchedBook.bookName} 
+                  author={matchedBook.author} 
+                  coverImage={matchedBook.coverImage} 
+                />
+              </div>
+
+              {/* Information */}
+              <div className="flex-grow space-y-4">
+                <div className="space-y-1">
+                  <span className="text-[9.5px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider inline-block">
+                    {matchedBook.category || "General"}
+                  </span>
+                  <h2 className="text-lg md:text-xl font-black text-white leading-tight">
+                    {matchedBook.bookName}
+                  </h2>
+                  <p className="text-xs text-slate-400 font-bold">
+                    by <span className="text-slate-200 font-black">{matchedBook.author || "Unknown"}</span>
+                  </p>
+                </div>
+
+                {/* Grid Metadata */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 bg-slate-900/50 border border-slate-800/80 p-4 rounded-xl font-mono text-[11px] text-slate-350">
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Accession Number</span>
+                    <span className="text-slate-100 font-black">{matchedBook.accessionNumber || matchedBook.bookId}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Call Number</span>
+                    <span className="text-slate-100 font-black">{matchedBook.callNumber || "-"}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Book Number</span>
+                    <span className="text-slate-100 font-black">{matchedBook.bookNumber || "-"}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Shelf Number</span>
+                    <span className="text-emerald-450 font-black">{matchedBook.shelfNumber || "-"}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Publisher</span>
+                    <span className="text-slate-100 font-black line-clamp-1">{matchedBook.publisher || "-"}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Availability Status</span>
+                    {matchedBook.availableCopies > 0 ? (
+                      <span className="text-emerald-450 font-black">Available ({matchedBook.availableCopies}/{matchedBook.totalCopies})</span>
+                    ) : (
+                      <span className="text-red-400 font-black">Issued Out (0/{matchedBook.totalCopies})</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description block */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Book Abstract / Synopsis</h4>
+                  <p className="text-xs text-slate-350 leading-relaxed font-sans bg-slate-900/20 p-3 rounded-lg border border-slate-850">
+                    {matchedBook.description || "No summary details registered for this syllabus textbook resource."}
+                  </p>
+                </div>
+
+                {/* Request Actions (P0 Role-based Request Book security mandates) */}
+                <div className="pt-2 border-t border-slate-800/60 space-y-3">
+                  {loggedInRole === 'Student' ? (
+                    <div className="space-y-2">
+                      {hasPendingRequest ? (
+                        <div className="w-full text-center py-2.5 bg-slate-850/80 border border-amber-500/20 rounded-xl text-amber-400 font-bold text-xs select-none">
+                          ✓ Pending Checkout Request Awaiting Librarian Issue
+                        </div>
+                      ) : hasActiveLoan ? (
+                        <div className="w-full text-center py-2.5 bg-slate-850/80 border border-emerald-500/20 rounded-xl text-emerald-400 font-bold text-xs select-none">
+                          📖 You currently have this copy active on your library account
+                        </div>
+                      ) : matchedBook.availableCopies <= 0 ? (
+                        <div className="w-full text-center py-2.5 bg-slate-850/80 border border-red-500/25 rounded-xl text-red-400 font-bold text-xs select-none">
+                          ✕ Out of Stock: All copies are currently issued to other readers
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleScannedBookRequest}
+                          disabled={requestSubmitting}
+                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                        >
+                          {requestSubmitting ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Sending Request...</span>
+                            </>
+                          ) : (
+                            <span>✅ Request Book for Issue</span>
+                          )}
+                        </button>
+                      )}
+
+                      {requestError && (
+                        <p className="text-[10.5px] text-red-400 font-bold bg-red-950/20 border border-red-900/40 px-3 py-1.5 rounded-lg font-mono">
+                          ✕ {requestError}
+                        </p>
+                      )}
+                      {requestSuccess && (
+                        <p className="text-[10.5px] text-emerald-400 font-bold bg-emerald-950/20 border border-emerald-900/40 px-3 py-1.5 rounded-lg font-mono">
+                          ✓ Your borrow request has been logged successfully! Go to the school library counters to pick up your copy.
+                        </p>
+                      )}
+                    </div>
+                  ) : loggedInRole === 'Librarian' ? (
+                    <div className="p-3 bg-indigo-950/20 border border-indigo-900/40 text-indigo-300 font-mono text-[10px] rounded-lg">
+                      Librarian Mode Active: Use the Librarian Dashboard counters to issue or return this syllabus catalog entry.
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-amber-950/25 border border-amber-900/40 rounded-xl space-y-1.5">
+                      <p className="text-amber-400 font-extrabold text-xs">Student Login Required to Request Books</p>
+                      <p className="text-slate-400 text-[11px] leading-relaxed">
+                        To request and borrow this syllabus textbook, you must be logged in with a registered student account. Return to the Portal Homepage and log in to request this title.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Back Button */}
+                <button
+                  onClick={handleCloseScannedBook}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold text-[11px] rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Browse Digital Library Portal Home</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+
+        {/* Footer info */}
+        <footer className="h-10 bg-slate-950 border-t border-slate-850 px-6 flex items-center justify-between text-[11px] text-slate-550 shrink-0">
+          <div className="hidden sm:flex gap-4">
+            <span className="font-semibold text-emerald-400 font-mono">BSEB School Code: Begusarai-L01</span>
+            <span>|</span>
+            <span>Live Digital Stack Sync</span>
+          </div>
+          <div>
+            &copy; 2026 PM SHRI Ramdiri +2 High School. All Rights Reserved.
+          </div>
+        </footer>
+      </div>
+    );
+  }
 
   return (
     <div 
