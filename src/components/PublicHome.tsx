@@ -61,52 +61,95 @@ function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelPr
   );
 }
 
-// Google Books on-the-fly fetcher component
+// Google Books on-the-fly fetcher component with IntersectionObserver lazy loading and persistent localStorage caching
 export function GoogleBookCover({ bookName, author, coverImage }: { bookName: string; author: string; coverImage?: string }) {
-  const [imgUrl, setImgUrl] = useState<string | null>(coverImage || null);
+  const [imgUrl, setImgUrl] = React.useState<string | null>(coverImage || null);
+  const [isInView, setIsInView] = React.useState(false);
+  const elementRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (coverImage) {
       setImgUrl(coverImage);
       return;
     }
-    let isMounted = true;
-    
-    // Call google books search api
-    const query = encodeURIComponent(`${bookName} ${author}`);
-    fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`)
-      .then(res => res.json())
-      .then(data => {
-        if (!isMounted) return;
-        const items = data.items;
-        if (items && items.length > 0) {
-          const thumbnail = items[0].volumeInfo?.imageLinks?.thumbnail || items[0].volumeInfo?.imageLinks?.smallThumbnail;
-          if (thumbnail) {
-            setImgUrl(thumbnail.replace(/^http:/, 'https:'));
-          }
-        }
-      })
-      .catch(() => {
-        // Fallback gracefully
-      });
 
-    return () => { isMounted = false; };
-  }, [bookName, author, coverImage]);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    if (elementRef.current) {
+      observer.observe(elementRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [coverImage]);
+
+  React.useEffect(() => {
+    if (coverImage || !isInView) return;
+
+    const cacheKey = `gbooks_cover_${encodeURIComponent(bookName)}_${encodeURIComponent(author)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      setImgUrl(cached);
+      return;
+    }
+
+    let isMounted = true;
+    const query = encodeURIComponent(`${bookName} ${author}`);
+    
+    // Add a slight random delay to stagger queries and completely prevent browser request queuing
+    const delay = Math.floor(Math.random() * 300);
+    const timer = setTimeout(() => {
+      fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`)
+        .then(res => res.json())
+        .then(data => {
+          if (!isMounted) return;
+          const items = data.items;
+          if (items && items.length > 0) {
+            const thumbnail = items[0].volumeInfo?.imageLinks?.thumbnail || items[0].volumeInfo?.imageLinks?.smallThumbnail;
+            if (thumbnail) {
+              const securedUrl = thumbnail.replace(/^http:/, 'https:');
+              try {
+                localStorage.setItem(cacheKey, securedUrl);
+              } catch (e) {
+                // Ignore localStorage quota errors
+              }
+              setImgUrl(securedUrl);
+            }
+          }
+        })
+        .catch(() => {});
+    }, delay);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [bookName, author, coverImage, isInView]);
 
   if (imgUrl) {
     return (
-      <img
-        src={imgUrl}
-        alt={bookName}
-        referrerPolicy="no-referrer"
-        className="w-full h-48 object-cover rounded-md shadow-sm border border-slate-200 transition-transform hover:scale-105 duration-250"
-      />
+      <div ref={elementRef} className="w-full h-48 overflow-hidden rounded-md">
+        <img
+          src={imgUrl}
+          alt={bookName}
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          className="w-full h-48 object-cover rounded-md shadow-sm border border-slate-200 transition-transform hover:scale-[1.02] duration-250"
+        />
+      </div>
     );
   }
 
   // Stylish government-style fallback cover with high contrast and typography
   return (
-    <div className="w-full h-48 bg-gradient-to-br from-slate-700 to-slate-900 text-white p-3.5 flex flex-col justify-between rounded-md shadow-sm border border-slate-600 select-none">
+    <div ref={elementRef} className="w-full h-48 bg-gradient-to-br from-slate-700 to-slate-900 text-white p-3.5 flex flex-col justify-between rounded-md shadow-sm border border-slate-600 select-none">
       <div className="text-[9px] uppercase tracking-wider font-bold text-amber-400 font-mono">
         Ramdiri Library
       </div>
@@ -137,6 +180,7 @@ interface PublicHomeProps {
   onLogout: () => void;
   onNavigatePortal: () => void;
   loggedInRole?: 'Guest' | 'Student' | 'Librarian';
+  isBooksLoading?: boolean;
 }
 
 export default function PublicHome({
@@ -149,7 +193,8 @@ export default function PublicHome({
   loggedInUserLabel,
   onLogout,
   onNavigatePortal,
-  loggedInRole = 'Guest'
+  loggedInRole = 'Guest',
+  isBooksLoading = false
 }: PublicHomeProps) {
   // New Layout & Feature States
   const [homeActiveTab, setHomeActiveTab] = useState<'catalog' | 'resources' | 'feedback' | 'vision' | 'docs' | 'health'>('catalog');
@@ -1476,8 +1521,34 @@ export default function PublicHome({
           </div>
         </div>
 
-        {/* Content Render Segment: Grid vs. Table */}
-        {featuredBooks.length === 0 ? (
+        {/* Content Render Segment: Skeleton vs. Grid vs. Table */}
+        {isBooksLoading ? (
+          /* SKELETON LOADING GRID */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pt-2 animate-pulse">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(idx => (
+              <div key={idx} className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="aspect-3/4 w-full bg-slate-200 dark:bg-slate-800 rounded-md"></div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <div className="h-3 w-12 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                      <div className="h-3 w-16 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    </div>
+                    <div className="h-4 w-5/6 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-3 w-1/2 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg">
+                    <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                    <div className="h-5 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                  </div>
+                </div>
+                <div className="h-5 w-full bg-slate-200 dark:bg-slate-800 rounded mt-4"></div>
+              </div>
+            ))}
+          </div>
+        ) : featuredBooks.length === 0 ? (
           <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
             <p className="text-sm font-extrabold text-slate-750 dark:text-slate-300">No matching library books found.</p>
             <p className="text-[11px] text-slate-500">Try adjusting your filters or query spelling (e.g. gainit / history).</p>

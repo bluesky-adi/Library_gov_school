@@ -21,6 +21,7 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<LibraryAuditLog[]>([]);
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isBooksLoading, setIsBooksLoading] = useState<boolean>(true);
 
   // --- Dynamic Layout Configuration States ---
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
@@ -122,6 +123,7 @@ export default function App() {
       }
     } finally {
       isSyncingRef.current = false;
+      setIsBooksLoading(false);
     }
   };
 
@@ -132,7 +134,10 @@ export default function App() {
 
   // Automated background retry to resolve cold-start race conditions seamlessly
   useEffect(() => {
-    if (books.length > 0) return;
+    if (books.length > 0) {
+      setIsBooksLoading(false);
+      return;
+    }
 
     let retryCount = 0;
     const maxRetries = 6;
@@ -147,6 +152,7 @@ export default function App() {
           const freshBooks = await res.json();
           if (freshBooks && freshBooks.length > 0) {
             setBooks(freshBooks);
+            setIsBooksLoading(false);
             console.log(`[DLMS AUTO-RECOVERY] Successfully resolved race condition on attempt #${retryCount}. ${freshBooks.length} books loaded.`);
             clearInterval(interval);
             return;
@@ -157,6 +163,7 @@ export default function App() {
       }
 
       if (retryCount >= maxRetries) {
+        setIsBooksLoading(false);
         clearInterval(interval);
       }
     }, 2500);
@@ -1274,6 +1281,7 @@ export default function App() {
                 loggedInRole={loggedInRole}
                 onLogout={handleLogout}
                 onNavigatePortal={() => setActiveTab('portal')}
+                isBooksLoading={isBooksLoading}
               />
             )}
 

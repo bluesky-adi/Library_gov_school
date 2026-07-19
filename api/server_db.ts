@@ -1230,16 +1230,22 @@ export const dbService = {
   },
 
   async getAuditLogs(): Promise<LibraryAuditLog[]> {
+    if (auditLogsCache) return auditLogsCache;
+    let list: LibraryAuditLog[];
     if (isConnectedToMongo) {
-      return (await MongoLibraryAuditLog.find().sort({ timestamp: -1 }).lean()) as any[];
+      list = (await MongoLibraryAuditLog.find().sort({ timestamp: -1 }).lean()) as any[];
+    } else {
+      list = readLocalFile<LibraryAuditLog>(AUDIT_LOGS_FILE);
     }
-    const logs = readLocalFile<LibraryAuditLog>(AUDIT_LOGS_FILE);
-    return logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    auditLogsCache = list;
+    return list;
   },
 
   async saveAuditLog(log: LibraryAuditLog): Promise<LibraryAuditLog> {
     if (isConnectedToMongo) {
       await MongoLibraryAuditLog.findOneAndUpdate({ id: log.id }, log, { upsert: true, new: true });
+      auditLogsCache = null;
       return log;
     } else {
       const logs = readLocalFile<LibraryAuditLog>(AUDIT_LOGS_FILE);
@@ -1250,6 +1256,7 @@ export const dbService = {
         logs.unshift(log);
       }
       writeLocalFile(AUDIT_LOGS_FILE, logs);
+      auditLogsCache = null;
       return log;
     }
   },
