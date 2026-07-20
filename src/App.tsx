@@ -252,13 +252,15 @@ export default function App() {
   // Real-time synchronization poll for students and librarians (Critical Issue 5)
   useEffect(() => {
     if (scannedAccession !== null) return;
-    // Poll every 3000ms to ensure real-time synchronization of state without stale data or manual refreshes
+    if (loggedInRole === 'Guest') return; // Only poll when a user is authenticated
+    
+    // Poll every 10000ms to ensure synchronization of active session states
     const interval = setInterval(() => {
       refreshData(false);
-    }, 3000);
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, [scannedAccession]);
+  }, [scannedAccession, loggedInRole]);
 
   // Try to restore session on boot
   useEffect(() => {
@@ -387,11 +389,20 @@ export default function App() {
 
   // --- Handle Login Completion ---
   const handleLoginSuccess = (role: 'Student' | 'Librarian', student?: Student) => {
+    const pendingScanned = localStorage.getItem("pending_scanned_accession");
+    
     if (role === 'Student' && student) {
       setLoggedInRole('Student');
       setLoggedInStudent(student);
       setLoggedInName(student.name);
-      setActiveTab('portal');
+      
+      if (pendingScanned) {
+        setScannedAccession(pendingScanned);
+        localStorage.removeItem("pending_scanned_accession");
+        setActiveTab('home');
+      } else {
+        setActiveTab('portal');
+      }
     } else if (role === 'Librarian') {
       setLoggedInRole('Librarian');
       setLoggedInStudent(null);
@@ -404,7 +415,14 @@ export default function App() {
         } catch (e) {}
       }
       setLoggedInName(dName);
-      setActiveTab('portal');
+      
+      if (pendingScanned) {
+        setScannedAccession(pendingScanned);
+        localStorage.removeItem("pending_scanned_accession");
+        setActiveTab('home');
+      } else {
+        setActiveTab('portal');
+      }
     }
     refreshData();
   };
@@ -1395,11 +1413,20 @@ export default function App() {
                       Librarian Mode Active: Use the Librarian Dashboard counters to issue or return this syllabus catalog entry.
                     </div>
                   ) : (
-                    <div className="p-3.5 bg-amber-950/25 border border-amber-900/40 rounded-xl space-y-1.5">
+                    <div className="p-3.5 bg-amber-950/25 border border-amber-900/40 rounded-xl space-y-2">
                       <p className="text-amber-400 font-extrabold text-xs">Student Login Required to Request Books</p>
                       <p className="text-slate-400 text-[11px] leading-relaxed">
                         To request and borrow this syllabus textbook, you must be logged in with a registered student account. Return to the Portal Homepage and log in to request this title.
                       </p>
+                      <button
+                        onClick={() => {
+                          localStorage.setItem("pending_scanned_accession", scannedAccession || "");
+                          handleTriggerLoginClick();
+                        }}
+                        className="w-full mt-1.5 py-2.5 bg-amber-500 hover:bg-amber-450 text-slate-950 font-black text-xs rounded-xl shadow transition-all cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                      >
+                        <span>🔑 Sign In to Request Book</span>
+                      </button>
                     </div>
                   )}
                 </div>

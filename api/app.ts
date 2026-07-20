@@ -1236,6 +1236,9 @@ app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, asyn
       const saved = await dbService.saveIssueLog(issueLog);
       savedLogs.push(saved);
 
+      // Trigger student notification for direct desk issue
+      await createSystemNotification('Student', issueLog.studentId, 'Book Issued', `Book "${bk.bookName}" has been issued to you. Due date: ${dueDateStr}`, 'success');
+
       // 4. Register to audit tracking
       await addAuditLog(req, 'Book Issued', `Direct Desk Issue check: '${bk.bookName}' (ID: ${bk.bookId}) physical checkout given to ${matchedStudent.name} (Roll: ${matchedStudent.rollNumber}, SEC ${matchedStudent.class}-${matchedStudent.section})`);
     }
@@ -1696,10 +1699,32 @@ async function createSystemNotification(
   icon: string = 'info'
 ) {
   try {
+    const studentIdClean = studentId || "";
+    
+    // Prevent duplicate notifications within the last 5 minutes
+    const existingNotifications = await dbService.getNotifications();
+    const isDuplicate = existingNotifications.some((n: any) => {
+      if (
+        n.recipientRole === recipientRole &&
+        (n.studentId || "").toString().trim().toUpperCase() === studentIdClean.toString().trim().toUpperCase() &&
+        n.title === title &&
+        n.message === message
+      ) {
+        const diffMs = Date.now() - new Date(n.createdAt).getTime();
+        return diffMs < 5 * 60 * 1000; // 5 minutes
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      console.log(`[NOTIFICATION SYSTEM] Blocked duplicate notification: "${title}" to student: "${studentIdClean}"`);
+      return;
+    }
+
     const notification = {
       id: `NT-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
       recipientRole,
-      studentId: studentId || "",
+      studentId: studentIdClean,
       title,
       message,
       icon,
@@ -1726,7 +1751,9 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
     if (reqUser.role === 'Student') {
       const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
       const filtered = allNotifications.filter((n: any) => {
-        return n.recipientRole === 'Student' && n.studentId && n.studentId.trim().toUpperCase() === userSId.toUpperCase();
+        if (n.recipientRole !== 'Student') return false;
+        const targetId = (n.studentId || "").toString().trim().toUpperCase();
+        return targetId === userSId.toUpperCase() || targetId === 'ALL' || targetId === 'BROADCAST';
       });
       return res.json(filtered);
     }

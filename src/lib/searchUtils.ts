@@ -261,14 +261,16 @@ export interface DdcColor {
   text: string;
   border: string;
   hex: string;
+  textColorHex: string;
 }
 
 export function getDdcColor(ddcNumStr: string | undefined | null): DdcColor {
   const ddcDefaults: DdcColor = {
-    bg: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200',
-    text: 'text-slate-700 dark:text-slate-300',
-    border: 'border-slate-200 dark:border-slate-700',
-    hex: '#64748b'
+    bg: 'bg-slate-500',
+    text: 'text-white',
+    border: 'border-slate-650',
+    hex: '#B0BEC5',
+    textColorHex: '#000000'
   };
   
   if (!ddcNumStr) return ddcDefaults;
@@ -286,73 +288,83 @@ export function getDdcColor(ddcNumStr: string | undefined | null): DdcColor {
   switch(mainClass) {
     case 0:
       return {
-        bg: 'bg-slate-150 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
-        text: 'text-slate-600 dark:text-slate-400',
-        border: 'border-slate-300 dark:border-slate-750',
-        hex: '#94a3b8' // Light Gray
+        bg: 'bg-[#B0BEC5]',
+        text: 'text-[#000000]',
+        border: 'border-[#90A4AE]',
+        hex: '#B0BEC5', // Light Gray
+        textColorHex: '#000000'
       };
     case 100:
       return {
-        bg: 'bg-purple-100 text-purple-850 dark:bg-purple-950/40 dark:text-purple-200',
-        text: 'text-purple-700 dark:text-purple-300',
-        border: 'border-purple-200 dark:border-purple-900/50',
-        hex: '#a855f7' // Purple
+        bg: 'bg-[#7E57C2]',
+        text: 'text-white',
+        border: 'border-[#5E35B1]',
+        hex: '#7E57C2', // Purple
+        textColorHex: '#FFFFFF'
       };
     case 200:
       return {
-        bg: 'bg-amber-100 text-amber-905 dark:bg-amber-950/40 dark:text-amber-200',
-        text: 'text-amber-800 dark:text-amber-305',
-        border: 'border-amber-200 dark:border-amber-900/50',
-        hex: '#78350f' // Brown
+        bg: 'bg-[#8D6E63]',
+        text: 'text-white',
+        border: 'border-[#6D4C41]',
+        hex: '#8D6E63', // Brown
+        textColorHex: '#FFFFFF'
       };
     case 300:
       return {
-        bg: 'bg-red-100 text-red-850 dark:bg-red-950/40 dark:text-red-200',
-        text: 'text-red-700 dark:text-red-300',
-        border: 'border-red-200 dark:border-red-900/50',
-        hex: '#dc2626' // Crimson Red
+        bg: 'bg-[#E53935]',
+        text: 'text-white',
+        border: 'border-[#C62828]',
+        hex: '#E53935', // Crimson Red
+        textColorHex: '#FFFFFF'
       };
     case 400:
       return {
-        bg: 'bg-orange-100 text-orange-850 dark:bg-orange-950/40 dark:text-orange-200',
-        text: 'text-orange-700 dark:text-orange-300',
-        border: 'border-orange-200 dark:border-orange-900/50',
-        hex: '#f97316' // Orange
+        bg: 'bg-[#FB8C00]',
+        text: 'text-[#000000]',
+        border: 'border-[#EF6C00]',
+        hex: '#FB8C00', // Orange
+        textColorHex: '#000000'
       };
     case 500:
       return {
-        bg: 'bg-emerald-100 text-emerald-850 dark:bg-emerald-950/40 dark:text-emerald-200',
-        text: 'text-emerald-700 dark:text-emerald-300',
-        border: 'border-emerald-200 dark:border-emerald-900/50',
-        hex: '#10b981' // Emerald Green
+        bg: 'bg-[#43A047]',
+        text: 'text-white',
+        border: 'border-[#2E7D32]',
+        hex: '#43A047', // Emerald Green
+        textColorHex: '#FFFFFF'
       };
     case 600:
       return {
-        bg: 'bg-blue-105 text-blue-850 dark:bg-blue-950/40 dark:text-blue-200',
-        text: 'text-blue-700 dark:text-blue-300',
-        border: 'border-blue-200 dark:border-blue-900/50',
-        hex: '#2563eb' // Royal Blue
+        bg: 'bg-[#1E88E5]',
+        text: 'text-white',
+        border: 'border-[#1565C0]',
+        hex: '#1E88E5', // Royal Blue
+        textColorHex: '#FFFFFF'
       };
     case 700:
       return {
-        bg: 'bg-pink-100 text-pink-850 dark:bg-pink-955/40 dark:text-pink-200',
-        text: 'text-pink-705 dark:text-pink-300',
-        border: 'border-pink-200 dark:border-pink-900/50',
-        hex: '#db2777' // Pink
+        bg: 'bg-[#EC407A]',
+        text: 'text-white',
+        border: 'border-[#C2185B]',
+        hex: '#EC407A', // Pink
+        textColorHex: '#FFFFFF'
       };
     case 800:
       return {
-        bg: 'bg-yellow-100 text-yellow-850 dark:bg-yellow-950/40 dark:text-yellow-200',
-        text: 'text-yellow-700 dark:text-yellow-300',
-        border: 'border-yellow-200 dark:border-yellow-900/50',
-        hex: '#eab308' // Golden Yellow
+        bg: 'bg-[#FDD835]',
+        text: 'text-[#000000]',
+        border: 'border-[#FBC02D]',
+        hex: '#FDD835', // Golden Yellow
+        textColorHex: '#000000'
       };
     case 900:
       return {
-        bg: 'bg-teal-100 text-teal-855 dark:bg-teal-950/40 dark:text-teal-200',
-        text: 'text-teal-705 dark:text-teal-300',
-        border: 'border-teal-200 dark:border-teal-900/50',
-        hex: '#0d9488' // Teal
+        bg: 'bg-[#00897B]',
+        text: 'text-white',
+        border: 'border-[#00695C]',
+        hex: '#00897B', // Teal
+        textColorHex: '#FFFFFF'
       };
     default:
       return ddcDefaults;

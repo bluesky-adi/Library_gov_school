@@ -359,6 +359,7 @@ export async function connectDatabase() {
 
   if ((mongoose.connection.readyState as number) === 1) {
     if (hasMongoUri) isConnectedToMongo = true;
+    console.log("[MONGO] connection reused");
     return;
   }
 
@@ -370,6 +371,7 @@ export async function connectDatabase() {
       } else {
         isConnectedToMongo = (mongoose.connection.readyState as number) === 1;
       }
+      console.log("[MONGO] connection reused");
       return;
     } catch (e) {
       cachedConnection = null;
@@ -415,6 +417,7 @@ export async function connectDatabase() {
     if (mongoose.connection.listenerCount('disconnected') === 0) {
       mongoose.connection.on('disconnected', () => {
         console.log("[MONGO EVENT] Lost connection to MongoDB Atlas Cloud.");
+        console.log("[MONGO] connection closed");
         if (!hasMongoUri) {
           isConnectedToMongo = false;
         }
@@ -428,10 +431,12 @@ export async function connectDatabase() {
       });
     }
 
+    console.log("[MONGO] connection created");
     cachedConnection = mongoose.connect(uri, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 15000,
       socketTimeoutMS: 45000,
+      maxPoolSize: 5, // Limit connection pool size strictly to prevent Atlas connection exhaustion
     });
 
     await cachedConnection;

@@ -773,19 +773,52 @@ export default function StudentModule({
                 <span className="text-xs font-extrabold text-slate-705 dark:text-slate-300 font-mono">
                   Showing {filteredBooks.length} / {books.length} Books
                 </span>
-                <span className="text-[10px] bg-[#0f172a] text-amber-400 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-                  📖 SCHOOL DATABASE
-                </span>
+                
+                <div className="flex items-center gap-2">
+                  {/* Layout Toggler */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setStudentViewMode('cards')}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer ${
+                        studentViewMode === 'cards'
+                          ? 'bg-indigo-600 text-white shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'
+                      }`}
+                      title="Grid View"
+                    >
+                      <LayoutGrid className="w-3 h-3" />
+                      <span>Cards</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentViewMode('table')}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer ${
+                        studentViewMode === 'table'
+                          ? 'bg-indigo-600 text-white shadow-xs font-black'
+                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'
+                      }`}
+                      title="Excel Grid View"
+                    >
+                      <Table className="w-3 h-3" />
+                      <span>Excel Sheet</span>
+                    </button>
+                  </div>
+
+                  <span className="text-[10px] bg-[#0f172a] text-amber-400 px-2.5 py-1.5 rounded-lg font-bold uppercase tracking-wider">
+                    📖 DATABASE
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Content Display: Cards Grid */}
+            {/* Content Display */}
             {filteredBooks.length === 0 ? (
               <div className="text-center py-12 p-4 text-slate-500 bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
                 <BookOpen className="w-10 h-10 mx-auto text-slate-300 mb-2" />
                 <p className="text-xs font-extrabold">{t.noBooks}</p>
               </div>
-            ) : (
+            ) : studentViewMode === 'cards' ? (
               <div>
                 {/* RENDER HIGH CONTRAST SIMPLIFIED GRID CARDS FOR STUDENTS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -805,75 +838,51 @@ export default function StudentModule({
                         
                         <div className="flex-1 flex flex-col justify-between mt-3.5">
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] bg-indigo-50 text-indigo-850 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase tracking-wider">
-                                {book.category}
-                              </span>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
-                                SR# {book.bookId}
-                              </span>
-                            </div>
-                            
-                            <h3 
-                              onClick={() => setSelectedBook(book)}
-                              className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2 hover:text-indigo-650 cursor-pointer transition-colors"
-                            >
-                               {book.bookName}
-                            </h3> <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {paginatedBooks.map(book => {
-                    const isAvailable = book.availableCopies > 0;
-                    return (
-                      <div 
-                        key={book.bookId}
-                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all duration-300"
-                      >
-                        <div 
-                          onClick={() => setSelectedBook(book)}
-                          className="aspect-[3/4] w-full overflow-hidden bg-slate-50 dark:bg-slate-950 rounded-md ring-1 ring-slate-100 dark:ring-slate-800 hover:scale-[1.02] transition-all duration-300 cursor-pointer flex items-center justify-center"
-                        >
-                          <GoogleBookCover bookName={book.bookName} author={book.author} coverImage={book.coverImage} />
-                        </div>
-                        
-                        <div className="flex-1 flex flex-col justify-between mt-3.5">
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] bg-indigo-50 text-indigo-850 dark:bg-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-black uppercase tracking-wider">
-                                {book.category}
-                              </span>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
-                                SR# {book.bookId}
-                              </span>
-                            </div>
-                            
-                            <h3 
-                              onClick={() => setSelectedBook(book)}
-                              className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2 hover:text-indigo-650 cursor-pointer transition-colors"
-                            >
-                               {book.bookName}
-                            </h3>
-                            <p className="text-[11px] text-slate-500 italic font-medium line-clamp-1">
-                              by {book.author}
-                            </p>
+                            {(() => {
+                              const ddc = getDdcColor(book.ddcNumber || book.callNumber);
+                              return (
+                                <>
+                                  <div className="flex items-center justify-between">
+                                    <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-wider border ${ddc.bg} ${ddc.border} ${ddc.text}`}>
+                                      {book.category}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-extrabold font-mono">
+                                      SR# {book.bookId}
+                                    </span>
+                                  </div>
+                                  
+                                  <h3 
+                                    onClick={() => setSelectedBook(book)}
+                                    className="font-extrabold text-[#0f172a] dark:text-slate-100 text-xs sm:text-sm line-clamp-2 hover:text-indigo-650 cursor-pointer transition-colors"
+                                  >
+                                     {book.bookName}
+                                  </h3>
+                                  <p className="text-[11px] text-slate-500 italic font-medium line-clamp-1">
+                                    by {book.author}
+                                  </p>
 
-                            {/* Metadata Details Grid block */}
-                            <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[9.5px] font-mono border border-slate-150 dark:border-slate-800/80 my-2 select-none">
-                              <div>
-                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Accession No</span>
-                                <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.accessionNumber || "N/A"}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Call Number</span>
-                                <span className="text-indigo-600 dark:text-indigo-400 font-black block truncate">{book.callNumber || book.ddcNumber || "N/A"}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Book Number</span>
-                                <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.bookNumber || "N/A"}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Shelf Location</span>
-                                <span className="text-emerald-700 dark:text-emerald-400 font-black block truncate">Shelf #{categorySerialsMap.get(book.bookId) || 1}</span>
-                              </div>
-                            </div>
+                                  {/* Metadata Details Grid block */}
+                                  <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[9.5px] font-mono border border-slate-150 dark:border-slate-800/80 my-2 select-none">
+                                    <div>
+                                      <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Accession No</span>
+                                      <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.accessionNumber || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Call Number</span>
+                                      <span className={`font-black block truncate ${ddc.text}`}>{book.callNumber || book.ddcNumber || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Book Number</span>
+                                      <span className="text-slate-900 dark:text-slate-200 font-black block truncate">{book.bookNumber || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Shelf Location</span>
+                                      <span className={`font-black block truncate ${ddc.text}`}>Shelf #{categorySerialsMap.get(book.bookId) || 1}</span>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                             
                             <div className="pt-1 flex items-center gap-1.5">
                               <span className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-emerald-600' : 'bg-red-650'}`}></span>
@@ -914,7 +923,78 @@ export default function StudentModule({
                   hasMore={paginatedBooks.length < filteredBooks.length}
                 />
               </div>
-          )}
+            ) : (
+              /* EXCEL TABULAR VIEW MODE FOR STUDENTS */
+              <div className="space-y-4">
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs text-[11px] animate-fade-in bg-white dark:bg-slate-900">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-[#0f172a] text-white font-mono uppercase tracking-wider text-[9px] select-none border-b border-slate-900">
+                      <tr>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Serial No</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800 text-emerald-400 font-bold">Shelf Sr #</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Accession No</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Call Number</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Title of Book</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Author Name</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Publisher</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800">Subject Category</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800 text-center">Copies</th>
+                        <th className="p-2.5 border border-slate-200 dark:border-slate-800 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-300 font-medium">
+                      {paginatedBooks.map((book) => {
+                        const isAvail = book.availableCopies > 0;
+                        const ddc = getDdcColor(book.ddcNumber || book.callNumber);
+                        return (
+                          <tr 
+                            key={book.bookId}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-colors"
+                          >
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-slate-900 dark:text-white border border-slate-150 dark:border-slate-800">#{book.bookId}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-150 dark:border-slate-800 bg-emerald-50/10">#{categorySerialsMap.get(book.bookId) || 1}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-indigo-700 dark:text-indigo-400 border border-slate-150 dark:border-slate-800 bg-indigo-50/10">{book.accessionNumber || "-"}</td>
+                            <td onClick={() => setSelectedBook(book)} className={`p-2.5 font-mono font-bold border border-slate-150 dark:border-slate-800 ${ddc.text}`}>{book.callNumber || "-"}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-extrabold text-slate-950 dark:text-white border border-slate-150 dark:border-slate-800">{book.bookName}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 border border-slate-150 dark:border-slate-800 italic">{book.author}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 border border-slate-150 dark:border-slate-800">{book.publisher || "-"}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 border border-slate-150 dark:border-slate-800">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${ddc.bg} ${ddc.border} ${ddc.text}`}>
+                                {book.category}
+                              </span>
+                            </td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 border border-slate-150 dark:border-slate-800 text-center font-mono">
+                              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${isAvail ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                {book.availableCopies} / {book.totalCopies}
+                              </span>
+                            </td>
+                            <td className="p-2 border border-slate-150 dark:border-slate-800 text-center">
+                              <button
+                                onClick={() => handleRequestClick(book)}
+                                disabled={!isAvail}
+                                className={`px-2 py-1 text-[9px] font-black rounded-md border border-transparent transition-all cursor-pointer ${
+                                  isAvail
+                                    ? 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                }`}
+                              >
+                                {t.requestBook}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* INFINITE SCROLL CONTROLS */}
+                <InfiniteScrollSentinel 
+                  onVisible={() => setVisibleBooksCount(prev => prev + 24)}
+                  hasMore={paginatedBooks.length < filteredBooks.length}
+                />
+              </div>
+            )}
           </div>
 
           {/* Request Status Logs & Reading History Segment (4 cols) */}
@@ -1746,50 +1826,57 @@ export default function StudentModule({
               </div>
               
               <div className="flex-1 space-y-4">
-                <div className="space-y-1">
-                  <span className="text-[9px] bg-sky-50 text-sky-850 px-2 py-0.5 rounded font-bold uppercase">
-                    {selectedBook.category}
-                  </span>
-                  <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100 leading-tight">
-                    {selectedBook.bookName}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    by <span className="font-bold text-slate-700">{selectedBook.author}</span>
-                  </p>
-                </div>
+                {(() => {
+                  const ddc = getDdcColor(selectedBook.ddcNumber || selectedBook.callNumber);
+                  return (
+                    <>
+                      <div className="space-y-1">
+                        <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase border ${ddc.bg} ${ddc.border} ${ddc.text}`}>
+                          {selectedBook.category}
+                        </span>
+                        <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100 leading-tight">
+                          {selectedBook.bookName}
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          by <span className="font-bold text-slate-700">{selectedBook.author}</span>
+                        </p>
+                      </div>
 
-                <div className="text-xs text-slate-700 dark:text-slate-350 bg-slate-50 dark:bg-slate-950 p-3 rounded border leading-relaxed">
-                  {selectedBook.description}
-                </div>
+                      <div className="text-xs text-slate-700 dark:text-slate-350 bg-slate-50 dark:bg-slate-950 p-3 rounded border leading-relaxed">
+                        {selectedBook.description}
+                      </div>
 
-                <div className="grid grid-cols-2 gap-3.5 text-[11px] border-t border-slate-150 pt-3">
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Category</span>
-                    <span className="font-bold text-[#0f172a] dark:text-indigo-400 block mt-0.5">{selectedBook.category}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Availability State</span>
-                    <span className={`font-extrabold block mt-0.5 ${selectedBook.availableCopies > 0 ? 'text-emerald-700 font-bold' : 'text-red-655'}`}>
-                      {selectedBook.availableCopies > 0 ? `${t.available} (${selectedBook.availableCopies} of ${selectedBook.totalCopies} Copies)` : t.unavailable}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Accession Number</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5">{selectedBook.accessionNumber || "N/A"}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Call / Book Number</span>
-                    <span className="font-bold text-indigo-650 dark:text-indigo-400 block mt-0.5">{selectedBook.callNumber || selectedBook.ddcNumber || "N/A"} / {selectedBook.bookNumber || "N/A"}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Publisher</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5 truncate">{selectedBook.publisher || "Ramdiri Library Publications"}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Shelf Location</span>
-                    <span className="font-bold text-emerald-700 dark:text-emerald-400 block mt-0.5">Shelf #{categorySerialsMap.get(selectedBook.bookId) || 1}</span>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-2 gap-3.5 text-[11px] border-t border-slate-150 pt-3">
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Category</span>
+                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>{selectedBook.category}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Availability State</span>
+                          <span className={`font-extrabold block mt-0.5 ${selectedBook.availableCopies > 0 ? 'text-emerald-700 font-bold' : 'text-red-655'}`}>
+                            {selectedBook.availableCopies > 0 ? `${t.available} (${selectedBook.availableCopies} of ${selectedBook.totalCopies} Copies)` : t.unavailable}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Accession Number</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5">{selectedBook.accessionNumber || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Call / Book Number</span>
+                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>{selectedBook.callNumber || selectedBook.ddcNumber || "N/A"} / {selectedBook.bookNumber || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Publisher</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 block mt-0.5 truncate">{selectedBook.publisher || "Ramdiri Library Publications"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Shelf Location</span>
+                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>Shelf #{categorySerialsMap.get(selectedBook.bookId) || 1}</span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <button
                   onClick={() => {

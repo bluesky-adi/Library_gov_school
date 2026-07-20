@@ -159,20 +159,20 @@
 
   .sticker-grid {
     display: grid !important;
-    grid-template-columns: repeat(3, 64mm) !important;
-    grid-template-rows: repeat(11, 24mm) !important;
+    grid-template-columns: repeat(8, 24mm) !important;
+    grid-template-rows: repeat(4, 64mm) !important;
     row-gap: 0px !important;
     column-gap: 0px !important;
     width: 192mm !important;
-    height: 264mm !important;
+    height: 256mm !important;
     box-sizing: border-box !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
   .sticker-item {
-    width: 64mm !important;
-    height: 24mm !important;
+    width: 24mm !important;
+    height: 64mm !important;
     box-sizing: border-box !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -183,13 +183,13 @@
 /* Custom screen styling to allow full live interactive preview of printed stickers */
 .sticker-preview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 16px;
 }
 
 .sticker-preview-item {
-  width: 242px; /* ~64mm */
-  height: 91px; /* ~24mm */
+  width: 110px; /* ~24mm scaled up */
+  height: 293px; /* ~64mm scaled up */
   box-sizing: border-box;
 }
 

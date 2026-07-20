@@ -415,11 +415,11 @@ export default function PublicHome({
     fetchStats(false);
     fetchFeedbacks(false);
 
-    // Set up silent polling every 3000ms
+    // Set up silent polling every 30000ms
     const pollInterval = setInterval(() => {
       fetchStats(true);
       fetchFeedbacks(true);
-    }, 3000);
+    }, 30000);
 
     return () => clearInterval(pollInterval);
   }, [feedbackRefreshTrigger]);
