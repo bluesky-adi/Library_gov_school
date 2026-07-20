@@ -296,7 +296,10 @@ function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, o
               const accessionNo = book.accessionNumber || book.bookId || "N/A";
               const callNo = book.callNumber || "N/A";
               const bookNo = book.bookNumber || "N/A";
-              const shelfLocation = book.shelfNumber || "";
+              const serialNo = categorySerialsMap.get(book.bookId) || 1;
+              const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
+                ? `${book.shelfNumber.trim()} (#${serialNo})`
+                : `Shelf #${serialNo}`;
               const isPrinted = stickerPrintedIds.has(book.bookId);
 
               return (
@@ -690,7 +693,10 @@ export default function LibrarianModule({
         const accessionNo = book.accessionNumber || book.bookId || "N/A";
         const callNo = book.callNumber || "N/A";
         const bookNo = book.bookNumber || "N/A";
-        const shelfLocation = book.shelfNumber || "";
+        const serialNo = categorySerialsMap.get(book.bookId) || 1;
+        const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
+          ? `${book.shelfNumber.trim()} (#${serialNo})`
+          : `Shelf #${serialNo}`;
 
         const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
         const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
@@ -6058,7 +6064,10 @@ export default function LibrarianModule({
                     const accessionNo = book.accessionNumber || book.bookId || "N/A";
                     const callNo = book.callNumber || "N/A";
                     const bookNo = book.bookNumber || "N/A";
-                    const shelfLocation = book.shelfNumber || "";
+                    const serialNo = categorySerialsMap.get(book.bookId) || 1;
+                    const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
+                      ? `${book.shelfNumber.trim()} (#${serialNo})`
+                      : `Shelf #${serialNo}`;
                     
                     return (
                       <StickerElement 
