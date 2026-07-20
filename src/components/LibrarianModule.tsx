@@ -750,69 +750,6 @@ export default function LibrarianModule({
   const [replyText, setReplyText] = useState<string>('');
   const [feedbackFilter, setFeedbackFilter] = useState<'All' | 'Pending' | 'Approved' | 'Spam' | 'Resolved' | 'Rejected' | 'Hidden'>('All');
 
-  // --- DIRECT CONTACT MESSAGES STATES & HANDLERS ---
-  const [feedbackSubTab, setFeedbackSubTab] = useState<'reviews' | 'contact'>('reviews');
-  const [contactMessages, setContactMessages] = useState<any[]>([]);
-  const [contactMessagesLoading, setContactMessagesLoading] = useState<boolean>(false);
-  const [contactFilter, setContactFilter] = useState<'All' | 'Unread' | 'Read'>('All');
-  const [contactCategoryFilter, setContactCategoryFilter] = useState<string>('All');
-
-  const fetchLibrarianContactMessages = () => {
-    setContactMessagesLoading(true);
-    const token = localStorage.getItem("ramdiri_library_token");
-    fetch('/api/contact-messages', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setContactMessages(data);
-        }
-      })
-      .catch(err => console.error("Error loading contact messages:", err))
-      .finally(() => setContactMessagesLoading(false));
-  };
-
-  const handleToggleContactStatus = (id: string, currentStatus: 'Read' | 'Unread') => {
-    const newStatus = currentStatus === 'Read' ? 'Unread' : 'Read';
-    const token = localStorage.getItem("ramdiri_library_token");
-    fetch(`/api/contact-messages/${id}/status`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ status: newStatus })
-    })
-      .then(res => {
-        if (res.ok) {
-          fetchLibrarianContactMessages();
-        } else {
-          alert("Could not update message status.");
-        }
-      })
-      .catch(() => alert("Network error updating contact message status."));
-  };
-
-  const handleDeleteContactMessage = (id: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this student contact message? This cannot be undone.")) {
-      return;
-    }
-    const token = localStorage.getItem("ramdiri_library_token");
-    fetch(`/api/contact-messages/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => {
-        if (res.ok) {
-          fetchLibrarianContactMessages();
-        } else {
-          alert("Could not delete contact message.");
-        }
-      })
-      .catch(() => alert("Network error deleting contact message."));
-  };
-
   const fetchLibrarianFeedbacks = () => {
     setFeedbacksLoading(true);
     const token = localStorage.getItem("ramdiri_library_token");
@@ -832,7 +769,6 @@ export default function LibrarianModule({
   React.useEffect(() => {
     if (activeTab === 'feedback') {
       fetchLibrarianFeedbacks();
-      fetchLibrarianContactMessages();
     }
   }, [activeTab]);
 
@@ -6457,40 +6393,8 @@ export default function LibrarianModule({
       {activeTab === 'feedback' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 p-5 sm:p-6 rounded-xl space-y-6 shadow-xs animate-fade-in" id="feedback-moderator-tab">
           
-          {/* Sub-tab Navigation */}
-          <div className="flex border-b border-slate-150 dark:border-slate-800 gap-4 mb-2">
-            <button
-              type="button"
-              onClick={() => setFeedbackSubTab('reviews')}
-              className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                feedbackSubTab === 'reviews'
-                  ? 'border-indigo-650 text-indigo-700 dark:text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-650'
-              }`}
-            >
-              💬 Public Book & Site Reviews
-            </button>
-            <button
-              type="button"
-              onClick={() => setFeedbackSubTab('contact')}
-              className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-                feedbackSubTab === 'contact'
-                  ? 'border-indigo-650 text-indigo-700 dark:text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-650'
-              }`}
-            >
-              ✉️ Student Contact Mailbox
-              {contactMessages.filter(m => m.status === 'Unread').length > 0 && (
-                <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
-                  {contactMessages.filter(m => m.status === 'Unread').length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {feedbackSubTab === 'reviews' ? (
-            <>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+          {/* Public reviews section */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                 <div>
                   <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                     <MessageSquare className="w-5 h-5 text-indigo-600" />
@@ -6694,153 +6598,6 @@ export default function LibrarianModule({
                     )}
                 </div>
               )}
-            </>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-indigo-600" />
-                    <span>Student Direct Mailbox</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    View questions, suggestions, reports, or book recommendations sent directly by school students.
-                  </p>
-                </div>
-
-                {/* Filters Row */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Read/Unread Filter */}
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-slate-400 font-bold uppercase text-[9px]">Status:</span>
-                    {(['All', 'Unread', 'Read'] as const).map((opt) => (
-                      <button
-                        type="button"
-                        key={opt}
-                        onClick={() => setContactFilter(opt)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-black transition-all cursor-pointer ${
-                          contactFilter === opt
-                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-150'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Category Filter */}
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-slate-400 font-bold uppercase text-[9px]">Category:</span>
-                    <select
-                      value={contactCategoryFilter}
-                      onChange={(e) => setContactCategoryFilter(e.target.value)}
-                      className="text-xs font-bold p-1 bg-white dark:bg-slate-950 border border-slate-200 rounded outline-none"
-                    >
-                      <option value="All">All Categories</option>
-                      <option value="General Question">General Question</option>
-                      <option value="Suggestion">Suggestion</option>
-                      <option value="Report an Issue">Report an Issue</option>
-                      <option value="Book Recommendation">Book Recommendation</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {contactMessagesLoading ? (
-                <div className="text-center py-16 text-xs text-slate-400 font-mono">
-                  Loading direct mailbox logs...
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {contactMessages
-                    .filter(m => contactFilter === 'All' || m.status === contactFilter)
-                    .filter(m => contactCategoryFilter === 'All' || m.category === contactCategoryFilter)
-                    .length === 0 ? (
-                      <div className="text-center py-16 border-2 border-dashed border-slate-205 dark:border-slate-800 rounded-xl space-y-2">
-                        <MessageSquare className="w-10 h-10 mx-auto text-slate-300 stroke-[1.5]" />
-                        <p className="text-xs text-slate-400">No student messages match the selected filters.</p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-4">
-                        {contactMessages
-                          .filter(m => contactFilter === 'All' || m.status === contactFilter)
-                          .filter(m => contactCategoryFilter === 'All' || m.category === contactCategoryFilter)
-                          .map((m) => (
-                            <div key={m.id} className="pt-4 first:pt-0 space-y-3">
-                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-slate-50/50 dark:bg-slate-955/30 p-4.5 rounded-xl border border-slate-150 dark:border-slate-850">
-                                <div className="space-y-2 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-extrabold text-xs text-slate-900 dark:text-white">
-                                      {m.studentName || "Verified Scholar"}
-                                    </span>
-                                    <span className="text-[10px] bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded font-mono">
-                                      Class {m.class || "?"}-{m.section || "?"}
-                                    </span>
-                                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded font-mono">
-                                      Roll #{m.rollNumber || "?"}
-                                    </span>
-                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
-                                      m.category === 'General Question' ? 'bg-blue-105 text-blue-800 border border-blue-200' :
-                                      m.category === 'Suggestion' ? 'bg-purple-105 text-purple-800 border border-purple-200' :
-                                      m.category === 'Report an Issue' ? 'bg-red-105 text-red-800 border border-red-200' :
-                                      m.category === 'Book Recommendation' ? 'bg-emerald-105 text-emerald-800 border border-emerald-200' :
-                                      'bg-slate-105 text-slate-800 border border-slate-200'
-                                    }`}>
-                                      {m.category}
-                                    </span>
-                                  </div>
-
-                                  <div className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
-                                    {m.message}
-                                  </div>
-
-                                  <span className="text-[9.5px] font-mono text-slate-400 block">
-                                    Received: {m.createdAt ? new Date(m.createdAt).toLocaleString() : ""}
-                                  </span>
-                                </div>
-
-                                <div className="flex sm:flex-col items-stretch sm:items-end justify-end gap-2 shrink-0">
-                                  <div className="flex items-center gap-1.5 text-[10.5px]">
-                                    <span className="text-[10px] uppercase font-bold text-slate-400">Status:</span>
-                                    <span className={`font-black text-[10.5px] uppercase px-2 py-0.5 rounded ${
-                                      m.status === 'Read' ? 'bg-emerald-100 text-emerald-850' : 'bg-amber-100 text-amber-855 animate-pulse'
-                                    }`}>
-                                      {m.status}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex gap-2 pt-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleContactStatus(m.id, m.status)}
-                                      className={`px-3 py-1.5 text-[10.5px] font-black rounded-lg border cursor-pointer transition-all ${
-                                        m.status === 'Read'
-                                          ? 'bg-slate-50 hover:bg-slate-100 text-slate-650 border-slate-200'
-                                          : 'bg-emerald-600 hover:bg-emerald-505 text-white border-transparent shadow-xs'
-                                      }`}
-                                    >
-                                      {m.status === 'Read' ? 'Mark Unread' : 'Mark Read'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteContactMessage(m.id)}
-                                      className="px-3 py-1.5 text-[10.5px] font-bold text-red-700 hover:bg-red-50 border border-red-200 rounded-lg cursor-pointer transition-all"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 

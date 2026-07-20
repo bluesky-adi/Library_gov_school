@@ -966,6 +966,11 @@ app.post('/api/requests', authenticateToken, async (req, res) => {
   try {
     const reqBody: BorrowRequest = req.body;
     const reqUser = (req as any).user;
+
+    // Limit request comment to max 200 characters if present
+    if (reqBody.comment) {
+      reqBody.comment = reqBody.comment.substring(0, 200).trim();
+    }
     
     // Prevent unauthenticated students from making requests for other students
     if (reqUser?.role === 'Student') {
@@ -1093,7 +1098,6 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
     
     // Trigger real-time synchronized notifications
     await createSystemNotification('Student', studentIdVal, 'Borrow Request Approved', `Your borrow request for "${borrowReq.bookName}" has been approved! Due date: ${dueDateStr}`, 'success');
-    await createSystemNotification('Librarian', '', 'Book Issued Successfully', `Issued "${borrowReq.bookName}" to ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`, 'success');
     
     res.json({ success: true, log: savedLog });
   } catch (error: any) {
@@ -1301,7 +1305,6 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
     
     // Trigger real-time synchronized notifications
     await createSystemNotification('Student', log.studentId, 'Book Returned Successfully', `You have successfully returned "${log.bookName}" on ${log.returnDate}.`, 'success');
-    await createSystemNotification('Librarian', '', 'Book Returned', `Student ${log.studentName} (Roll: ${log.rollNumber}) returned "${log.bookName}"`, 'success');
 
     res.json({ success: true, log });
   } catch (error: any) {
@@ -1583,111 +1586,6 @@ app.delete('/api/feedback/:id', authenticateToken, requireLibrarian, async (req,
 });
 
 
-// ---- CONTACT LIBRARIAN ENDPOINTS ----
-// 1. Submit contact message (Students only, or general authenticated)
-app.post('/api/contact-messages', authenticateToken, async (req, res) => {
-  try {
-    const { category, message } = req.body;
-    if (!category || !message) {
-      return res.status(400).json({ error: "Missing required fields: category and message are required." });
-    }
-    const allowedCategories = ['General Question', 'Suggestion', 'Report an Issue', 'Book Recommendation', 'Other'];
-    if (!allowedCategories.includes(category)) {
-      return res.status(400).json({ error: "Invalid contact category." });
-    }
-
-    const reqUser = (req as any).user;
-    if (!reqUser) {
-      return res.status(401).json({ error: "Unauthorized access context." });
-    }
-
-    const msgId = `MSG-${Date.now().toString().slice(-4)}-${Math.floor(10 + Math.random() * 90)}`;
-    const newMessage = {
-      id: msgId,
-      studentName: reqUser.name || "Student",
-      class: (reqUser.class || "").toString().trim().toUpperCase() || "N/A",
-      section: (reqUser.section || "").toString().trim().toUpperCase() || "N/A",
-      rollNumber: Number(reqUser.rollNumber) || 0,
-      category,
-      message: message.trim(),
-      status: 'Unread',
-      createdAt: new Date().toISOString()
-    };
-
-    const savedMessage = await dbService.saveContactMessage(newMessage);
-    
-    // Trigger real-time librarian notification
-    await createSystemNotification('Librarian', '', 'New Direct Message', `Message from ${savedMessage.studentName} (Roll: ${savedMessage.rollNumber}): "${savedMessage.message.slice(0, 50)}..."`, 'message');
-
-    res.status(201).json({ success: true, message: savedMessage });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 2. Get contact messages (Librarians see all, Students see their own)
-app.get('/api/contact-messages', authenticateToken, async (req, res) => {
-  try {
-    const reqUser = (req as any).user;
-    if (!reqUser) {
-      return res.status(401).json({ error: "Unauthorized access context." });
-    }
-
-    const allMessages = await dbService.getContactMessages();
-
-    if (reqUser.role === 'Student') {
-      const filtered = allMessages.filter((m: any) => {
-        return (
-          m.studentName?.toLowerCase() === reqUser.name?.toLowerCase() &&
-          String(m.class).toUpperCase() === String(reqUser.class).toUpperCase() &&
-          String(m.section).toUpperCase() === String(reqUser.section).toUpperCase() &&
-          Number(m.rollNumber) === Number(reqUser.rollNumber)
-        );
-      });
-      return res.json(filtered);
-    }
-
-    res.json(allMessages);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 3. Update status of contact message (Librarians only)
-app.put('/api/contact-messages/:id/status', authenticateToken, requireLibrarian, async (req, res) => {
-  try {
-    const { status } = req.body;
-    if (status !== 'Read' && status !== 'Unread') {
-      return res.status(400).json({ error: "Invalid status option. Must be 'Read' or 'Unread'." });
-    }
-
-    const allMessages = await dbService.getContactMessages();
-    const msg = allMessages.find((m: any) => m.id === req.params.id);
-    if (!msg) {
-      return res.status(404).json({ error: "Contact message record not found." });
-    }
-
-    msg.status = status;
-    const saved = await dbService.saveContactMessage(msg);
-    res.json(saved);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 4. Delete contact message (Librarians only)
-app.delete('/api/contact-messages/:id', authenticateToken, requireLibrarian, async (req, res) => {
-  try {
-    const success = await dbService.deleteContactMessage(req.params.id);
-    if (!success) {
-      return res.status(404).json({ error: "Contact message not found." });
-    }
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 
 // ---- SYSTEM NOTIFICATIONS CONTROLLERS & ENDPOINTS ----
 
@@ -1752,14 +1650,56 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
       const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
       const filtered = allNotifications.filter((n: any) => {
         if (n.recipientRole !== 'Student') return false;
+        
+        // Filter ONLY student-related library activity
+        const allowedStudentTitles = [
+          'Borrow Request Approved',
+          'Book Request Approved',
+          'Borrow Request Rejected',
+          'Book Request Rejected',
+          'Borrow Request Pending',
+          'Book Request Pending',
+          'Request Pending',
+          'Book Issued',
+          'Book Returned Successfully',
+          'Book Returned',
+          'Due Soon Reminder',
+          'Overdue Reminder',
+          'New Digital Resource Available',
+          'New Digital Resource'
+        ];
+        if (!allowedStudentTitles.includes(n.title)) return false;
+
         const targetId = (n.studentId || "").toString().trim().toUpperCase();
         return targetId === userSId.toUpperCase() || targetId === 'ALL' || targetId === 'BROADCAST';
       });
+
+      // Sort newest notifications first
+      filtered.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       return res.json(filtered);
     }
 
     if (reqUser.role === 'Librarian') {
-      const filtered = allNotifications.filter((n: any) => n.recipientRole === 'Librarian');
+      const filtered = allNotifications.filter((n: any) => {
+        if (n.recipientRole !== 'Librarian') return false;
+
+        // Only include allowed librarian notification categories
+        const allowedLibrarianTitles = [
+          'New Borrow Request',
+          'New Feedback Submitted',
+          'New Student Enrolled',
+          'Excel Book Import Complete',
+          'Excel Student Import Complete',
+          'Digital Resource Uploaded',
+          'Digital Resource Upload Failed',
+          'System Alert',
+          'System Alerts'
+        ];
+        return allowedLibrarianTitles.includes(n.title);
+      });
+
+      // Sort newest notifications first
+      filtered.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       return res.json(filtered);
     }
 
@@ -2099,10 +2039,8 @@ app.get('/api/database/backup', authenticateToken, requireLibrarian, async (req,
 app.post('/api/database/restore', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const payload = req.body;
+    // Restore full database
     await dbService.restoreFullDatabase(payload);
-    
-    // Trigger real-time librarian notification
-    await createSystemNotification('Librarian', '', 'Database Restored', 'The entire library system database was successfully restored from a secure backup.', 'success');
 
     res.json({ success: true, message: "Database state completely restored successfully." });
   } catch (error: any) {
