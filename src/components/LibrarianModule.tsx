@@ -552,52 +552,11 @@ export default function LibrarianModule({
     }
   };
 
-  const runStickerGenerationFlow = async (booksList: Book[], type: 'pdf' | 'print') => {
-    if (booksList.length === 0) {
-      alert("No books selected for printing stickers.");
-      return;
-    }
-
-    // 1. Validate data integrity
-    const errorsList: { book: Book; errors: string[] }[] = [];
-    booksList.forEach(b => {
-      const bookErrors: string[] = [];
-      const accessionNo = (b.accessionNumber || '').trim();
-      const callNo = (b.callNumber || '').trim();
-      const bookNo = (b.bookNumber || '').trim();
-      
-      if (!accessionNo) {
-        bookErrors.push("Accession Number is missing.");
-      }
-      if (!callNo) {
-        bookErrors.push("Call Number is missing.");
-      }
-      if (!bookNo) {
-        bookErrors.push("Book Number is missing.");
-      }
-
-      const ddcCat = getDdcCategoryName(b.ddcNumber || b.callNumber || b.category);
-      if (ddcCat === "Needs Librarian Review") {
-        bookErrors.push("DDC Category classification is missing or invalid.");
-      }
-
-      if (bookErrors.length > 0) {
-        errorsList.push({ book: b, errors: bookErrors });
-      }
-    });
-
-    if (errorsList.length > 0) {
-      setFailedBooksForStickers(errorsList);
-      setStickerValidationErrorModal(true);
-      return;
-    }
-
-    // 2. Data is 100% valid. Proceed to QR Verification stage
-    setStickerPendingAction({ books: booksList, type });
+  const executeStickerGenerationFlow = async (booksList: Book[], type: 'pdf' | 'print') => {
     setStickerVerificationState('verifying');
     setStickerVerificationLogs([
       "Initializing secure verification engine...",
-      "Data integrity verification: PASSED."
+      "Data integrity verification: PASSED (or bypassed by librarian)."
     ]);
 
     try {
@@ -641,6 +600,52 @@ export default function LibrarianModule({
       setStickerVerificationState('failed');
       setStickerVerificationLogs(prev => [...prev, `❌ QR Verification FAILED: ${err.message || err}`]);
     }
+  };
+
+  const runStickerGenerationFlow = async (booksList: Book[], type: 'pdf' | 'print') => {
+    if (booksList.length === 0) {
+      alert("No books selected for printing stickers.");
+      return;
+    }
+
+    setStickerPendingAction({ books: booksList, type });
+
+    // 1. Validate data integrity
+    const errorsList: { book: Book; errors: string[] }[] = [];
+    booksList.forEach(b => {
+      const bookErrors: string[] = [];
+      const accessionNo = (b.accessionNumber || '').trim();
+      const callNo = (b.callNumber || '').trim();
+      const bookNo = (b.bookNumber || '').trim();
+      
+      if (!accessionNo) {
+        bookErrors.push("Accession Number is missing.");
+      }
+      if (!callNo) {
+        bookErrors.push("Call Number is missing.");
+      }
+      if (!bookNo) {
+        bookErrors.push("Book Number is missing.");
+      }
+
+      const ddcCat = getDdcCategoryName(b.ddcNumber || b.callNumber || b.category);
+      if (ddcCat === "Needs Librarian Review") {
+        bookErrors.push("DDC Category classification is missing or invalid.");
+      }
+
+      if (bookErrors.length > 0) {
+        errorsList.push({ book: b, errors: bookErrors });
+      }
+    });
+
+    if (errorsList.length > 0) {
+      setFailedBooksForStickers(errorsList);
+      setStickerValidationErrorModal(true);
+      return;
+    }
+
+    // 2. Data is 100% valid. Proceed to QR Verification stage
+    await executeStickerGenerationFlow(booksList, type);
   };
 
   const handleDownloadPDF = async (booksList: Book[]) => {
@@ -2871,8 +2876,8 @@ export default function LibrarianModule({
             </div>
 
             <div className="p-6 space-y-4 flex-1 overflow-y-auto max-h-[75vh]">
-              <div className="bg-red-50 dark:bg-red-950/20 text-red-800 dark:text-red-400 p-3.5 rounded-xl border border-red-150 dark:border-red-950 text-xs leading-relaxed">
-                <strong>Validation Failure:</strong> Some of your selected books cannot have stickers printed because crucial catalog data fields are missing. Each sticker requires a valid <strong>Accession Number</strong>, <strong>Call Number</strong>, <strong>Book Number</strong>, and a correctly resolvable <strong>DDC Category classification</strong>. Please correct these records first.
+              <div className="bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-400 p-3.5 rounded-xl border border-amber-150 dark:border-amber-950 text-xs leading-relaxed">
+                <strong>Data Completeness Warning:</strong> Some of your selected books have missing catalog data fields (such as Book Number, Call Number, or DDC classification). For optimal sticker layout, we recommend filling these fields. However, you can proceed to print stickers anyway—missing values will simply display as <strong>"—"</strong> or <strong>"Not Assigned"</strong>.
               </div>
 
               <div className="space-y-3">
@@ -2892,7 +2897,7 @@ export default function LibrarianModule({
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {errors.map((err, eIdx) => (
-                            <span key={eIdx} className="bg-red-50 dark:bg-red-950/50 border border-red-100 dark:border-red-900 text-red-650 dark:text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">
+                            <span key={eIdx} className="bg-amber-50 dark:bg-amber-955/50 border border-amber-100 dark:border-amber-900 text-amber-650 dark:text-amber-400 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">
                               {err}
                             </span>
                           ))}
@@ -2920,13 +2925,25 @@ export default function LibrarianModule({
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-850">
+              <div className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t border-slate-100 dark:border-slate-850">
                 <button
                   type="button"
                   onClick={() => setStickerValidationErrorModal(false)}
-                  className="px-5 py-2 bg-slate-950 hover:bg-slate-850 text-white font-extrabold text-xs rounded-lg cursor-pointer transition-all tracking-wider"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-xs rounded-lg cursor-pointer transition-all tracking-wider"
                 >
-                  Acknowledge & Close
+                  Cancel & Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setStickerValidationErrorModal(false);
+                    if (stickerPendingAction) {
+                      await executeStickerGenerationFlow(stickerPendingAction.books, stickerPendingAction.type);
+                    }
+                  }}
+                  className="px-5 py-2 bg-amber-550 hover:bg-amber-600 text-white font-extrabold text-xs rounded-lg cursor-pointer transition-all tracking-wider flex items-center gap-1.5"
+                >
+                  <span>🖨️ Print Anyway (Ignore warnings)</span>
                 </button>
               </div>
             </div>
