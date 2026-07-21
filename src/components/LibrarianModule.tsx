@@ -390,6 +390,7 @@ interface LibrarianModuleProps {
   onRejectRequest: (id: string) => Promise<{ success: boolean; error?: string } | void>;
   onHoldRequest?: (id: string) => Promise<{ success: boolean; error?: string } | void>;
   onCancelRequest?: (id: string) => any;
+  onDeleteRequest?: (id: string) => Promise<boolean>;
   onReturnBook: (logId: string) => Promise<{ success: boolean; error?: string } | void>;
   onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
   onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
@@ -438,6 +439,7 @@ export default function LibrarianModule({
   onRejectRequest,
   onHoldRequest,
   onCancelRequest,
+  onDeleteRequest,
   onReturnBook,
   onAddRequest,
   onImportBooksExcel,
@@ -2003,25 +2005,10 @@ export default function LibrarianModule({
   const filteredStudents = useMemo(() => {
     let result = students;
 
-    const query = studentSearchInput.trim().toLowerCase();
+    const query = studentSearchInput.trim();
     if (query) {
-      result = result.filter(s => {
-        const studentIdStr = String(s.studentId || '').toLowerCase();
-        const nameStr = String(s.name || '').toLowerCase();
-        const rollStr = String(s.rollNumber || '').toLowerCase();
-        const classStr = String(s.class || '').toLowerCase();
-        const sectionStr = String(s.section || '').toLowerCase();
-        const admissionStr = String((s as any).admissionNumber || '').toLowerCase();
-
-        return (
-          studentIdStr.includes(query) ||
-          nameStr.includes(query) ||
-          rollStr.includes(query) ||
-          classStr.includes(query) ||
-          sectionStr.includes(query) ||
-          admissionStr.includes(query)
-        );
-      });
+      const results = fuseStudents.search(query);
+      result = results.map(r => r.item);
     }
 
     if (filterClass) {
@@ -2505,6 +2492,17 @@ export default function LibrarianModule({
     } else {
       alert(currentLang === 'EN' ? `Hold failed: ${(result as any)?.error || "Server error"}` : `होल्ड विफल: ${(result as any)?.error || "सर्वर त्रुटि"}`);
     }
+  };
+
+  const handleDeleteRequestAction = async (id: string) => {
+    if (!onDeleteRequest) return;
+    if (isSubmittingAction) return;
+    if (!window.confirm(currentLang === 'EN' ? "Are you sure you want to delete this borrow request record from the database completely?" : "क्या आप वाकई इस उधार अनुरोध रिकॉर्ड को डेटाबेस से पूरी तरह हटाना चाहते हैं?")) {
+      return;
+    }
+    setIsSubmittingAction(true);
+    await onDeleteRequest(id);
+    setIsSubmittingAction(false);
   };
 
   const handleReturnAction = (logId: string) => {
@@ -4186,7 +4184,6 @@ export default function LibrarianModule({
                       className="w-4 h-4 rounded border-slate-300 text-slate-900 cursor-pointer"
                     />
                   </th>
-                  <th className="p-3 border border-slate-850 text-center">S.No</th>
                   <th className="p-3 border border-slate-850 text-left">Student Name</th>
                   <th className="p-3 border border-slate-850 text-center">Class & Section</th>
                   <th className="p-3 border border-slate-850 text-center">Roll Number</th>
@@ -4217,7 +4214,6 @@ export default function LibrarianModule({
                           className="rounded text-indigo-650 focus:ring-indigo-500 cursor-pointer"
                         />
                       </td>
-                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 text-slate-400 font-mono">{itemIndex < 10 ? "0" + itemIndex : itemIndex}</td>
                       <td className="p-3 border border-slate-200 dark:border-slate-800 font-semibold text-slate-900 dark:text-slate-105 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
                         <button
                           type="button"
@@ -4275,7 +4271,7 @@ export default function LibrarianModule({
                 })}
                 {filteredStudents.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
+                    <td colSpan={7} className="p-6 text-center text-slate-400 text-xs font-sans">No students registered in active ledger. Use spreadsheet bulk importer box below to enroll.</td>
                   </tr>
                 )}
               </tbody>
@@ -4508,6 +4504,22 @@ export default function LibrarianModule({
                            <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-1 sm:mt-0 font-sans">
                              <button
                                onClick={() => setSelectedRequestDetails(req)}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Verify Details</span>
+                              </button>
+                              {onDeleteRequest && (
+                                <button
+                                  disabled={isSubmittingAction}
+                                  onClick={() => handleDeleteRequestAction(req.id)}
+                                  className="px-3 py-1.5 text-red-800 font-bold text-xs rounded border border-red-200 transition-all flex items-center gap-1 select-none flex-1 sm:flex-none justify-center bg-red-50 hover:bg-red-100 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete</span>
+                                </button>
+                              )}
+                              <button
+                                style={{ display: 'none' }}
                                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-755 dark:text-indigo-300 font-bold text-xs rounded border border-indigo-200 dark:border-indigo-800/60 transition-all cursor-pointer flex items-center gap-1 select-none flex-1 sm:flex-none justify-center"
                                title="Verify Student & Book Location Specs"
                              >
@@ -5919,16 +5931,16 @@ export default function LibrarianModule({
             <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 dark:border-indigo-950 text-slate-700 dark:text-slate-350 space-y-1.5 select-none leading-relaxed text-xs">
               <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Avery Standard Alignment):</span>
               <p className="text-[11px]">
-                Each generated print layout centers a grid of <strong>3 columns × 11 rows = 33 stickers</strong> per page with fine guide boundaries.
+                Each generated print layout centers a grid of <strong>8 columns × 4 rows = 32 stickers</strong> per page with fine guide boundaries.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sticker Size</span>
-                  64 mm × 24 mm
+                  24 mm × 64 mm
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">A4 Sheet Columns</span>
-                  3 Columns (64mm × 3 = 192mm)
+                  8 Columns (24mm × 8 = 192mm)
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sheet Side Margins</span>

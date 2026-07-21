@@ -254,10 +254,10 @@ export default function App() {
     if (scannedAccession !== null) return;
     if (loggedInRole === 'Guest') return; // Only poll when a user is authenticated
     
-    // Poll every 10000ms to ensure synchronization of active session states
+    // Poll every 1000ms to ensure synchronization of active session states (<= 1 second requirement)
     const interval = setInterval(() => {
       refreshData(false);
-    }, 10000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [scannedAccession, loggedInRole]);
@@ -1039,6 +1039,30 @@ export default function App() {
     }
   };
 
+  // 8.6 Delete a borrow request completely (Librarian)
+  const handleDeleteRequest = async (id: string): Promise<boolean> => {
+    const token = localStorage.getItem("ramdiri_library_token");
+    try {
+      const resp = await fetch(`/api/requests/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        await refreshData();
+        return true;
+      } else {
+        const err = await resp.json();
+        alert(`Deletion failed: ${err.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Delete request failed:", err);
+      return false;
+    }
+  };
+
   // 9. Process physical Check-In / Book Returns
   const handleReturnBook = async (logId: string): Promise<{ success: boolean; error?: string }> => {
     const token = localStorage.getItem("ramdiri_library_token");
@@ -1678,6 +1702,7 @@ export default function App() {
                 onRejectRequest={handleRejectRequest}
                 onHoldRequest={handleHoldRequest}
                 onCancelRequest={handleCancelRequest}
+                onDeleteRequest={handleDeleteRequest}
                 onReturnBook={handleReturnBook}
                 onImportBooksExcel={handleImportBooksExcel}
                 onImportStudentsExcel={handleImportStudentsExcel}

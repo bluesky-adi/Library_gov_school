@@ -34,6 +34,7 @@ interface LibraryPortalProps {
   onRejectRequest: (id: string) => Promise<{ success: boolean; error?: string }>;
   onHoldRequest?: (id: string) => Promise<{ success: boolean; error?: string }>;
   onCancelRequest: (id: string) => Promise<boolean>;
+  onDeleteRequest?: (id: string) => Promise<boolean>;
   studyMaterials?: StudyMaterial[];
   onAddStudyMaterial?: (material: Omit<StudyMaterial, 'id' | 'createdAt'>) => Promise<boolean>;
   onDeleteStudyMaterial?: (id: string) => Promise<boolean>;
@@ -85,6 +86,7 @@ export default function LibraryPortal({
   onRejectRequest,
   onHoldRequest,
   onCancelRequest,
+  onDeleteRequest,
   onReturnBook,
   studyMaterials,
   onAddStudyMaterial,
@@ -178,6 +180,7 @@ export default function LibraryPortal({
             onRejectRequest={onRejectRequest}
             onHoldRequest={onHoldRequest}
             onCancelRequest={onCancelRequest}
+            onDeleteRequest={onDeleteRequest}
             onReturnBook={onReturnBook}
             onImportBooksExcel={onImportBooksExcel}
             onImportStudentsExcel={onImportStudentsExcel}

@@ -1202,6 +1202,24 @@ export const dbService = {
     }
   },
 
+  async deleteBorrowRequest(id: string): Promise<boolean> {
+    if (isConnectedToMongo) {
+      const res = await MongoBorrowRequest.deleteOne({ id });
+      requestsCache = null;
+      return res.deletedCount > 0;
+    } else {
+      const requests = readLocalFile<BorrowRequest>(REQUESTS_FILE);
+      const idx = requests.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        requests.splice(idx, 1);
+        writeLocalFile(REQUESTS_FILE, requests);
+        requestsCache = null;
+        return true;
+      }
+      return false;
+    }
+  },
+
   // BOOK ISSUE LOGS (outstanding / history)
   async getIssueLogs(): Promise<BookIssueLog[]> {
     if (issueLogsCache) return issueLogsCache;

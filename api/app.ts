@@ -1162,6 +1162,20 @@ app.post('/api/requests/:id/cancel', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/requests/:id', authenticateToken, requireLibrarian, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const success = await dbService.deleteBorrowRequest(requestId);
+    if (!success) {
+      return res.status(404).json({ error: "Borrow request code not discovered." });
+    }
+    await addAuditLog(req, 'Book Deleted', `Deleted borrow request record ID ${requestId}`);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, async (req, res) => {
   try {
     const { rollNumber, class: studClass, section, studentName, bookIds, dueDate } = req.body;

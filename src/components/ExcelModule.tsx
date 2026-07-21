@@ -235,6 +235,7 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
       const sourceVal = findVal(["Source", "source"]);
       const remarksVal = findVal(["Remarks", "remarks", "Notes", "notes"]);
       const descVal = findVal(["Description", "description"]);
+      const shelfNumberVal = findVal(["Shelf Number", "Shelf No.", "Shelf No", "Shelf", "shelfNo", "shelf_no", "shelfNumber", "shelf"]);
 
       const bookName = titleVal ? String(titleVal).trim() : "";
       const finalBookName = bookName || `Untitled Book #${index + 1}`;
@@ -309,7 +310,8 @@ export default function ExcelModule({ onImportBooks, onImportStudents, currentLa
         bookNumber: bookNoVal ? String(bookNoVal).trim() : "",
         source: sourceVal ? String(sourceVal).trim() : "",
         remarks: remarksVal ? String(remarksVal).trim() : "",
-        ddcCategory: ddcCategory
+        ddcCategory: ddcCategory,
+        shelfNumber: shelfNumberVal ? String(shelfNumberVal).trim() : ""
       };
     });
   };
