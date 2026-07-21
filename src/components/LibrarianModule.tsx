@@ -610,41 +610,7 @@ export default function LibrarianModule({
 
     setStickerPendingAction({ books: booksList, type });
 
-    // 1. Validate data integrity
-    const errorsList: { book: Book; errors: string[] }[] = [];
-    booksList.forEach(b => {
-      const bookErrors: string[] = [];
-      const accessionNo = (b.accessionNumber || '').trim();
-      const callNo = (b.callNumber || '').trim();
-      const bookNo = (b.bookNumber || '').trim();
-      
-      if (!accessionNo) {
-        bookErrors.push("Accession Number is missing.");
-      }
-      if (!callNo) {
-        bookErrors.push("Call Number is missing.");
-      }
-      if (!bookNo) {
-        bookErrors.push("Book Number is missing.");
-      }
-
-      const ddcCat = getDdcCategoryName(b.ddcNumber || b.callNumber || b.category);
-      if (ddcCat === "Needs Librarian Review") {
-        bookErrors.push("DDC Category classification is missing or invalid.");
-      }
-
-      if (bookErrors.length > 0) {
-        errorsList.push({ book: b, errors: bookErrors });
-      }
-    });
-
-    if (errorsList.length > 0) {
-      setFailedBooksForStickers(errorsList);
-      setStickerValidationErrorModal(true);
-      return;
-    }
-
-    // 2. Data is 100% valid. Proceed to QR Verification stage
+    // Directly proceed to verification and print/download, completely lenient
     await executeStickerGenerationFlow(booksList, type);
   };
 
