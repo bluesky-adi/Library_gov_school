@@ -58,7 +58,9 @@ function InfiniteScrollSentinel({ onVisible, hasMore }: InfiniteScrollSentinelPr
 }
 
 import QRCode from 'qrcode';
-import { jsPDF } from 'jspdf';
+import { jsPDF as jsPDFNamed } from 'jspdf';
+import jsPDFDefault from 'jspdf';
+const jsPDF = jsPDFNamed || jsPDFDefault || (jsPDFDefault as any).jsPDF;
 
 interface StickerElementProps {
   book: Book;
@@ -586,17 +588,13 @@ export default function LibrarianModule({
 
       setStickerVerificationLogs(prev => [...prev, "Automated QR Verification: PASSED.", "Finalizing print layout compile..."]);
       
-      setTimeout(() => {
-        setStickerVerificationState('success');
-        setTimeout(() => {
-          setStickerVerificationState('idle');
-          if (type === 'pdf') {
-            executeDownloadPDF(booksList);
-          } else {
-            executeTriggerPrint(booksList);
-          }
-        }, 800);
-      }, 1000);
+      setStickerVerificationState('success');
+      setStickerVerificationState('idle');
+      if (type === 'pdf') {
+        await executeDownloadPDF(booksList);
+      } else {
+        executeTriggerPrint(booksList);
+      }
 
     } catch (err: any) {
       setStickerVerificationState('failed');
@@ -649,109 +647,114 @@ export default function LibrarianModule({
       const rowGap = 0;
 
       for (let i = 0; i < booksList.length; i++) {
-        const pageIndex = Math.floor(i / stickersPerPage);
-        const stickerIndexOnPage = i % stickersPerPage;
-
-        if (pageIndex > 0 && stickerIndexOnPage === 0) {
-          doc.addPage();
-        }
-
-        const col = stickerIndexOnPage % cols;
-        const row = Math.floor(stickerIndexOnPage / cols);
-
-        const x = leftMargin + col * (stickerWidth + colGap);
-        const y = topMargin + row * (stickerHeight + rowGap);
-
-        const book = booksList[i];
-        const accessionNo = book.accessionNumber || book.bookId || "N/A";
-        const callNo = book.callNumber || "N/A";
-        const bookNo = book.bookNumber || "N/A";
-        const serialNo = categorySerialsMap.get(book.bookId) || 1;
-        const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
-          ? `${book.shelfNumber.trim()} (#${serialNo})`
-          : `Shelf #${serialNo}`;
-
-        const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
-        const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
-        const gVal = parseInt(ddcCol.hex.substring(3, 5), 16) || 190;
-        const bVal = parseInt(ddcCol.hex.substring(5, 7), 16) || 197;
-
-        // Fill entire sticker background with DDC color
-        doc.setFillColor(rVal, gVal, bVal);
-        doc.rect(x, y, stickerWidth, stickerHeight, 'F');
-
-        // Draw light grey cutting guidelines
-        doc.setDrawColor(220, 220, 220);
-        doc.setLineWidth(0.15);
-        doc.rect(x, y, stickerWidth, stickerHeight, 'S');
-
-        // Text settings - choose black or white based on DDC color metadata
-        const textR = parseInt(ddcCol.textColorHex.substring(1, 3), 16) || 0;
-        const textG = parseInt(ddcCol.textColorHex.substring(3, 5), 16) || 0;
-        const textB = parseInt(ddcCol.textColorHex.substring(5, 7), 16) || 0;
-        doc.setTextColor(textR, textG, textB);
-        
-        const centerX = x + (stickerWidth / 2);
-
-        // Drawing Accession Number
-        doc.setFont('courier', 'bold');
-        doc.setFontSize(4.5);
-        doc.text("ACCESSION", centerX, y + 4.5, { align: 'center' });
-        
-        doc.setFontSize(7.5);
-        doc.text(accessionNo, centerX, y + 7.5, { align: 'center' });
-
-        // Draw a divider line under Accession number using the same text color
-        doc.setDrawColor(textR, textG, textB);
-        doc.setLineWidth(0.12);
-        doc.line(x + 3, y + 8.8, x + stickerWidth - 3, y + 8.8);
-
-        // Drawing Call Number
-        doc.setFont('courier', 'bold');
-        doc.setFontSize(4.5);
-        doc.text("CALL NO", centerX, y + 12.0, { align: 'center' });
-        doc.setFontSize(7.5);
-        doc.text(callNo, centerX, y + 15.0, { align: 'center' });
-
-        // Drawing Book Number
-        doc.setFontSize(4.5);
-        doc.text("BOOK NO", centerX, y + 19.5, { align: 'center' });
-        doc.setFontSize(7.5);
-        doc.text(bookNo, centerX, y + 22.5, { align: 'center' });
-
-        // Drawing Shelf
-        doc.setFontSize(4.5);
-        doc.text("SHELF", centerX, y + 27.0, { align: 'center' });
-        doc.setFontSize(7.5);
-        doc.text(shelfLocation ? shelfLocation : "Not Assigned", centerX, y + 30.0, { align: 'center' });
-
-        // Generate and add QR Code
-        const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
         try {
-          const qrDataUrl = await QRCode.toDataURL(targetUrl, {
-            margin: 1,
-            width: 150,
-            color: {
-              dark: '#000000',
-              light: '#ffffff'
-            }
-          });
+          const pageIndex = Math.floor(i / stickersPerPage);
+          const stickerIndexOnPage = i % stickersPerPage;
+
+          if (pageIndex > 0 && stickerIndexOnPage === 0) {
+            doc.addPage();
+          }
+
+          const col = stickerIndexOnPage % cols;
+          const row = Math.floor(stickerIndexOnPage / cols);
+
+          const x = leftMargin + col * (stickerWidth + colGap);
+          const y = topMargin + row * (stickerHeight + rowGap);
+
+          const book = booksList[i];
+          if (!book) continue;
+
+          const accessionNo = (book.accessionNumber || book.bookId || "").trim();
+          const callNo = (book.callNumber || "").trim();
+          const bookNo = (book.bookNumber || "").trim();
+          const shelfLocation = (book.shelfNumber || "").trim();
+
+          const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
+          const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
+          const gVal = parseInt(ddcCol.hex.substring(3, 5), 16) || 190;
+          const bVal = parseInt(ddcCol.hex.substring(5, 7), 16) || 197;
+
+          // Fill entire sticker background with DDC color
+          doc.setFillColor(rVal, gVal, bVal);
+          doc.rect(x, y, stickerWidth, stickerHeight, 'F');
+
+          // Draw light grey cutting guidelines
+          doc.setDrawColor(220, 220, 220);
+          doc.setLineWidth(0.15);
+          doc.rect(x, y, stickerWidth, stickerHeight, 'S');
+
+          // Text settings - choose black or white based on DDC color metadata
+          const textR = parseInt(ddcCol.textColorHex.substring(1, 3), 16) || 0;
+          const textG = parseInt(ddcCol.textColorHex.substring(3, 5), 16) || 0;
+          const textB = parseInt(ddcCol.textColorHex.substring(5, 7), 16) || 0;
+          doc.setTextColor(textR, textG, textB);
           
-          // Position QR centered at the bottom of the sticker on a high-contrast container
-          const qrBoxWidth = 15;
-          const qrBoxHeight = 15;
-          const qrBoxX = x + (stickerWidth - qrBoxWidth) / 2;
-          const qrBoxY = y + stickerHeight - qrBoxHeight - 3;
+          const centerX = x + (stickerWidth / 2);
 
-          doc.setFillColor(255, 255, 255);
-          doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
+          // Drawing Accession Number
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(4.5);
+          doc.text("ACCESSION", centerX, y + 4.5, { align: 'center' });
+          
+          doc.setFontSize(7.5);
+          doc.text(accessionNo, centerX, y + 7.5, { align: 'center' });
 
-          const qrSize = 13.5;
-          const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
-          const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
-          doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-        } catch (err) {
-          console.error("Error drawing QR on PDF:", err);
+          // Draw a divider line under Accession number using the same text color
+          doc.setDrawColor(textR, textG, textB);
+          doc.setLineWidth(0.12);
+          doc.line(x + 3, y + 8.8, x + stickerWidth - 3, y + 8.8);
+
+          // Drawing Call Number
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(4.5);
+          doc.text("CALL NO", centerX, y + 12.0, { align: 'center' });
+          doc.setFontSize(7.5);
+          doc.text(callNo, centerX, y + 15.0, { align: 'center' });
+
+          // Drawing Book Number
+          doc.setFontSize(4.5);
+          doc.text("BOOK NO", centerX, y + 19.5, { align: 'center' });
+          doc.setFontSize(7.5);
+          doc.text(bookNo, centerX, y + 22.5, { align: 'center' });
+
+          // Drawing Shelf
+          doc.setFontSize(4.5);
+          doc.text("SHELF", centerX, y + 27.0, { align: 'center' });
+          doc.setFontSize(7.5);
+          doc.text(shelfLocation, centerX, y + 30.0, { align: 'center' });
+
+          // Generate and add QR Code if accessionNo exists
+          if (accessionNo) {
+            const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
+            try {
+              const qrDataUrl = await QRCode.toDataURL(targetUrl, {
+                margin: 1,
+                width: 150,
+                color: {
+                  dark: '#000000',
+                  light: '#ffffff'
+                }
+              });
+              
+              // Position QR centered at the bottom of the sticker on a high-contrast container
+              const qrBoxWidth = 15;
+              const qrBoxHeight = 15;
+              const qrBoxX = x + (stickerWidth - qrBoxWidth) / 2;
+              const qrBoxY = y + stickerHeight - qrBoxHeight - 3;
+
+              doc.setFillColor(255, 255, 255);
+              doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
+
+              const qrSize = 13.5;
+              const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
+              const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
+              doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+            } catch (err) {
+              console.error("Error drawing QR on PDF:", err);
+            }
+          }
+        } catch (singleBookErr) {
+          console.error(`Error drawing sticker at index ${i}:`, singleBookErr);
         }
       }
 
@@ -4184,11 +4187,11 @@ export default function LibrarianModule({
                       className="w-4 h-4 rounded border-slate-300 text-slate-900 cursor-pointer"
                     />
                   </th>
-                  <th className="p-3 border border-slate-850 text-left">Student Name</th>
-                  <th className="p-3 border border-slate-850 text-center">Class & Section</th>
                   <th className="p-3 border border-slate-850 text-center">Roll Number</th>
+                  <th className="p-3 border border-slate-850 text-left">Student Name</th>
+                  <th className="p-3 border border-slate-850 text-center">Class</th>
+                  <th className="p-3 border border-slate-850 text-center">Section</th>
                   <th className="p-3 border border-slate-850 text-left">Date of Birth</th>
-                  <th className="p-3 border border-slate-850 text-center">Active Checked-out Books</th>
                   <th className="p-3 border border-slate-850 text-right">Actions</th>
                 </tr>
               </thead>
@@ -4214,6 +4217,9 @@ export default function LibrarianModule({
                           className="rounded text-indigo-650 focus:ring-indigo-500 cursor-pointer"
                         />
                       </td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold font-mono text-indigo-600 dark:text-indigo-400">
+                        {stud.rollNumber}
+                      </td>
                       <td className="p-3 border border-slate-200 dark:border-slate-800 font-semibold text-slate-900 dark:text-slate-105 sticky left-0 bg-white dark:bg-slate-900 z-10 shadow-xs">
                         <button
                           type="button"
@@ -4224,17 +4230,18 @@ export default function LibrarianModule({
                           {stud.status === "VACANT" || !stud.name ? (currentLang === "EN" ? "Vacant" : "रिक्त") : stud.name}
                         </button>
                       </td>
-                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300">Class {stud.class || "10"}-{stud.section || "A"}</td>
-                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold font-mono text-indigo-600 dark:text-indigo-400">#{stud.rollNumber}</td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                        {stud.class || "10"}
+                      </td>
+                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                        {stud.section || "A"}
+                      </td>
                       <td className="p-3 border border-slate-200 dark:border-slate-800 font-mono text-slate-650 dark:text-slate-350">
                         {stud.dob ? stud.dob : (
                           <span className="px-2 py-0.5 text-[9px] font-black rounded-full bg-amber-100 text-amber-800 dark:bg-amber-955/40 dark:text-amber-400 uppercase tracking-wider font-sans">
-                            No DOB (Optional)
+                            No DOB
                           </span>
                         )}
-                      </td>
-                      <td className="p-3 text-center border border-slate-200 dark:border-slate-800 font-extrabold text-amber-700 dark:text-amber-500 font-mono">
-                        {checkoutsCount}
                       </td>
                       <td className="p-3 text-right border border-slate-200 dark:border-slate-800">
                         <div className="flex gap-2 justify-end">
@@ -5701,61 +5708,13 @@ export default function LibrarianModule({
               Print Configuration & Generation Controls
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Option A: Print Selected */}
-              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all bg-slate-50/30 dark:bg-slate-950/20">
-                <div className="space-y-1.5">
-                  <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[11px] font-black text-indigo-650 dark:text-indigo-400 font-mono">A</span>
-                    Generate Selected Stickers
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Prints stickers only for books currently checked in the primary Book Catalog list checkboxes.
-                  </p>
-                </div>
-                <button
-                  disabled={selectedBookIds.length === 0}
-                  onClick={() => {
-                    const toPrint = books.filter(b => selectedBookIds.includes(b.bookId));
-                    handleDownloadPDF(toPrint);
-                  }}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Checked ({selectedBookIds.length})</span>
-                </button>
-              </div>
-
-              {/* Option B: Print Newly Added */}
-              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-emerald-200 dark:hover:border-emerald-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
-                <div className="space-y-1.5">
-                  <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-[11px] font-black text-emerald-600 dark:text-emerald-405 font-mono">B</span>
-                    Generate Newly Added Books
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-normal">
-                    Prints stickers for all book records created or imported that do not yet have their sticker status marked as printed.
-                  </p>
-                </div>
-                <button
-                  disabled={books.filter(b => !stickerPrintedIds.has(b.bookId)).length === 0}
-                  onClick={() => {
-                    const toPrint = books.filter(b => !stickerPrintedIds.has(b.bookId));
-                    handleDownloadPDF(toPrint);
-                  }}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Newly Added ({books.filter(b => !stickerPrintedIds.has(b.bookId)).length})</span>
-                </button>
-              </div>
-
-              {/* Option C: Print Entire Catalog */}
+              {/* Option A: Print Entire Catalog */}
               <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-slate-200 dark:hover:border-slate-700 transition-all bg-slate-50/30 dark:bg-slate-950/20">
                 <div className="space-y-1.5">
                   <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-[11px] font-black text-slate-600 dark:text-slate-400 font-mono">C</span>
+                    <span className="w-5 h-5 rounded bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-[11px] font-black text-slate-600 dark:text-slate-400 font-mono">A</span>
                     Generate Entire Library
                   </div>
                   <p className="text-[11px] text-slate-500 leading-normal">
@@ -5772,12 +5731,12 @@ export default function LibrarianModule({
                 </button>
               </div>
 
-              {/* Option D: Print Custom Accession Range ⭐ (MANDATORY) */}
+              {/* Option B: Print Custom Accession Range ⭐ (MANDATORY) */}
               <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-pink-200 dark:hover:border-pink-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
                 <div className="space-y-2 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded bg-pink-50 dark:bg-pink-950/50 flex items-center justify-center text-[11px] font-black text-pink-650 dark:text-pink-400 font-mono">D</span>
+                      <span className="w-5 h-5 rounded bg-pink-50 dark:bg-pink-950/50 flex items-center justify-center text-[11px] font-black text-pink-650 dark:text-pink-400 font-mono">B</span>
                       Print Custom Accession Range
                     </div>
                     <p className="text-[11px] text-slate-500 leading-normal mt-1">
@@ -5822,106 +5781,6 @@ export default function LibrarianModule({
                 >
                   <Printer className="w-4 h-4" />
                   <span>Print Range ({rangeStart && rangeEnd ? filterByAccessionRange(books, rangeStart, rangeEnd).length : 0})</span>
-                </button>
-              </div>
-
-              {/* Option E: Print by Shelf */}
-              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-cyan-200 dark:hover:border-cyan-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
-                <div className="space-y-2 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded bg-cyan-50 dark:bg-cyan-950/50 flex items-center justify-center text-[11px] font-black text-cyan-650 dark:text-cyan-400 font-mono">E</span>
-                      Print by Shelf Number
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                      Generate sticker pages only for books assigned to a particular physical library shelf.
-                    </p>
-                    <div className="pt-2">
-                      <select
-                        value={selectedShelfForPrint}
-                        onChange={(e) => setSelectedShelfForPrint(e.target.value)}
-                        className="w-full text-[11px] px-2 py-1.5 rounded border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-150 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
-                      >
-                        <option value="">-- Select Assigned Shelf --</option>
-                        {uniqueShelves.map(shelf => (
-                          <option key={shelf} value={shelf}>{shelf}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  {selectedShelfForPrint && (
-                    <div className="text-[10px] text-cyan-600 dark:text-cyan-400 font-bold font-mono mt-1.5">
-                      Matched {books.filter(b => b.shelfNumber === selectedShelfForPrint).length} books
-                    </div>
-                  )}
-                </div>
-                <button
-                  disabled={!selectedShelfForPrint}
-                  onClick={() => {
-                    const toPrint = books.filter(b => b.shelfNumber === selectedShelfForPrint);
-                    handleDownloadPDF(toPrint);
-                  }}
-                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer mt-3"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Shelf ({selectedShelfForPrint ? books.filter(b => b.shelfNumber === selectedShelfForPrint).length : 0})</span>
-                </button>
-              </div>
-
-              {/* Option F: Print by DDC Category */}
-              <div className="border border-slate-150 dark:border-slate-800 p-4.5 rounded-xl flex flex-col justify-between space-y-4 hover:border-violet-200 dark:hover:border-violet-950 transition-all bg-slate-50/30 dark:bg-slate-950/20">
-                <div className="space-y-2 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="text-xs font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded bg-violet-50 dark:bg-violet-950/50 flex items-center justify-center text-[11px] font-black text-violet-650 dark:text-violet-400 font-mono">F</span>
-                      Print by DDC Classification
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                      Generate stickers sorted exactly by decimal classification subjects.
-                    </p>
-                    <div className="pt-2">
-                      <select
-                        value={selectedDdcForPrint}
-                        onChange={(e) => setSelectedDdcForPrint(e.target.value)}
-                        className="w-full text-[11px] px-2 py-1.5 rounded border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-150 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
-                      >
-                        <option value="">-- Select DDC Classification --</option>
-                        {[
-                          "000 General Works",
-                          "100 Philosophy",
-                          "200 Religion",
-                          "300 Social Sciences",
-                          "400 Language",
-                          "500 Science",
-                          "600 Technology",
-                          "700 Arts",
-                          "800 Literature",
-                          "900 History & Geography",
-                          "Needs Librarian Review"
-                        ].map(cat => (
-                          <option key={cat} value={cat}>
-                            {cat} ({books.filter(b => getDdcCategoryName(b.ddcNumber || b.callNumber || b.category) === cat).length})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  {selectedDdcForPrint && (
-                    <div className="text-[10px] text-violet-600 dark:text-violet-400 font-bold font-mono mt-1.5">
-                      Matched {books.filter(b => getDdcCategoryName(b.ddcNumber || b.callNumber || b.category) === selectedDdcForPrint).length} books
-                    </div>
-                  )}
-                </div>
-                <button
-                  disabled={!selectedDdcForPrint}
-                  onClick={() => {
-                    const toPrint = books.filter(b => getDdcCategoryName(b.ddcNumber || b.callNumber || b.category) === selectedDdcForPrint);
-                    handleDownloadPDF(toPrint);
-                  }}
-                  className="w-full py-2 bg-violet-600 hover:bg-violet-505 text-white font-extrabold text-xs rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-45 disabled:cursor-not-allowed select-none cursor-pointer mt-3"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print DDC ({selectedDdcForPrint ? books.filter(b => getDdcCategoryName(b.ddcNumber || b.callNumber || b.category) === selectedDdcForPrint).length : 0})</span>
                 </button>
               </div>
 

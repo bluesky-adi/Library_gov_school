@@ -83,6 +83,12 @@ export default function App() {
 
   const t = translations[currentLang];
 
+  const areArraysEqual = (a: any[] | null | undefined, b: any[] | null | undefined): boolean => {
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    return JSON.stringify(a) === JSON.stringify(b);
+  };
+
   // Refresh all system metrics and records from servers safely
   const refreshData = async (force: boolean = true) => {
     if (scannedAccession !== null) {
@@ -159,13 +165,13 @@ export default function App() {
           handleSafeFetch('/api/notifications', { headers })
         ]);
 
-        if (dataBooks) setBooks(dataBooks);
-        if (dataMaterials) setStudyMaterials(dataMaterials);
-        if (studentsData) setStudents(studentsData);
-        if (requestsData) setRequests(requestsData);
-        if (logsData) setIssueLogs(logsData);
-        if (auditData) setAuditLogs(auditData);
-        if (dataNotifications) setNotifications(dataNotifications);
+        if (dataBooks) setBooks(prev => areArraysEqual(prev, dataBooks) ? prev : dataBooks);
+        if (dataMaterials) setStudyMaterials(prev => areArraysEqual(prev, dataMaterials) ? prev : dataMaterials);
+        if (studentsData) setStudents(prev => areArraysEqual(prev, studentsData) ? prev : studentsData);
+        if (requestsData) setRequests(prev => areArraysEqual(prev, requestsData) ? prev : requestsData);
+        if (logsData) setIssueLogs(prev => areArraysEqual(prev, logsData) ? prev : logsData);
+        if (auditData) setAuditLogs(prev => areArraysEqual(prev, auditData) ? prev : auditData);
+        if (dataNotifications) setNotifications(prev => areArraysEqual(prev, dataNotifications) ? prev : dataNotifications);
       } else if (role === 'Student') {
         const [dataBooks, dataMaterials, requestsData, logsData, dataNotifications] = await Promise.all([
           handleSafeFetch('/api/books'),
@@ -175,19 +181,19 @@ export default function App() {
           handleSafeFetch('/api/notifications', { headers })
         ]);
 
-        if (dataBooks) setBooks(dataBooks);
-        if (dataMaterials) setStudyMaterials(dataMaterials);
-        if (requestsData) setRequests(requestsData);
-        if (logsData) setIssueLogs(logsData);
-        if (dataNotifications) setNotifications(dataNotifications);
+        if (dataBooks) setBooks(prev => areArraysEqual(prev, dataBooks) ? prev : dataBooks);
+        if (dataMaterials) setStudyMaterials(prev => areArraysEqual(prev, dataMaterials) ? prev : dataMaterials);
+        if (requestsData) setRequests(prev => areArraysEqual(prev, requestsData) ? prev : requestsData);
+        if (logsData) setIssueLogs(prev => areArraysEqual(prev, logsData) ? prev : logsData);
+        if (dataNotifications) setNotifications(prev => areArraysEqual(prev, dataNotifications) ? prev : dataNotifications);
       } else {
         const [dataBooks, dataMaterials] = await Promise.all([
           handleSafeFetch('/api/books'),
           handleSafeFetch('/api/study-materials')
         ]);
 
-        if (dataBooks) setBooks(dataBooks);
-        if (dataMaterials) setStudyMaterials(dataMaterials);
+        if (dataBooks) setBooks(prev => areArraysEqual(prev, dataBooks) ? prev : dataBooks);
+        if (dataMaterials) setStudyMaterials(prev => areArraysEqual(prev, dataMaterials) ? prev : dataMaterials);
         setNotifications([]);
       }
     } finally {
