@@ -493,6 +493,8 @@ export default function LibrarianModule({
     return new Set<string>();
   });
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [pdfProgress, setPdfProgress] = useState<number>(0);
+  const [pdfProgressStatus, setPdfProgressStatus] = useState<string>('');
 
   // --- ENHANCED STICKER GENERATOR SCALABILITY & INTEGRITY SYSTEM ---
   const [stickerValidationErrorModal, setStickerValidationErrorModal] = useState<boolean>(false);
@@ -610,8 +612,11 @@ export default function LibrarianModule({
 
     setStickerPendingAction({ books: booksList, type });
 
-    // Directly proceed to verification and print/download, completely lenient
-    await executeStickerGenerationFlow(booksList, type);
+    if (type === 'pdf') {
+      await executeDownloadPDF(booksList);
+    } else {
+      executeTriggerPrint(booksList);
+    }
   };
 
   const handleDownloadPDF = async (booksList: Book[]) => {
@@ -625,6 +630,8 @@ export default function LibrarianModule({
   const executeDownloadPDF = async (booksList: Book[]) => {
     if (booksList.length === 0) return;
     setIsGeneratingPdf(true);
+    setPdfProgress(0);
+    setPdfProgressStatus('Preparing Sticker PDF...');
     markAsPrinted(booksList.map(b => b.bookId));
 
     try {
@@ -646,10 +653,40 @@ export default function LibrarianModule({
       const colGap = 0;
       const rowGap = 0;
 
-      for (let i = 0; i < booksList.length; i++) {
-        try {
-          const pageIndex = Math.floor(i / stickersPerPage);
-          const stickerIndexOnPage = i % stickersPerPage;
+      const CHUNK_SIZE = 128; // Chunking to keep the browser event loop responsive
+
+      for (let i = 0; i < booksList.length; i += CHUNK_SIZE) {
+        const chunk = booksList.slice(i, i + CHUNK_SIZE);
+
+        // Generate QR codes in parallel for the current batch
+        const qrPromises = chunk.map(async (book) => {
+          const accessionNo = (book.accessionNumber || book.bookId || "").trim();
+          if (!accessionNo) return null;
+          const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
+          try {
+            const qrDataUrl = await QRCode.toDataURL(targetUrl, {
+              margin: 1,
+              width: 90, // Fast, high contrast and perfectly sized for sticker
+              color: {
+                dark: '#000000',
+                light: '#ffffff'
+              }
+            });
+            return { bookId: book.bookId, qrDataUrl };
+          } catch (err) {
+            console.error("Error generating QR:", err);
+            return null;
+          }
+        });
+
+        const qrResults = await Promise.all(qrPromises);
+        const qrMap = new Map(qrResults.filter(Boolean).map(r => [r!.bookId, r!.qrDataUrl]));
+
+        // Synchronously draw the chunk's stickers on jsPDF (extremely fast)
+        for (let j = 0; j < chunk.length; j++) {
+          const absoluteIndex = i + j;
+          const pageIndex = Math.floor(absoluteIndex / stickersPerPage);
+          const stickerIndexOnPage = absoluteIndex % stickersPerPage;
 
           if (pageIndex > 0 && stickerIndexOnPage === 0) {
             doc.addPage();
@@ -661,13 +698,13 @@ export default function LibrarianModule({
           const x = leftMargin + col * (stickerWidth + colGap);
           const y = topMargin + row * (stickerHeight + rowGap);
 
-          const book = booksList[i];
+          const book = chunk[j];
           if (!book) continue;
 
           const accessionNo = (book.accessionNumber || book.bookId || "").trim();
-          const callNo = (book.callNumber || "").trim();
-          const bookNo = (book.bookNumber || "").trim();
-          const shelfLocation = (book.shelfNumber || "").trim();
+          const callNo = (book.callNumber || "").trim() || "—";
+          const bookNo = (book.bookNumber || "").trim() || "—";
+          const shelfLocation = (book.shelfNumber || "").trim() || "—";
 
           const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
           const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
@@ -723,40 +760,43 @@ export default function LibrarianModule({
           doc.setFontSize(7.5);
           doc.text(shelfLocation, centerX, y + 30.0, { align: 'center' });
 
-          // Generate and add QR Code if accessionNo exists
+          // Add QR Code if it exists
           if (accessionNo) {
-            const targetUrl = `${window.location.origin}/book/${encodeURIComponent(accessionNo)}`;
-            try {
-              const qrDataUrl = await QRCode.toDataURL(targetUrl, {
-                margin: 1,
-                width: 150,
-                color: {
-                  dark: '#000000',
-                  light: '#ffffff'
-                }
-              });
-              
-              // Position QR centered at the bottom of the sticker on a high-contrast container
-              const qrBoxWidth = 15;
-              const qrBoxHeight = 15;
-              const qrBoxX = x + (stickerWidth - qrBoxWidth) / 2;
-              const qrBoxY = y + stickerHeight - qrBoxHeight - 3;
+            const qrDataUrl = qrMap.get(book.bookId);
+            if (qrDataUrl) {
+              try {
+                // Position QR centered at the bottom of the sticker on a high-contrast container
+                const qrBoxWidth = 15;
+                const qrBoxHeight = 15;
+                const qrBoxX = x + (stickerWidth - qrBoxWidth) / 2;
+                const qrBoxY = y + stickerHeight - qrBoxHeight - 3;
 
-              doc.setFillColor(255, 255, 255);
-              doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
+                doc.setFillColor(255, 255, 255);
+                doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
 
-              const qrSize = 13.5;
-              const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
-              const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
-              doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-            } catch (err) {
-              console.error("Error drawing QR on PDF:", err);
+                const qrSize = 13.5;
+                const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
+                const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
+                doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+              } catch (err) {
+                console.error("Error drawing QR on PDF:", err);
+              }
             }
           }
-        } catch (singleBookErr) {
-          console.error(`Error drawing sticker at index ${i}:`, singleBookErr);
         }
+
+        // Update progress smoothly
+        const processedCount = Math.min(i + CHUNK_SIZE, booksList.length);
+        const currentProgress = Math.round((processedCount / booksList.length) * 100);
+        setPdfProgress(currentProgress);
+
+        // Yield execution back to browser for fluid rendering / painting
+        await new Promise(resolve => setTimeout(resolve, 15));
       }
+
+      setPdfProgress(100);
+      setPdfProgressStatus('Download Ready ✅');
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       doc.save(`ramdiri_library_stickers_${booksList.length}.pdf`);
     } catch (e) {
@@ -2915,6 +2955,55 @@ export default function LibrarianModule({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* STICKER PDF GENERATION PROGRESS MODAL */}
+      {isGeneratingPdf && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in" id="sticker-pdf-generation-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 max-w-md w-full overflow-hidden shadow-2xl rounded-2xl flex flex-col scale-in-center select-none font-sans">
+            <div className="bg-slate-900 text-white p-4.5 flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 shrink-0 animate-spin text-indigo-400" />
+              <span className="font-extrabold text-xs uppercase tracking-wider">
+                Preparing Sticker PDF...
+              </span>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-950 text-emerald-400 p-5 rounded-xl font-mono text-xs space-y-3 border border-slate-800 shadow-inner">
+                <div className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">
+                  System Status: {pdfProgress === 100 ? 'DOWNLOAD READY' : 'COMPILING STICKERS'}
+                </div>
+                
+                {/* Text Progress Bar */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-bold text-emerald-500">
+                    <span>PROGRESS:</span>
+                    <span>{pdfProgress}%</span>
+                  </div>
+                  <div className="tracking-widest break-all select-none text-[13px] leading-tight text-emerald-400 font-bold">
+                    {'█'.repeat(Math.round((pdfProgress / 100) * 20))}
+                    <span className="text-slate-700">{'░'.repeat(20 - Math.round((pdfProgress / 100) * 20))}</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] pt-1.5 border-t border-slate-900 text-slate-500 flex justify-between">
+                  <span>Status:</span>
+                  <span className={pdfProgress === 100 ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
+                    {pdfProgressStatus}
+                  </span>
+                </div>
+              </div>
+
+              {pdfProgress === 100 && (
+                <div className="flex justify-center pt-2 animate-bounce">
+                  <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-bold rounded-full uppercase tracking-widest border border-emerald-500/20">
+                    Download Triggered Automatically ✅
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
