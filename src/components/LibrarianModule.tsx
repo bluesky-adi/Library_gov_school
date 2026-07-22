@@ -495,6 +495,7 @@ export default function LibrarianModule({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [pdfProgress, setPdfProgress] = useState<number>(0);
   const [pdfProgressStatus, setPdfProgressStatus] = useState<string>('');
+  const cancelPdfGenerationRef = React.useRef<boolean>(false);
 
   // --- ENHANCED STICKER GENERATOR SCALABILITY & INTEGRITY SYSTEM ---
   const [stickerValidationErrorModal, setStickerValidationErrorModal] = useState<boolean>(false);
@@ -632,6 +633,7 @@ export default function LibrarianModule({
     setIsGeneratingPdf(true);
     setPdfProgress(0);
     setPdfProgressStatus('Preparing Sticker PDF...');
+    cancelPdfGenerationRef.current = false;
     markAsPrinted(booksList.map(b => b.bookId));
 
     try {
@@ -653,12 +655,20 @@ export default function LibrarianModule({
       const colGap = 0;
       const rowGap = 0;
 
-      const CHUNK_SIZE = 128; // Chunking to keep the browser event loop responsive
+      const CHUNK_SIZE = 64; // Small batch size to guarantee browser stays fully responsive
 
       for (let i = 0; i < booksList.length; i += CHUNK_SIZE) {
+        // Yield control back to browser immediately to process any clicks (e.g., Cancel)
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        if (cancelPdfGenerationRef.current) {
+          console.log("PDF generation cancelled by user.");
+          return;
+        }
+
         const chunk = booksList.slice(i, i + CHUNK_SIZE);
 
-        // Generate QR codes in parallel for the current batch
+        // Generate QR codes in parallel for the current small batch
         const qrPromises = chunk.map(async (book) => {
           const accessionNo = (book.accessionNumber || book.bookId || "").trim();
           if (!accessionNo) return null;
@@ -666,7 +676,8 @@ export default function LibrarianModule({
           try {
             const qrDataUrl = await QRCode.toDataURL(targetUrl, {
               margin: 1,
-              width: 90, // Fast, high contrast and perfectly sized for sticker
+              width: 45, // 45px width generates 4x faster and takes 4x less memory than 90px
+              errorCorrectionLevel: 'L', // Low error correction level generates much simpler & faster matrices
               color: {
                 dark: '#000000',
                 light: '#ffffff'
@@ -777,7 +788,7 @@ export default function LibrarianModule({
                 const qrSize = 13.5;
                 const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
                 const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
-                doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+                doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize, undefined, 'FAST');
               } catch (err) {
                 console.error("Error drawing QR on PDF:", err);
               }
@@ -789,16 +800,14 @@ export default function LibrarianModule({
         const processedCount = Math.min(i + CHUNK_SIZE, booksList.length);
         const currentProgress = Math.round((processedCount / booksList.length) * 100);
         setPdfProgress(currentProgress);
-
-        // Yield execution back to browser for fluid rendering / painting
-        await new Promise(resolve => setTimeout(resolve, 15));
+        setPdfProgressStatus(`Compiled ${processedCount} of ${booksList.length} stickers...`);
       }
 
       setPdfProgress(100);
       setPdfProgressStatus('Download Ready ✅');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      doc.save(`ramdiri_library_stickers_${booksList.length}.pdf`);
+      doc.save(`Library_Sticker_Sheets.pdf`);
     } catch (e) {
       console.error("PDF generation failed:", e);
       alert("An error occurred during PDF generation.");
@@ -3001,6 +3010,21 @@ export default function LibrarianModule({
                   <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-bold rounded-full uppercase tracking-widest border border-emerald-500/20">
                     Download Triggered Automatically ✅
                   </span>
+                </div>
+              )}
+
+              {pdfProgress < 100 && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelPdfGenerationRef.current = true;
+                      setIsGeneratingPdf(false);
+                    }}
+                    className="px-4 py-1.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
                 </div>
               )}
             </div>
