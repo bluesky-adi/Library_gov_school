@@ -242,7 +242,7 @@ export default function ReportsModule({
                 {sortedBooks.map(b => (
                   <tr key={b.bookId} className="hover:bg-slate-50/50">
                     <td className="p-3 font-mono font-bold text-emerald-800">{b.bookId}</td>
-                    <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">#{categorySerialsMap.get(b.bookId) || 1}</td>
+                    <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">{b.shelfNumber?.trim() || "—"}</td>
                     <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{b.bookName}</td>
                     <td className="p-3 text-slate-705 dark:text-slate-300">{b.author}</td>
                     <td className="p-3 text-slate-500">{b.publisher}</td>
@@ -260,7 +260,7 @@ export default function ReportsModule({
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800 select-none">
                   <th className="p-3">Loan Log ID</th>
-                  <th className="p-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Shelf Sr #</th>
+                  <th className="p-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Shelf Number</th>
                   <th className="p-3">Book Checked-Out</th>
                   <th className="p-3">Student Name</th>
                   <th className="p-3 text-center">Roll Number</th>
@@ -272,11 +272,11 @@ export default function ReportsModule({
               <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
                 {issueLogs.map(l => {
                   const bookObj = books.find(b => b.bookId === l.bookId || b.bookName === l.bookName);
-                  const shelfSr = bookObj ? (categorySerialsMap.get(bookObj.bookId) || 1) : 1;
+                  const shelfVal = bookObj?.shelfNumber?.trim() || "—";
                   return (
                     <tr key={l.id} className="hover:bg-slate-50/50">
                       <td className="p-3 font-mono font-bold text-slate-500">{l.id}</td>
-                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">#{shelfSr}</td>
+                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">{shelfVal}</td>
                       <td className="p-3 font-bold text-slate-905 dark:text-slate-105">{l.bookName}</td>
                       <td className="p-3 font-semibold text-slate-808 dark:text-slate-305">{l.studentName}</td>
                       <td className="p-3 text-center font-mono font-bold text-teal-800">Roll #{l.rollNumber}</td>

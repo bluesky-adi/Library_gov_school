@@ -90,8 +90,9 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, isPr
 
   const ddcCol = getDdcColor(callNo || book?.ddcNumber || book?.callNumber);
 
-  // Fallback for shelf number to show real database value or Not Assigned
-  const displayShelf = (shelfLocation && shelfLocation.trim()) ? shelfLocation : "Not Assigned";
+  // Read the exact shelfNumber field from the book object
+  const rawShelf = (book?.shelfNumber || shelfLocation || "").trim();
+  const displayShelf = (rawShelf && rawShelf !== "Not Assigned") ? rawShelf : "—";
   
   // Book number fallback
   const displayBookNo = (bookNo && bookNo.trim()) ? bookNo : "—";
@@ -3839,7 +3840,7 @@ export default function LibrarianModule({
                     
                     {/* Shelf Order Location Desk Indicator Badges */}
                     <div className="mt-2 grid grid-cols-2 gap-1.5 bg-indigo-50/50 dark:bg-slate-950 p-2 rounded-lg border border-indigo-100/60 dark:border-slate-800/80 font-mono text-[9.5px]">
-                      <div><span className="text-slate-400">Shelf Sr #:</span> <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{categorySerialsMap.get(book.bookId) || 1}</span></div>
+                      <div><span className="text-slate-400">Shelf Number:</span> <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{book.shelfNumber?.trim() || "—"}</span></div>
                       <div><span className="text-slate-400">Serial #:</span> <span className="font-black text-indigo-700 dark:text-amber-400">#{book.bookId}</span></div>
                       <div><span className="text-slate-400 font-bold">Acc #:</span> <span className="font-extrabold text-slate-800 dark:text-slate-200">{book.accessionNumber || book.bookId || "N/A"}</span></div>
                       <div><span className="text-slate-400">Call #:</span> <span className="font-extrabold text-slate-800 dark:text-slate-200">{book.callNumber || "N/A"}</span></div>
@@ -3947,7 +3948,7 @@ export default function LibrarianModule({
                       />
                     </th>
                     <th className="p-3 border border-slate-800 text-center">Serial Number</th>
-                    <th className="p-3 border border-slate-800 text-center text-emerald-450 font-bold">Shelf Serial Number</th>
+                    <th className="p-3 border border-slate-800 text-center text-emerald-450 font-bold">Shelf Number</th>
                     <th className="p-3 border border-slate-800 text-center">Accession Number</th>
                     <th className="p-3 border border-slate-800 text-center">Call Number</th>
                     <th className="p-3 border border-slate-800 text-center">Book Number</th>
@@ -3985,7 +3986,7 @@ export default function LibrarianModule({
                           #{book.bookId}
                         </td>
                         <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-black text-emerald-600 dark:text-emerald-450">
-                          {shelfSrNo}
+                          {book.shelfNumber?.trim() || "—"}
                         </td>
                         <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-bold text-slate-850 dark:text-slate-250">
                           {book.accessionNumber || book.bookId || "N/A"}
@@ -8591,8 +8592,8 @@ export default function LibrarianModule({
                         <span className="font-mono font-bold text-indigo-750 dark:text-indigo-400 text-right">#{bk.bookId}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
-                        <span className="text-slate-500 font-bold font-sans">Shelf Serial Number:</span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">#{categorySerialsMap.get(bk.bookId) || 1}</span>
+                        <span className="text-slate-500 font-bold font-sans">Shelf Number:</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">{bk.shelfNumber?.trim() || "—"}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-500 font-bold font-sans">Accession Number:</span>
@@ -9224,9 +9225,9 @@ export default function LibrarianModule({
 
                       <div className="space-y-2 text-xs font-mono">
                         <div className="flex justify-between py-1 border-b border-slate-200/50">
-                          <span className="text-slate-400 uppercase font-sans font-bold">Shelf Serial Number</span>
+                          <span className="text-slate-400 uppercase font-sans font-bold">Shelf Number</span>
                           <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                            #{categorySerialsMap.get(book.bookId) || 1}
+                            {book.shelfNumber?.trim() || "—"}
                           </span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-slate-200/50">

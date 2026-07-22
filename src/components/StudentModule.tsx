@@ -874,7 +874,7 @@ export default function StudentModule({
                             className="hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-colors"
                           >
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-slate-900 dark:text-white border border-slate-150 dark:border-slate-800">#{book.bookId}</td>
-                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-150 dark:border-slate-800 bg-emerald-50/10">#{categorySerialsMap.get(book.bookId) || 1}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-150 dark:border-slate-800 bg-emerald-50/10">{book.shelfNumber?.trim() || "—"}</td>
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-indigo-700 dark:text-indigo-400 border border-slate-150 dark:border-slate-800 bg-indigo-50/10">{book.accessionNumber || "-"}</td>
                             <td onClick={() => setSelectedBook(book)} className={`p-2.5 font-mono font-bold border border-slate-150 dark:border-slate-800 ${ddc.text}`}>{book.callNumber || "-"}</td>
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-extrabold text-slate-950 dark:text-white border border-slate-150 dark:border-slate-800">{book.bookName}</td>
@@ -1655,7 +1655,7 @@ export default function StudentModule({
                         </div>
                         <div>
                           <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Shelf Location</span>
-                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>Shelf #{categorySerialsMap.get(selectedBook.bookId) || 1}</span>
+                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>Shelf {selectedBook.shelfNumber?.trim() || "—"}</span>
                         </div>
                       </div>
                     </>
