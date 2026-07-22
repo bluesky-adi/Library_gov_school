@@ -1585,7 +1585,7 @@ export default function PublicHome({
                           const ddcColor = getDdcColor(book.ddcNumber || book.callNumber);
                           return (
                             <span className={`text-[10px] font-extrabold font-mono ${ddcColor.text}`}>
-                              Shelf #{categorySerialsMap.get(book.bookId) || 1} • SR# {book.bookId}
+                              Shelf {book.shelfNumber?.trim() || "—"} • SR# {book.bookId}
                             </span>
                           );
                         })()}
@@ -1600,14 +1600,14 @@ export default function PublicHome({
                     </div>
 
                     {/* Highly visible prominent Serial, Accession, Call No list for librarians */}
-                    <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[10px] font-mono border border-slate-205 dark:border-slate-800">
+                    <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 dark:bg-slate-955 rounded-lg text-[10px] font-mono border border-slate-205 dark:border-slate-800">
                       <div>
                         <span className="text-slate-500 block text-[8px] uppercase font-sans font-bold">Accession No</span>
                         <span className="text-slate-955 dark:text-slate-205 font-black block">{book.accessionNumber || "N/A"}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[8px] uppercase font-sans font-bold text-emerald-600 dark:text-emerald-400">Shelf Number</span>
-                        <span className="text-emerald-655 dark:text-emerald-400 font-black block">#{categorySerialsMap.get(book.bookId) || 1}</span>
+                        <span className="text-emerald-655 dark:text-emerald-400 font-black block">{book.shelfNumber?.trim() || "—"}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block text-[8px] uppercase font-sans font-bold">Call Number</span>
@@ -1638,7 +1638,7 @@ export default function PublicHome({
               <thead className="bg-slate-900 text-white font-mono uppercase tracking-wider text-[10px] select-none border-b-2 border-slate-950">
                 <tr>
                   <th className="p-3 border border-slate-800">Serial No</th>
-                  <th className="p-3 border border-slate-800 text-emerald-400 font-bold">Shelf Sr #</th>
+                  <th className="p-3 border border-slate-800 text-emerald-400 font-bold">Shelf Number</th>
                   <th className="p-3 border border-slate-800">Accession No</th>
                   <th className="p-3 border border-slate-800">Call Number</th>
                   <th className="p-3 border border-slate-800">Book Number</th>
@@ -1661,7 +1661,7 @@ export default function PublicHome({
                       title="Click to view complete catalog ledger metadata"
                     >
                       <td className="p-3 font-mono font-black text-slate-900 dark:text-white border border-slate-250 dark:border-slate-800">#{book.bookId}</td>
-                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-250 dark:border-slate-800 bg-emerald-50/20">#{categorySerialsMap.get(book.bookId) || 1}</td>
+                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-250 dark:border-slate-800 bg-emerald-50/20">{book.shelfNumber?.trim() || "—"}</td>
                       <td className="p-3 font-mono font-black text-indigo-750 dark:text-indigo-400 border border-slate-250 dark:border-slate-800 bg-indigo-50/20">{book.accessionNumber || "-"}</td>
                       <td className="p-3 font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">{book.callNumber || "-"}</td>
                       <td className="p-3 font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">{book.bookNumber || "-"}</td>
@@ -2805,7 +2805,7 @@ export default function PublicHome({
                         const ddcColor = getDdcColor(selectedBookDetails.ddcNumber || selectedBookDetails.callNumber);
                         return (
                           <span className={`font-extrabold ${ddcColor.text}`}>
-                            #{categorySerialsMap.get(selectedBookDetails.bookId) || 1}
+                            {selectedBookDetails.shelfNumber?.trim() || "—"}
                           </span>
                         );
                       })()}

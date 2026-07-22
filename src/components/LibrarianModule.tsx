@@ -298,10 +298,7 @@ function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, o
               const accessionNo = book.accessionNumber || book.bookId || "N/A";
               const callNo = book.callNumber || "N/A";
               const bookNo = book.bookNumber || "N/A";
-              const serialNo = categorySerialsMap.get(book.bookId) || 1;
-              const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
-                ? `${book.shelfNumber.trim()} (#${serialNo})`
-                : `Shelf #${serialNo}`;
+              const shelfLocation = (book.shelfNumber || "").trim() || "—";
               const isPrinted = stickerPrintedIds.has(book.bookId);
 
               return (
@@ -6031,10 +6028,7 @@ export default function LibrarianModule({
                     const accessionNo = book.accessionNumber || book.bookId || "N/A";
                     const callNo = book.callNumber || "N/A";
                     const bookNo = book.bookNumber || "N/A";
-                    const serialNo = categorySerialsMap.get(book.bookId) || 1;
-                    const shelfLocation = book.shelfNumber && book.shelfNumber.trim()
-                      ? `${book.shelfNumber.trim()} (#${serialNo})`
-                      : `Shelf #${serialNo}`;
+                    const shelfLocation = (book.shelfNumber || "").trim() || "—";
                     
                     return (
                       <StickerElement 
