@@ -68,11 +68,12 @@ interface StickerElementProps {
   accessionNo: string;
   callNo: string;
   bookNo: string;
-  shelfLocation: string;
+  shelfLocation?: string;
+  categorySerialsMap?: Map<string, number>;
   isPreview?: boolean;
 }
 
-function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, isPreview = false }: StickerElementProps) {
+function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, categorySerialsMap, isPreview = false }: StickerElementProps) {
   const [qrUrl, setQrUrl] = useState<string>('');
 
   useEffect(() => {
@@ -91,8 +92,8 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, isPr
 
   const ddcCol = getDdcColor(callNo || book?.ddcNumber || book?.callNumber);
 
-  // Read the exact shelfNumber field from the book object
-  const displayShelf = getDisplayShelfNumber(book, undefined, { prefix: "Shelf #" });
+  // Read the exact shelf location computed via categorySerialsMap across the catalog
+  const displayShelf = shelfLocation || getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" });
   
   // Book number fallback
   const displayBookNo = (bookNo && bookNo.trim()) ? bookNo : "—";
@@ -398,7 +399,7 @@ interface LibrarianModuleProps {
   onImportBooksExcel: (books: Book[]) => void;
   onImportStudentsExcel: (students: Student[]) => void;
   onAddStudent: (student: Student) => Promise<boolean>;
-  onEditStudent: (student: Student) => Promise<boolean>;
+  onEditStudent: (student: Student, oldStudentId?: string) => Promise<boolean>;
   onDeleteStudent: (studentId: string) => Promise<boolean>;
   onDeleteStudentsBulk?: (ids: string[]) => Promise<boolean>;
   onClearStudentsRegistry?: () => Promise<boolean>;
@@ -2454,7 +2455,7 @@ export default function LibrarianModule({
 
     let success = false;
     if (editingStudent) {
-      success = await onEditStudent(payload);
+      success = await onEditStudent(payload, editingStudent.studentId);
     } else {
       success = await onAddStudent(payload);
     }

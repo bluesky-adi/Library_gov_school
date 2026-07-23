@@ -42,7 +42,7 @@ interface LibraryPortalProps {
   onImportBooksExcel: (imported: Book[]) => void;
   onImportStudentsExcel: (imported: Student[]) => void;
   onAddStudent: (student: Student) => Promise<boolean>;
-  onEditStudent: (student: Student) => Promise<boolean>;
+  onEditStudent: (student: Student, oldStudentId?: string) => Promise<boolean>;
   onDeleteStudent: (studentId: string) => Promise<boolean>;
   onDeleteStudentsBulk?: (studentIds: string[]) => Promise<boolean>;
   onClearStudentsRegistry?: () => Promise<boolean>;

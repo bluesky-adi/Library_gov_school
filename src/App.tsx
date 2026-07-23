@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Header from './components/Header';
 import PublicHome, { GoogleBookCover } from './components/PublicHome';
 import LibraryPortal from './components/LibraryPortal';
@@ -11,7 +11,7 @@ import { translations } from './localization';
 import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial, Notification } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
 import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark, ArrowLeft } from 'lucide-react';
-import { getDisplayShelfNumber } from './lib/shelfUtils';
+import { buildCategorySerialsMap, getDisplayShelfNumber } from './lib/shelfUtils';
 
 export default function App() {
   // --- Back-End Synced Database States ---
@@ -732,11 +732,15 @@ export default function App() {
     }
   };
 
+  // Category serial map for shelf calculations
+  const categorySerialsMap = useMemo(() => buildCategorySerialsMap(books), [books]);
+
   // 5.2 Manual Edit Student
-  const handleEditStudent = async (student: Student): Promise<boolean> => {
+  const handleEditStudent = async (student: Student, oldStudentId?: string): Promise<boolean> => {
+    const targetId = oldStudentId || student.studentId;
     const token = localStorage.getItem("ramdiri_library_token");
     try {
-      const resp = await fetch(`/api/students/${student.studentId}`, {
+      const resp = await fetch(`/api/students/${encodeURIComponent(targetId)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -747,12 +751,19 @@ export default function App() {
       if (resp.ok) {
         const savedStudent = await resp.json().catch(() => null);
         const updatedStudent = savedStudent || student;
-        setStudents(prev => prev.map(s => s.studentId === updatedStudent.studentId ? { ...s, ...updatedStudent } : s));
+        setStudents(prev => {
+          const exists = prev.some(s => s.studentId === targetId || s.studentId === updatedStudent.studentId);
+          if (exists) {
+            return prev.map(s => (s.studentId === targetId || s.studentId === updatedStudent.studentId) ? { ...s, ...updatedStudent } : s);
+          } else {
+            return [updatedStudent, ...prev];
+          }
+        });
         refreshData();
         return true;
       } else {
-        const err = await resp.json();
-        alert(`Failed to Edit Student: ${err.error}`);
+        const err = await resp.json().catch(() => ({ error: 'Failed to update student' }));
+        alert(`Failed to Edit Student: ${err.error || 'Server error'}`);
         return false;
       }
     } catch (err) {
@@ -1389,7 +1400,7 @@ export default function App() {
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Shelf Number</span>
-                    <span className="text-emerald-450 font-black">{getDisplayShelfNumber(matchedBook, undefined, { prefix: "Shelf #" })}</span>
+                    <span className="text-emerald-450 font-black">{getDisplayShelfNumber(matchedBook, categorySerialsMap, { prefix: "Shelf #" })}</span>
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Publisher</span>
