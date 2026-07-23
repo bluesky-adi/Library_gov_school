@@ -49,9 +49,11 @@ export interface Student {
   studentId: string; // Generated: Class-Section-RollNumber (e.g. "10-A-15")
   name: string;
   rollNumber: number;
-  dob: string; // YYYY-MM-DD
+  dob: string; // DD-MM-YYYY
   class: string; // e.g. "10", "11", "9"
   section: string; // e.g. "A", "B", "C"
+  admissionNumber?: string;
+  contactNumber?: string;
   pin?: string;
   status?: string;
 }

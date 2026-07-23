@@ -9,7 +9,7 @@ import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMater
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
 import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl, getDdcColor } from '../lib/searchUtils';
-import { buildCategorySerialsMap, getDisplayShelfNumber, formatDateForInput } from '../lib/shelfUtils';
+import { buildCategorySerialsMap, getDisplayShelfNumber, formatDateForInput, formatDobDisplay } from '../lib/shelfUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -987,6 +987,7 @@ export default function LibrarianModule({
 
   const handleUpdateStatus = (id: string, newStatus: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
+    setAllFeedbacks(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f));
     fetch(`/api/feedback/${id}/status`, {
       method: 'POST',
       headers: {
@@ -996,13 +997,15 @@ export default function LibrarianModule({
       body: JSON.stringify({ status: newStatus })
     })
       .then(res => {
-        if (res.ok) {
-          fetchLibrarianFeedbacks();
-        } else {
+        if (!res.ok) {
           alert("Could not update status.");
+          fetchLibrarianFeedbacks();
         }
       })
-      .catch(() => alert("Network error updating feedback status."));
+      .catch(() => {
+        alert("Network error updating feedback status.");
+        fetchLibrarianFeedbacks();
+      });
   };
 
   const handleSendReply = (id: string) => {
@@ -1011,24 +1014,28 @@ export default function LibrarianModule({
       return;
     }
     const token = localStorage.getItem("ramdiri_library_token");
+    const sentText = replyText;
+    setAllFeedbacks(prev => prev.map(f => f.id === id ? { ...f, reply: sentText } : f));
+    setActiveReplyId(null);
+    setReplyText('');
     fetch(`/api/feedback/${id}/reply`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ reply: replyText })
+      body: JSON.stringify({ reply: sentText })
     })
       .then(res => {
-        if (res.ok) {
-          setActiveReplyId(null);
-          setReplyText('');
-          fetchLibrarianFeedbacks();
-        } else {
+        if (!res.ok) {
           alert("Could not post reply.");
+          fetchLibrarianFeedbacks();
         }
       })
-      .catch(() => alert("Network error sending reply."));
+      .catch(() => {
+        alert("Network error sending reply.");
+        fetchLibrarianFeedbacks();
+      });
   };
 
   const handleDeleteFeedback = (id: string) => {
@@ -1036,18 +1043,21 @@ export default function LibrarianModule({
       return;
     }
     const token = localStorage.getItem("ramdiri_library_token");
+    setAllFeedbacks(prev => prev.filter(f => f.id !== id));
     fetch(`/api/feedback/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => {
-        if (res.ok) {
-          fetchLibrarianFeedbacks();
-        } else {
+        if (!res.ok) {
           alert("Could not delete feedback.");
+          fetchLibrarianFeedbacks();
         }
       })
-      .catch(() => alert("Network error deleting feedback."));
+      .catch(() => {
+        alert("Network error deleting feedback.");
+        fetchLibrarianFeedbacks();
+      });
   };
 
   // --- CSV DATA MIGRATION HELPERS ---
@@ -1248,6 +1258,8 @@ export default function LibrarianModule({
   const [studSection, setStudSection] = useState('A');
   const [studRoll, setStudRoll] = useState<string>('');
   const [studDOB, setStudDOB] = useState('');
+  const [studAdmission, setStudAdmission] = useState('');
+  const [studContact, setStudContact] = useState('');
 
   // Student list quick filtering selectors
   const [filterClass, setFilterClass] = useState<string>('');
@@ -2453,7 +2465,9 @@ export default function LibrarianModule({
       class: studClass.trim().toUpperCase(),
       section: studSection.trim().toUpperCase(),
       rollNumber: parsedRoll,
-      dob: studDOB.trim(),
+      dob: formatDobDisplay(studDOB.trim()),
+      admissionNumber: studAdmission.trim(),
+      contactNumber: studContact.trim(),
       pin: editingStudent ? (editingStudent.pin || '1234') : '1234'
     };
 
@@ -2470,6 +2484,8 @@ export default function LibrarianModule({
       setStudSection('A');
       setStudRoll('');
       setStudDOB('');
+      setStudAdmission('');
+      setStudContact('');
       setShowStudentForm(false);
       setEditingStudent(null);
     }
@@ -2482,6 +2498,8 @@ export default function LibrarianModule({
     setStudSection(stud.section || 'A');
     setStudRoll(stud.rollNumber ? stud.rollNumber.toString() : '');
     setStudDOB(formatDateForInput(stud.dob || ''));
+    setStudAdmission(stud.admissionNumber || '');
+    setStudContact(stud.contactNumber || '');
     setShowStudentForm(true);
   };
 
@@ -5692,6 +5710,30 @@ export default function LibrarianModule({
                     value={studDOB}
                     onChange={(e) => setStudDOB(e.target.value)}
                     className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Admission No. (Optional)</label>
+                  <input
+                    type="text"
+                    value={studAdmission}
+                    onChange={(e) => setStudAdmission(e.target.value)}
+                    placeholder="e.g. ADM-2024-089"
+                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-bold font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block">Contact No. (Optional)</label>
+                  <input
+                    type="text"
+                    value={studContact}
+                    onChange={(e) => setStudContact(e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    className="w-full text-xs p-2 rounded bg-white border border-slate-250 outline-none text-slate-900 font-bold font-mono"
                   />
                 </div>
               </div>

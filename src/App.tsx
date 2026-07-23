@@ -261,10 +261,10 @@ export default function App() {
     if (scannedAccession !== null) return;
     if (loggedInRole === 'Guest') return; // Only poll when a user is authenticated
     
-    // Poll every 1000ms to ensure synchronization of active session states (<= 1 second requirement)
+    // Poll every 12000ms to ensure background synchronization without network congestion
     const interval = setInterval(() => {
       refreshData(false);
-    }, 1000);
+    }, 12000);
 
     return () => clearInterval(interval);
   }, [scannedAccession, loggedInRole]);
@@ -516,6 +516,7 @@ export default function App() {
   const handleDeleteBook = async (id: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setBooks(prev => prev.filter(b => b.bookId !== id));
       const resp = await fetch(`/api/books/${id}`, {
         method: 'DELETE',
         headers: {
@@ -527,9 +528,11 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Deletion Failed: ${err.error}`);
+        await refreshData();
       }
     } catch (err) {
       alert("Network fault.");
+      await refreshData();
     }
   };
 
@@ -537,6 +540,7 @@ export default function App() {
   const handleDeleteBooksBulk = async (ids: string[]) => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setBooks(prev => prev.filter(b => !ids.includes(b.bookId)));
       const resp = await fetch('/api/books/bulk-delete', {
         method: 'POST',
         headers: {
@@ -550,9 +554,11 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Bulk Deletion Failed: ${err.error}`);
+        await refreshData();
       }
     } catch (err) {
       alert("Network fault during bulk deletion.");
+      await refreshData();
     }
   };
 
@@ -777,6 +783,7 @@ export default function App() {
   const handleDeleteStudent = async (studentId: string): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setStudents(prev => prev.filter(s => s.studentId !== studentId));
       const resp = await fetch(`/api/students/${studentId}`, {
         method: 'DELETE',
         headers: {
@@ -789,11 +796,13 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Failed to Delete Student: ${err.error}`);
+        await refreshData();
         return false;
       }
     } catch (err) {
       console.error("Delete student triggered error:", err);
       alert("Network fault during student deletion.");
+      await refreshData();
       return false;
     }
   };
@@ -802,6 +811,7 @@ export default function App() {
   const handleDeleteStudentsBulk = async (studentIds: string[]): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setStudents(prev => prev.filter(s => !studentIds.includes(s.studentId)));
       const resp = await fetch('/api/students/bulk-delete', {
         method: 'POST',
         headers: {
@@ -816,11 +826,13 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Failed to Delete Selected Students: ${err.error}`);
+        await refreshData();
         return false;
       }
     } catch (err) {
       console.error("Bulk delete students triggered error:", err);
       alert("Network fault during bulk student deletion.");
+      await refreshData();
       return false;
     }
   };
@@ -1031,6 +1043,7 @@ export default function App() {
   const handleDeleteStudyMaterial = async (id: string) => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setStudyMaterials(prev => prev.filter(m => m.id !== id));
       const resp = await fetch(`/api/study-materials/${id}`, {
         method: 'DELETE',
         headers: {
@@ -1043,10 +1056,12 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Failed to delete material: ${err.error}`);
+        await refreshData();
         return false;
       }
     } catch (err) {
       console.error(err);
+      await refreshData();
       return false;
     }
   };
@@ -1079,6 +1094,7 @@ export default function App() {
   const handleDeleteRequest = async (id: string): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setRequests(prev => prev.filter(r => r.id !== id));
       const resp = await fetch(`/api/requests/${id}`, {
         method: 'DELETE',
         headers: {
@@ -1091,10 +1107,12 @@ export default function App() {
       } else {
         const err = await resp.json();
         alert(`Deletion failed: ${err.error}`);
+        await refreshData();
         return false;
       }
     } catch (err) {
       console.error("Delete request failed:", err);
+      await refreshData();
       return false;
     }
   };

@@ -95,3 +95,35 @@ export function formatDateForInput(dobStr?: string): string {
 
   return trimmed;
 }
+
+/**
+ * Formats Date of Birth strings into DD-MM-YYYY format for consistent application display.
+ * Handles YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, and returns DD-MM-YYYY.
+ */
+export function formatDobDisplay(dobStr?: string): string {
+  if (!dobStr) return '';
+  const trimmed = dobStr.trim();
+  if (!trimmed) return '';
+
+  const parts = trimmed.split(/[-/.]/);
+  if (parts.length === 3) {
+    const [p1, p2, p3] = parts;
+    // YYYY-MM-DD -> DD-MM-YYYY
+    if (p1.length === 4 && p3.length <= 2) {
+      const year = p1;
+      const month = p2.padStart(2, '0');
+      const day = p3.padStart(2, '0');
+      return `${day}-${month}-${year}`;
+    }
+    // DD-MM-YYYY -> DD-MM-YYYY
+    if (p1.length <= 2 && p3.length === 4) {
+      const day = p1.padStart(2, '0');
+      const month = p2.padStart(2, '0');
+      const year = p3;
+      return `${day}-${month}-${year}`;
+    }
+  }
+
+  return trimmed;
+}
+
