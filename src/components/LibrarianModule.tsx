@@ -9,6 +9,7 @@ import { Book, Student, BorrowRequest, BookIssueLog, LibraryAuditLog, StudyMater
 import ExcelModule from './ExcelModule';
 import { GoogleBookCover } from './PublicHome';
 import { searchBooksSmart, getDdcCategoryName, base64ToBlobUrl, getDdcColor } from '../lib/searchUtils';
+import { buildCategorySerialsMap, getDisplayShelfNumber, formatDateForInput } from '../lib/shelfUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -91,8 +92,7 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, isPr
   const ddcCol = getDdcColor(callNo || book?.ddcNumber || book?.callNumber);
 
   // Read the exact shelfNumber field from the book object
-  const rawShelf = (book?.shelfNumber || shelfLocation || "").trim();
-  const displayShelf = (rawShelf && rawShelf !== "Not Assigned") ? rawShelf : "—";
+  const displayShelf = getDisplayShelfNumber(book, undefined, { prefix: "Shelf #" });
   
   // Book number fallback
   const displayBookNo = (bookNo && bookNo.trim()) ? bookNo : "—";
@@ -299,7 +299,7 @@ function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, o
               const accessionNo = book.accessionNumber || book.bookId || "N/A";
               const callNo = book.callNumber || "N/A";
               const bookNo = book.bookNumber || "N/A";
-              const shelfLocation = (book.shelfNumber || "").trim() || "—";
+              const shelfLocation = getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" });
               const isPrinted = stickerPrintedIds.has(book.bookId);
 
               return (
@@ -713,7 +713,7 @@ export default function LibrarianModule({
           const accessionNo = (book.accessionNumber || book.bookId || "").trim();
           const callNo = (book.callNumber || "").trim() || "—";
           const bookNo = (book.bookNumber || "").trim() || "—";
-          const shelfLocation = (book.shelfNumber || "").trim() || "—";
+          const shelfLocation = getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" });
 
           const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
           const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
@@ -1815,24 +1815,7 @@ export default function LibrarianModule({
 
   // Dynamic Category Serial Numbering Map for shelf tracking
   const categorySerialsMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const groups: { [cat: string]: Book[] } = {};
-    for (const b of books) {
-      const cat = b.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(b);
-    }
-    for (const cat of Object.keys(groups)) {
-      groups[cat].sort((a, b) => {
-        const idA = a.accessionNumber || a.bookId;
-        const idB = b.accessionNumber || b.bookId;
-        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
-      });
-      groups[cat].forEach((b, idx) => {
-        map.set(b.bookId, idx + 1);
-      });
-    }
-    return map;
+    return buildCategorySerialsMap(books);
   }, [books]);
 
   // KPI calculations
@@ -2493,7 +2476,7 @@ export default function LibrarianModule({
     setStudClass(stud.class || '10');
     setStudSection(stud.section || 'A');
     setStudRoll(stud.rollNumber ? stud.rollNumber.toString() : '');
-    setStudDOB(stud.dob || '');
+    setStudDOB(formatDateForInput(stud.dob || ''));
     setShowStudentForm(true);
   };
 
@@ -3986,7 +3969,7 @@ export default function LibrarianModule({
                           #{book.bookId}
                         </td>
                         <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-black text-emerald-600 dark:text-emerald-450">
-                          {book.shelfNumber?.trim() || "—"}
+                          {getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}
                         </td>
                         <td className="p-3 text-center border border-slate-200 dark:border-slate-850 font-mono font-bold text-slate-850 dark:text-slate-250">
                           {book.accessionNumber || book.bookId || "N/A"}
@@ -6029,7 +6012,7 @@ export default function LibrarianModule({
                     const accessionNo = book.accessionNumber || book.bookId || "N/A";
                     const callNo = book.callNumber || "N/A";
                     const bookNo = book.bookNumber || "N/A";
-                    const shelfLocation = (book.shelfNumber || "").trim() || "—";
+                    const shelfLocation = getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" });
                     
                     return (
                       <StickerElement 

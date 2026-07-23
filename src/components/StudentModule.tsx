@@ -8,6 +8,7 @@ import { Book, Student, BorrowRequest, BookIssueLog, StudyMaterial, Notification
 import { GoogleBookCover } from './PublicHome';
 import { Search, Filter, BookOpen, Clock, Calendar, CheckCircle, AlertTriangle, BookMarked, User, LayoutGrid, Table, Star, Send, MessageSquare, AlertCircle, RefreshCw, Inbox, Check, Archive, Bell, ShieldAlert, FileText, CloudUpload } from 'lucide-react';
 import { searchBooksSmart, getDdcColor } from '../lib/searchUtils';
+import { buildCategorySerialsMap, getDisplayShelfNumber } from '../lib/shelfUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -298,29 +299,7 @@ export default function StudentModule({
 
   // Create Category-wise Shelf Serial Map
   const categorySerialsMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const groups: { [cat: string]: Book[] } = {};
-    
-    // Group books by category
-    books.forEach(b => {
-      const cat = b.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(b);
-    });
-
-    // For each category, sort by Accession Number (and fallback to bookId) ascending
-    Object.keys(groups).forEach(cat => {
-      const sorted = [...groups[cat]].sort((a, b) => {
-        const accA = String(a.accessionNumber || a.bookId || "").trim();
-        const accB = String(b.accessionNumber || b.bookId || "").trim();
-        return accA.localeCompare(accB, undefined, { numeric: true, sensitivity: 'base' });
-      });
-      sorted.forEach((b, idx) => {
-        map.set(b.bookId, idx + 1);
-      });
-    });
-
-    return map;
+    return buildCategorySerialsMap(books);
   }, [books]);
 
   // Search and Filter books catalogue with smart multi-lingual transliteration matches
@@ -799,7 +778,7 @@ export default function StudentModule({
                                     </div>
                                     <div>
                                       <span className="text-slate-400 block text-[7.5px] uppercase font-sans font-bold">Shelf Location</span>
-                                      <span className={`font-black block truncate ${ddc.text}`}>Shelf #{categorySerialsMap.get(book.bookId) || 1}</span>
+                                      <span className={`font-black block truncate ${ddc.text}`}>{getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}</span>
                                     </div>
                                   </div>
                                 </>
@@ -874,7 +853,7 @@ export default function StudentModule({
                             className="hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer transition-colors"
                           >
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-slate-900 dark:text-white border border-slate-150 dark:border-slate-800">#{book.bookId}</td>
-                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-150 dark:border-slate-800 bg-emerald-50/10">{book.shelfNumber?.trim() || "—"}</td>
+                            <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-150 dark:border-slate-800 bg-emerald-50/10">{getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}</td>
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-mono font-black text-indigo-700 dark:text-indigo-400 border border-slate-150 dark:border-slate-800 bg-indigo-50/10">{book.accessionNumber || "-"}</td>
                             <td onClick={() => setSelectedBook(book)} className={`p-2.5 font-mono font-bold border border-slate-150 dark:border-slate-800 ${ddc.text}`}>{book.callNumber || "-"}</td>
                             <td onClick={() => setSelectedBook(book)} className="p-2.5 font-extrabold text-slate-950 dark:text-white border border-slate-150 dark:border-slate-800">{book.bookName}</td>
@@ -1655,7 +1634,7 @@ export default function StudentModule({
                         </div>
                         <div>
                           <span className="text-slate-400 block uppercase font-bold text-[8.5px] tracking-wide font-mono">Shelf Location</span>
-                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>Shelf {selectedBook.shelfNumber?.trim() || "—"}</span>
+                          <span className={`font-bold block mt-0.5 ${ddc.text}`}>{getDisplayShelfNumber(selectedBook, categorySerialsMap, { prefix: "Shelf #" })}</span>
                         </div>
                       </div>
                     </>

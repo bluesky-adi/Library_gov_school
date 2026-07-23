@@ -11,6 +11,7 @@ import { translations } from './localization';
 import { Book, Student, BorrowRequest, BookIssueLog, UserRole, LibraryAuditLog, StudyMaterial, Notification } from './types';
 import { initialBooks, initialStudents, initialRequests, initialIssueLogs } from './data/initialData';
 import { Home, BookOpen, HelpCircle, LogOut, Key, Landmark, ArrowLeft } from 'lucide-react';
+import { getDisplayShelfNumber } from './lib/shelfUtils';
 
 export default function App() {
   // --- Back-End Synced Database States ---
@@ -469,7 +470,13 @@ export default function App() {
         body: JSON.stringify(book)
       });
       if (resp.ok) {
-        await refreshData();
+        const savedBook = await resp.json().catch(() => null);
+        const newBook = savedBook || book;
+        setBooks(prev => {
+          const exists = prev.some(b => b.bookId === newBook.bookId);
+          return exists ? prev.map(b => b.bookId === newBook.bookId ? newBook : b) : [newBook, ...prev];
+        });
+        refreshData();
       } else {
         const errorData = await resp.json();
         alert(`Error adding book: ${errorData.error}`);
@@ -492,7 +499,10 @@ export default function App() {
         body: JSON.stringify(updated)
       });
       if (resp.ok) {
-        await refreshData();
+        const savedBook = await resp.json().catch(() => null);
+        const updatedBook = savedBook || updated;
+        setBooks(prev => prev.map(b => b.bookId === updatedBook.bookId ? { ...b, ...updatedBook } : b));
+        refreshData();
       } else {
         const errorData = await resp.json();
         alert(`Error modifying book details: ${errorData.error}`);
@@ -702,7 +712,13 @@ export default function App() {
         body: JSON.stringify(student)
       });
       if (resp.ok) {
-        await refreshData();
+        const savedStudent = await resp.json().catch(() => null);
+        const newStudent = savedStudent || student;
+        setStudents(prev => {
+          const exists = prev.some(s => s.studentId === newStudent.studentId);
+          return exists ? prev.map(s => s.studentId === newStudent.studentId ? newStudent : s) : [newStudent, ...prev];
+        });
+        refreshData();
         return true;
       } else {
         const err = await resp.json();
@@ -729,7 +745,10 @@ export default function App() {
         body: JSON.stringify(student)
       });
       if (resp.ok) {
-        await refreshData();
+        const savedStudent = await resp.json().catch(() => null);
+        const updatedStudent = savedStudent || student;
+        setStudents(prev => prev.map(s => s.studentId === updatedStudent.studentId ? { ...s, ...updatedStudent } : s));
+        refreshData();
         return true;
       } else {
         const err = await resp.json();
@@ -1370,7 +1389,7 @@ export default function App() {
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Shelf Number</span>
-                    <span className="text-emerald-450 font-black">{matchedBook.shelfNumber || "-"}</span>
+                    <span className="text-emerald-450 font-black">{getDisplayShelfNumber(matchedBook, undefined, { prefix: "Shelf #" })}</span>
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-slate-500 text-[9px] uppercase tracking-wider block">Publisher</span>

@@ -6,6 +6,7 @@
 import { useState, useMemo } from 'react';
 import { Printer, FileText, Download, CheckCircle, Clock } from 'lucide-react';
 import { Book, Student, BorrowRequest, BookIssueLog } from '../types';
+import { buildCategorySerialsMap, getDisplayShelfNumber } from '../lib/shelfUtils';
 
 interface ReportsModuleProps {
   books: Book[];
@@ -26,24 +27,7 @@ export default function ReportsModule({
 
   // Dynamic Category Serial Numbering Map for shelf tracking
   const categorySerialsMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const groups: { [cat: string]: Book[] } = {};
-    for (const b of books) {
-      const cat = b.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(b);
-    }
-    for (const cat of Object.keys(groups)) {
-      groups[cat].sort((a, b) => {
-        const idA = a.accessionNumber || a.bookId;
-        const idB = b.accessionNumber || b.bookId;
-        return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
-      });
-      groups[cat].forEach((b, idx) => {
-        map.set(b.bookId, idx + 1);
-      });
-    }
-    return map;
+    return buildCategorySerialsMap(books);
   }, [books]);
 
   const sortedBooks = useMemo(() => {
@@ -242,7 +226,7 @@ export default function ReportsModule({
                 {sortedBooks.map(b => (
                   <tr key={b.bookId} className="hover:bg-slate-50/50">
                     <td className="p-3 font-mono font-bold text-emerald-800">{b.bookId}</td>
-                    <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">{b.shelfNumber?.trim() || "—"}</td>
+                    <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/20">{getDisplayShelfNumber(b, categorySerialsMap, { prefix: "Shelf #" })}</td>
                     <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{b.bookName}</td>
                     <td className="p-3 text-slate-705 dark:text-slate-300">{b.author}</td>
                     <td className="p-3 text-slate-500">{b.publisher}</td>
@@ -272,7 +256,7 @@ export default function ReportsModule({
               <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
                 {issueLogs.map(l => {
                   const bookObj = books.find(b => b.bookId === l.bookId || b.bookName === l.bookName);
-                  const shelfVal = bookObj?.shelfNumber?.trim() || "—";
+                  const shelfVal = getDisplayShelfNumber(bookObj, categorySerialsMap, { prefix: "Shelf #" });
                   return (
                     <tr key={l.id} className="hover:bg-slate-50/50">
                       <td className="p-3 font-mono font-bold text-slate-500">{l.id}</td>

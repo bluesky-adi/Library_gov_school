@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { searchBooksSmart, base64ToBlobUrl, getDdcColor } from '../lib/searchUtils';
+import { buildCategorySerialsMap, getDisplayShelfNumber } from '../lib/shelfUtils';
 
 interface InfiniteScrollSentinelProps {
   onVisible: () => void;
@@ -567,29 +568,7 @@ export default function PublicHome({
 
   // Create Category-wise Shelf Serial Map
   const categorySerialsMap = React.useMemo(() => {
-    const map = new Map<string, number>();
-    const groups: { [cat: string]: Book[] } = {};
-    
-    // Group books by category
-    books.forEach(b => {
-      const cat = b.category || "General";
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(b);
-    });
-
-    // For each category, sort by Accession Number ascending
-    Object.keys(groups).forEach(cat => {
-      const sorted = [...groups[cat]].sort((a, b) => {
-        const accA = String(a.accessionNumber || a.bookId || "").trim();
-        const accB = String(b.accessionNumber || b.bookId || "").trim();
-        return accA.localeCompare(accB, undefined, { numeric: true, sensitivity: 'base' });
-      });
-      sorted.forEach((b, idx) => {
-        map.set(b.bookId, idx + 1);
-      });
-    });
-
-    return map;
+    return buildCategorySerialsMap(books);
   }, [books]);
 
   // Filter books dynamically based on category tab selection, availability, language, search query, and sorting
@@ -1585,7 +1564,7 @@ export default function PublicHome({
                           const ddcColor = getDdcColor(book.ddcNumber || book.callNumber);
                           return (
                             <span className={`text-[10px] font-extrabold font-mono ${ddcColor.text}`}>
-                              Shelf {book.shelfNumber?.trim() || "—"} • SR# {book.bookId}
+                              {getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })} • SR# {book.bookId}
                             </span>
                           );
                         })()}
@@ -1607,7 +1586,7 @@ export default function PublicHome({
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[8px] uppercase font-sans font-bold text-emerald-600 dark:text-emerald-400">Shelf Number</span>
-                        <span className="text-emerald-655 dark:text-emerald-400 font-black block">{book.shelfNumber?.trim() || "—"}</span>
+                        <span className="text-emerald-655 dark:text-emerald-400 font-black block">{getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block text-[8px] uppercase font-sans font-bold">Call Number</span>
@@ -1661,7 +1640,7 @@ export default function PublicHome({
                       title="Click to view complete catalog ledger metadata"
                     >
                       <td className="p-3 font-mono font-black text-slate-900 dark:text-white border border-slate-250 dark:border-slate-800">#{book.bookId}</td>
-                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-250 dark:border-slate-800 bg-emerald-50/20">{book.shelfNumber?.trim() || "—"}</td>
+                      <td className="p-3 font-mono font-black text-emerald-600 dark:text-emerald-400 border border-slate-250 dark:border-slate-800 bg-emerald-50/20">{getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}</td>
                       <td className="p-3 font-mono font-black text-indigo-750 dark:text-indigo-400 border border-slate-250 dark:border-slate-800 bg-indigo-50/20">{book.accessionNumber || "-"}</td>
                       <td className="p-3 font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">{book.callNumber || "-"}</td>
                       <td className="p-3 font-mono font-bold text-slate-600 dark:text-slate-400 border border-slate-250 dark:border-slate-800">{book.bookNumber || "-"}</td>
@@ -2805,7 +2784,7 @@ export default function PublicHome({
                         const ddcColor = getDdcColor(selectedBookDetails.ddcNumber || selectedBookDetails.callNumber);
                         return (
                           <span className={`font-extrabold ${ddcColor.text}`}>
-                            {selectedBookDetails.shelfNumber?.trim() || "—"}
+                            {getDisplayShelfNumber(selectedBookDetails, categorySerialsMap, { prefix: "Shelf #" })}
                           </span>
                         );
                       })()}
