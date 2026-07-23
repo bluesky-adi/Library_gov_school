@@ -714,7 +714,10 @@ export default function LibrarianModule({
           const accessionNo = (book.accessionNumber || book.bookId || "").trim();
           const callNo = (book.callNumber || "").trim() || "—";
           const bookNo = (book.bookNumber || "").trim() || "—";
-          const shelfLocation = getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" });
+          const serialsMap = (categorySerialsMap && categorySerialsMap.size > 0)
+            ? categorySerialsMap
+            : buildCategorySerialsMap((books && books.length > 0) ? books : booksList);
+          const shelfLocation = getDisplayShelfNumber(book, serialsMap, { prefix: "Shelf #" });
 
           const ddcCol = getDdcColor(book.ddcNumber || book.callNumber);
           const rVal = parseInt(ddcCol.hex.substring(1, 3), 16) || 176;
@@ -765,10 +768,11 @@ export default function LibrarianModule({
           doc.text(bookNo, centerX, y + 22.5, { align: 'center' });
 
           // Drawing Shelf
+          doc.setTextColor(textR, textG, textB);
           doc.setFontSize(4.5);
           doc.text("SHELF", centerX, y + 27.0, { align: 'center' });
           doc.setFontSize(7.5);
-          doc.text(shelfLocation, centerX, y + 30.0, { align: 'center' });
+          doc.text(String(shelfLocation || "Shelf #1"), centerX, y + 30.0, { align: 'center' });
 
           // Add QR Code if it exists
           if (accessionNo) {
