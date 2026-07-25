@@ -765,7 +765,7 @@ export default function App() {
             return [updatedStudent, ...prev];
           }
         });
-        refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json().catch(() => ({ error: 'Failed to update student' }));

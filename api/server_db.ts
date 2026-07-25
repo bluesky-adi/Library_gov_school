@@ -210,8 +210,11 @@ const StudentSchema = new mongoose.Schema({
   dob: { type: String, default: "" }, // YYYY-MM-DD
   class: { type: String, required: true },
   section: { type: String, required: true },
+  admissionNumber: { type: String, default: "" },
+  contactNumber: { type: String, default: "" },
+  pin: { type: String, default: "1234" },
   status: { type: String, default: "" }
-});
+}, { strict: false });
 
 const BorrowRequestSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -1017,9 +1020,15 @@ export const dbService = {
       throw new Error("Validation Error: Roll Number must be a positive integer.");
     }
     student.dob = student.dob || "";
+    student.admissionNumber = student.admissionNumber || "";
+    student.contactNumber = student.contactNumber || "";
 
     const genId = `${student.class.trim().toUpperCase()}-${student.section.trim().toUpperCase()}-${student.rollNumber}`;
     student.studentId = genId;
+
+    // Remove immutable Mongoose internal fields (_id, __v) before updating Mongo document
+    const { _id, __v, ...cleanStudent } = student as any;
+    cleanStudent.studentId = genId;
 
     if (isConnectedToMongo) {
       // Clean up old student record if Class/Section/Roll (and thus studentId) changed to prevent stale duplicate login blocks
@@ -1031,9 +1040,30 @@ export const dbService = {
       if (match && !isEdit) {
         throw new Error(`Data Integrity Guard: A student is already registered with Student ID "${genId}" in Class ${student.class}-${student.section}. Duplicate rolls are prohibited.`);
       }
-      await MongoStudent.findOneAndUpdate({ studentId: genId }, student, { upsert: true, new: true });
+
+      await MongoStudent.findOneAndUpdate(
+        { studentId: genId },
+        { $set: cleanStudent },
+        { upsert: true, new: true }
+      );
+
+      // Cascade update student name in associated requests & issue logs
+      if (isEdit) {
+        const queryId = oldStudentId || genId;
+        await MongoBorrowRequest.updateMany(
+          { $or: [{ studentId: queryId }, { rollNumber: student.rollNumber }] },
+          { $set: { studentName: student.name, rollNumber: student.rollNumber, class: student.class, section: student.section } }
+        );
+        await MongoBookIssueLog.updateMany(
+          { $or: [{ studentId: queryId }, { rollNumber: student.rollNumber, class: student.class, section: student.section }] },
+          { $set: { studentName: student.name, rollNumber: student.rollNumber, class: student.class, section: student.section } }
+        );
+      }
+
       studentsCache = null;
-      return student;
+      requestsCache = null;
+      issueLogsCache = null;
+      return cleanStudent;
     } else {
       const studentsList = readLocalFile<Student>(STUDENTS_FILE);
       
@@ -1051,13 +1081,47 @@ export const dbService = {
         if (!isEdit) {
           throw new Error(`Data Integrity Guard: A student is already registered with Student ID "${genId}" in Class ${student.class}-${student.section}. Duplicate rolls are prohibited.`);
         }
-        studentsList[idx] = student;
+        studentsList[idx] = cleanStudent;
       } else {
-        studentsList.unshift(student);
+        studentsList.unshift(cleanStudent);
       }
       writeLocalFile(STUDENTS_FILE, studentsList);
+
+      // Cascade update student name in associated local requests & issue logs
+      if (isEdit) {
+        const requestsList = readLocalFile<BorrowRequest>(REQUESTS_FILE);
+        let reqModified = false;
+        requestsList.forEach(r => {
+          if (r.rollNumber === student.rollNumber || r.studentId === oldStudentId || r.studentId === genId) {
+            r.studentName = student.name;
+            r.rollNumber = student.rollNumber;
+            r.class = student.class;
+            r.section = student.section;
+            r.studentId = genId;
+            reqModified = true;
+          }
+        });
+        if (reqModified) writeLocalFile(REQUESTS_FILE, requestsList);
+
+        const logsList = readLocalFile<BookIssueLog>(ISSUE_LOGS_FILE);
+        let logsModified = false;
+        logsList.forEach(l => {
+          if ((l.rollNumber === student.rollNumber && l.class === student.class && l.section === student.section) || l.studentId === oldStudentId || l.studentId === genId) {
+            l.studentName = student.name;
+            l.rollNumber = student.rollNumber;
+            l.class = student.class;
+            l.section = student.section;
+            l.studentId = genId;
+            logsModified = true;
+          }
+        });
+        if (logsModified) writeLocalFile(ISSUE_LOGS_FILE, logsList);
+      }
+
       studentsCache = null;
-      return student;
+      requestsCache = null;
+      issueLogsCache = null;
+      return cleanStudent;
     }
   },
 
@@ -1132,7 +1196,7 @@ export const dbService = {
       try {
         if (studentMap.has(genId.toUpperCase())) {
           // Update the existing student record instead of failing or throwing an error!
-          await this.saveStudent(stud, true);
+          await this.saveStudent(stud, true, genId);
           updatedCount++;
         } else {
           const output = await this.saveStudent(stud, false);
