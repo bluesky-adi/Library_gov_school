@@ -3846,7 +3846,7 @@ export default function LibrarianModule({
                     
                     {/* Shelf Order Location Desk Indicator Badges */}
                     <div className="mt-2 grid grid-cols-2 gap-1.5 bg-indigo-50/50 dark:bg-slate-950 p-2 rounded-lg border border-indigo-100/60 dark:border-slate-800/80 font-mono text-[9.5px]">
-                      <div><span className="text-slate-400">Shelf Number:</span> <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{book.shelfNumber?.trim() || "—"}</span></div>
+                      <div><span className="text-slate-400">Shelf Number:</span> <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}</span></div>
                       <div><span className="text-slate-400">Serial #:</span> <span className="font-black text-indigo-700 dark:text-amber-400">#{book.bookId}</span></div>
                       <div><span className="text-slate-400 font-bold">Acc #:</span> <span className="font-extrabold text-slate-800 dark:text-slate-200">{book.accessionNumber || book.bookId || "N/A"}</span></div>
                       <div><span className="text-slate-400">Call #:</span> <span className="font-extrabold text-slate-800 dark:text-slate-200">{book.callNumber || "N/A"}</span></div>
@@ -8623,7 +8623,7 @@ export default function LibrarianModule({
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-500 font-bold font-sans">Shelf Number:</span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">{bk.shelfNumber?.trim() || "—"}</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">{getDisplayShelfNumber(bk, categorySerialsMap, { prefix: "Shelf #" })}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
                         <span className="text-slate-500 font-bold font-sans">Accession Number:</span>
@@ -9257,7 +9257,7 @@ export default function LibrarianModule({
                         <div className="flex justify-between py-1 border-b border-slate-200/50">
                           <span className="text-slate-400 uppercase font-sans font-bold">Shelf Number</span>
                           <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                            {book.shelfNumber?.trim() || "—"}
+                            {getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" })}
                           </span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-slate-200/50">

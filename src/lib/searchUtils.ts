@@ -38,6 +38,31 @@ export const HINGLISH_MAP: { [key: string]: string } = {
   "sahitya": "साहित्य", "literature": "साहित्य"
 };
 
+// Rich mapping of search term synonyms for cross-domain discovery (e.g. fiction <-> literature/story/novel)
+export const SYNONYM_MAP: { [key: string]: string[] } = {
+  "fiction": ["fiction", "novel", "novels", "story", "stories", "katha", "upanyas", "literature", "sahitya", "800", "kahani", "tales", "prose", "fictions", "dramas", "play"],
+  "novel": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani"],
+  "novels": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani"],
+  "story": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales"],
+  "stories": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales"],
+  "literature": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "poem", "drama", "800", "essays", "prose"],
+  "sahitya": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "kavita", "800"],
+  "upanyas": ["upanyas", "novel", "fiction", "story", "katha", "800", "उपन्यास"],
+  "katha": ["katha", "story", "stories", "fiction", "novel", "kahani", "800", "कथा"],
+  "science": ["science", "vigyan", "vijnan", "physics", "chemistry", "biology", "500", "600", "विज्ञान"],
+  "vigyan": ["science", "vigyan", "physics", "chemistry", "biology", "500", "विज्ञान"],
+  "history": ["history", "itihas", "itihaas", "historical", "900", "biography", "इतिहास"],
+  "itihas": ["history", "itihas", "historical", "900", "इतिहास"],
+  "math": ["math", "maths", "mathematics", "ganit", "geometry", "algebra", "500", "गणित"],
+  "maths": ["math", "maths", "mathematics", "ganit", "geometry", "algebra", "500", "गणित"],
+  "mathematics": ["math", "maths", "mathematics", "ganit", "500", "गणित"],
+  "ganit": ["math", "maths", "mathematics", "ganit", "500", "गणित"],
+  "social": ["social", "samajik", "civics", "economics", "300", " सामाजिक"],
+  "hindi": ["hindi", "hindee", "हिन्दी", "sahitya", "400", "800"],
+  "english": ["english", "angreji", "angrezi", "अंग्रेजी", "400", "800"],
+  "sanskrit": ["sanskrit", "sanskrut", "संस्कृत", "400"]
+};
+
 // Map search terms of DDC class numbers to subject terms
 export const DDC_CLASS_SUBJECTS: { [key: string]: string } = {
   "000": "general information computer science computing books library research cyber 005",
@@ -48,7 +73,7 @@ export const DDC_CLASS_SUBJECTS: { [key: string]: string } = {
   "500": "science mathematics biology math geometry physics chemistry astronomy geology 500",
   "600": "technology engineering medical health agriculture applied science electronics electricity 600",
   "700": "arts recreation sports games music painting theater 700",
-  "800": "literature poems drama stories essays novels poetry 800",
+  "800": "literature fiction novel novels stories poems drama essays poetry katha upanyas kahani tales prose 800",
   "900": "history geography travel maps biography historical world 900"
 };
 
@@ -111,7 +136,9 @@ function getCenturyClass(ddc: string | undefined | null): string {
 }
 
 /**
- * Modern, high-performance Fuse.js smart search engine.
+ * Modern, high-performance, intelligent smart search engine.
+ * Combines exact code matches, multi-token synonym matching, partial substring matching,
+ * and Fuse.js fuzzy matching to guarantee human-friendly, accurate search results.
  */
 export function searchBooksSmart(
   books: Book[], 
@@ -120,101 +147,182 @@ export function searchBooksSmart(
 ): Book[] {
   if (!query || !query.trim()) return books;
   
-  const decodedQuery = query.toLowerCase().trim();
+  const rawQuery = query.toLowerCase().trim();
+  const normalizedQuery = rawQuery.replace(/[\s\-_]+/g, ''); // Compact spacing e.g. "rashmi rathi" -> "rashmirathi"
   
-  // 1. Enriched Books for Fuse indexing
+  // 1. Expand query tokens with Hinglish & Synonym dictionaries
+  const rawTokens = rawQuery.split(/[\s,.\-/]+/).filter(t => t.length > 0);
+  const searchTermsSet = new Set<string>();
+  
+  rawTokens.forEach(token => {
+    searchTermsSet.add(token);
+    
+    // Check Hinglish
+    if (HINGLISH_MAP[token]) {
+      searchTermsSet.add(HINGLISH_MAP[token].toLowerCase());
+    }
+    for (const [eng, hin] of Object.entries(HINGLISH_MAP)) {
+      if (token === hin || hin.toLowerCase() === token) {
+        searchTermsSet.add(eng);
+      }
+    }
+    
+    // Check Synonyms
+    if (SYNONYM_MAP[token]) {
+      SYNONYM_MAP[token].forEach(syn => searchTermsSet.add(syn.toLowerCase()));
+    }
+    for (const [key, synList] of Object.entries(SYNONYM_MAP)) {
+      if (synList.includes(token)) {
+        searchTermsSet.add(key.toLowerCase());
+        synList.forEach(s => searchTermsSet.add(s.toLowerCase()));
+      }
+    }
+  });
+
+  const expandedTerms = Array.from(searchTermsSet);
+  const expandedQueryStr = expandedTerms.join(' ');
+
+  // 2. Prepare enriched searchable records
   const enrichedBooks = books.map(book => {
     const bookDdc = book.ddcNumber || book.callNumber || "";
     const century = getCenturyClass(bookDdc);
     const ddcKeywords = century ? (DDC_CLASS_SUBJECTS[century] || "") : "";
+    const ddcCatName = getDdcCategoryName(bookDdc);
     const translit = getTransliterationKeywords(book);
-    
-    // Add shelf serial number string if present
     const catSerial = categorySerialsMap ? String(categorySerialsMap.get(book.bookId) || "") : "";
-    
+
+    const name = (book.bookName || "").toLowerCase();
+    const nameCompact = name.replace(/[\s\-_]+/g, '');
+    const author = (book.author || "").toLowerCase();
+    const authorCompact = author.replace(/[\s\-_]+/g, '');
+    const category = (book.category || "").toLowerCase();
+    const publisher = (book.publisher || "").toLowerCase();
+    const description = (book.description || "").toLowerCase();
+    const accessionNumber = (book.accessionNumber || "").toLowerCase();
+    const callNumber = (book.callNumber || "").toLowerCase();
+    const bookNumber = (book.bookNumber || "").toLowerCase();
+    const ddcNumber = (book.ddcNumber || "").toLowerCase();
+    const remarks = (book.remarks || "").toLowerCase();
+
+    // Combined blob for fast substring checks
+    const fullSearchBlob = `${name} ${author} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
+
     return {
       book,
       bookId: book.bookId,
-      bookName: book.bookName || "",
-      author: book.author || "",
-      publisher: book.publisher || "",
-      category: book.category || "",
-      description: book.description || "",
-      accessionNumber: book.accessionNumber || "",
-      callNumber: book.callNumber || "",
-      bookNumber: book.bookNumber || "",
-      ddcNumber: book.ddcNumber || "",
+      name,
+      nameCompact,
+      author,
+      authorCompact,
+      category,
+      publisher,
+      description,
+      accessionNumber,
+      callNumber,
+      bookNumber,
+      ddcNumber,
+      ddcCatName: ddcCatName.toLowerCase(),
       _ddcKeywords: ddcKeywords,
       _transliteration: translit,
       _shelfSerial: catSerial,
+      fullSearchBlob
     };
   });
 
-  // 2. Expand Query for bilingual matching
-  const tokens = decodedQuery.split(/[\s,.\-/]+/).filter(t => t.length > 0);
-  const expandedTokens: string[] = [];
-  for (const token of tokens) {
-    expandedTokens.push(token);
-    if (HINGLISH_MAP[token]) {
-      expandedTokens.push(HINGLISH_MAP[token]);
-    }
-    for (const [eng, hin] of Object.entries(HINGLISH_MAP)) {
-      if (token === hin || hin.toLowerCase() === token) {
-        expandedTokens.push(eng);
-      }
-    }
-  }
-  const expandedQuery = Array.from(new Set(expandedTokens)).join(' ');
-
-  // 3. Configure Fuse.js with optimized weights & thresholds
-  const options = {
+  // 3. Configure Fuse.js for fuzzy typo tolerance
+  const fuseOptions = {
     keys: [
       { name: 'accessionNumber', weight: 4.5 },
       { name: 'bookId', weight: 4.0 },
       { name: '_shelfSerial', weight: 4.0 },
-      { name: 'bookName', weight: 3.5 },
+      { name: 'name', weight: 3.5 },
       { name: 'ddcNumber', weight: 3.0 },
       { name: 'callNumber', weight: 3.0 },
       { name: 'author', weight: 2.5 },
       { name: '_transliteration', weight: 2.5 },
-      { name: '_ddcKeywords', weight: 2.0 },
-      { name: 'category', weight: 1.5 },
+      { name: '_ddcKeywords', weight: 2.2 },
+      { name: 'category', weight: 2.0 },
+      { name: 'ddcCatName', weight: 1.8 },
       { name: 'publisher', weight: 1.2 },
       { name: 'description', weight: 0.8 }
     ],
-    threshold: 0.45,       // Ideal balance for fuzzy typo tolerance without false positives
-    ignoreLocation: true,  // Search whole string regardless of match position
+    threshold: 0.5,
+    ignoreLocation: true,
     findAllMatches: true,
     minMatchCharLength: 1
   };
 
-  const fuse = new Fuse(enrichedBooks, options);
+  const fuse = new Fuse(enrichedBooks, fuseOptions);
+  const fuseResults = fuse.search(expandedQueryStr);
   
-  // Try exact matches first for codes (e.g. accession numbers or call numbers or direct exact titles)
-  const exactMatches = enrichedBooks.filter(item => {
-    const term = decodedQuery;
-    return (
-      item.accessionNumber.toLowerCase() === term ||
-      item.bookId.toLowerCase() === term ||
-      item.ddcNumber.toLowerCase() === term ||
-      item.callNumber.toLowerCase() === term ||
-      item._shelfSerial === term
-    );
+  const fuseScoreMap = new Map<string, number>();
+  fuseResults.forEach(res => {
+    // Fuse score ranges from 0 (perfect match) to 1 (poor match)
+    const scoreVal = (1 - (res.score || 0)) * 100;
+    fuseScoreMap.set(res.item.bookId, scoreVal);
   });
 
-  const fuseResults = fuse.search(expandedQuery).map(res => res.item);
-  
-  // Merge results, giving exact matches top priority
-  const mergedResults = [...exactMatches];
-  const exactSet = new Set(exactMatches.map(m => m.bookId));
-  
-  for (const item of fuseResults) {
-    if (!exactSet.has(item.bookId)) {
-      mergedResults.push(item);
+  // 4. Multi-level scoring and ranking
+  const scoredList: { book: Book; score: number }[] = [];
+
+  for (const item of enrichedBooks) {
+    let score = 0;
+
+    // A. Direct Code/ID Matches (highest priority)
+    if (
+      item.accessionNumber === rawQuery ||
+      item.bookId.toLowerCase() === rawQuery ||
+      item.ddcNumber === rawQuery ||
+      item.callNumber === rawQuery ||
+      item._shelfSerial === rawQuery
+    ) {
+      score += 1000;
+    } else if (
+      item.accessionNumber.includes(rawQuery) ||
+      item.bookId.toLowerCase().includes(rawQuery) ||
+      item.callNumber.includes(rawQuery)
+    ) {
+      score += 300;
+    }
+
+    // B. Direct Name / Author match (with compact spacing tolerance)
+    if (item.name === rawQuery || item.nameCompact === normalizedQuery) {
+      score += 500;
+    } else if (item.name.includes(rawQuery) || item.nameCompact.includes(normalizedQuery)) {
+      score += 200;
+    }
+
+    if (item.author.includes(rawQuery) || item.authorCompact.includes(normalizedQuery)) {
+      score += 150;
+    }
+
+    // C. Term & Synonym token inclusions
+    for (const term of expandedTerms) {
+      if (!term || term.length < 2) continue;
+
+      if (item.name.includes(term)) score += 80;
+      if (item.category.includes(term) || item.ddcCatName.includes(term)) score += 70;
+      if (item.author.includes(term)) score += 60;
+      if (item._ddcKeywords.includes(term)) score += 50;
+      if (item._transliteration.includes(term)) score += 40;
+      if (item.description.includes(term) || item.publisher.includes(term)) score += 20;
+    }
+
+    // D. Add Fuse Fuzzy Score
+    const fuzzyScore = fuseScoreMap.get(item.bookId) || 0;
+    if (fuzzyScore > 20) {
+      score += fuzzyScore;
+    }
+
+    if (score > 0) {
+      scoredList.push({ book: item.book, score });
     }
   }
 
-  return mergedResults.map(item => item.book);
+  // Sort by score descending
+  scoredList.sort((a, b) => b.score - a.score);
+
+  return scoredList.map(entry => entry.book);
 }
 
 /**

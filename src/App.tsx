@@ -476,7 +476,7 @@ export default function App() {
           const exists = prev.some(b => b.bookId === newBook.bookId);
           return exists ? prev.map(b => b.bookId === newBook.bookId ? newBook : b) : [newBook, ...prev];
         });
-        refreshData();
+        await refreshData(true);
       } else {
         const errorData = await resp.json();
         alert(`Error adding book: ${errorData.error}`);
@@ -502,7 +502,7 @@ export default function App() {
         const savedBook = await resp.json().catch(() => null);
         const updatedBook = savedBook || updated;
         setBooks(prev => prev.map(b => b.bookId === updatedBook.bookId ? { ...b, ...updatedBook } : b));
-        refreshData();
+        await refreshData(true);
       } else {
         const errorData = await resp.json();
         alert(`Error modifying book details: ${errorData.error}`);
@@ -524,15 +524,15 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
       } else {
         const err = await resp.json();
         alert(`Deletion Failed: ${err.error}`);
-        await refreshData();
+        await refreshData(true);
       }
     } catch (err) {
       alert("Network fault.");
-      await refreshData();
+      await refreshData(true);
     }
   };
 
@@ -724,7 +724,7 @@ export default function App() {
           const exists = prev.some(s => s.studentId === newStudent.studentId);
           return exists ? prev.map(s => s.studentId === newStudent.studentId ? newStudent : s) : [newStudent, ...prev];
         });
-        refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -791,18 +791,18 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Failed to Delete Student: ${err.error}`);
-        await refreshData();
+        await refreshData(true);
         return false;
       }
     } catch (err) {
       console.error("Delete student triggered error:", err);
       alert("Network fault during student deletion.");
-      await refreshData();
+      await refreshData(true);
       return false;
     }
   };
@@ -821,18 +821,18 @@ export default function App() {
         body: JSON.stringify({ studentIds })
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Failed to Delete Selected Students: ${err.error}`);
-        await refreshData();
+        await refreshData(true);
         return false;
       }
     } catch (err) {
       console.error("Bulk delete students triggered error:", err);
       alert("Network fault during bulk student deletion.");
-      await refreshData();
+      await refreshData(true);
       return false;
     }
   };
@@ -848,7 +848,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -905,7 +905,7 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -932,7 +932,7 @@ export default function App() {
         body: JSON.stringify(req)
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -957,7 +957,7 @@ export default function App() {
         body: JSON.stringify({ dueDate })
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -980,7 +980,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1003,7 +1003,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1027,7 +1027,7 @@ export default function App() {
         body: JSON.stringify(material)
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -1051,17 +1051,17 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Failed to delete material: ${err.error}`);
-        await refreshData();
+        await refreshData(true);
         return false;
       }
     } catch (err) {
       console.error(err);
-      await refreshData();
+      await refreshData(true);
       return false;
     }
   };
@@ -1077,7 +1077,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -1102,17 +1102,17 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Deletion failed: ${err.error}`);
-        await refreshData();
+        await refreshData(true);
         return false;
       }
     } catch (err) {
       console.error("Delete request failed:", err);
-      await refreshData();
+      await refreshData(true);
       return false;
     }
   };
@@ -1128,7 +1128,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1160,7 +1160,7 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1183,7 +1183,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData();
+        await refreshData(true);
         alert("Success: Cloud database restored to factory-seed conditions.");
       } else {
         alert("Security Authorization failed during system resets.");
