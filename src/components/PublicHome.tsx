@@ -596,7 +596,7 @@ export default function PublicHome({
 
     // 4. Search Filter (incorporating Hinglish, spelling corrections, DDC class)
     if (homeSearchQuery) {
-      result = searchBooksSmart(result, homeSearchQuery);
+      result = searchBooksSmart(result, homeSearchQuery, categorySerialsMap);
     }
 
     // 5. Sorting

@@ -226,17 +226,12 @@ function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, o
     if (filterMode === 'unprinted') {
       list = list.filter(b => !stickerPrintedIds.has(b.bookId));
     }
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
     if (q) {
-      list = list.filter(b => 
-        b.bookName.toLowerCase().includes(q) ||
-        (b.accessionNumber && b.accessionNumber.toLowerCase().includes(q)) ||
-        b.bookId.toLowerCase().includes(q) ||
-        (b.callNumber && b.callNumber.toLowerCase().includes(q))
-      );
+      list = searchBooksSmart(list, q, categorySerialsMap);
     }
     return list;
-  }, [books, filterMode, searchQuery, stickerPrintedIds]);
+  }, [books, filterMode, searchQuery, stickerPrintedIds, categorySerialsMap]);
 
   // Reset page on search or filter change
   useEffect(() => {
@@ -855,12 +850,7 @@ export default function LibrarianModule({
     const query = universalQuery.trim().toLowerCase();
     if (!query || query.length < 2) return { books: [], students: [], logs: [] };
 
-    const matchedBooks = books.filter(b => 
-      b.bookId.toLowerCase().includes(query) ||
-      b.bookName.toLowerCase().includes(query) ||
-      (b.author && b.author.toLowerCase().includes(query)) ||
-      (b.accessionNumber && b.accessionNumber.toLowerCase().includes(query))
-    ).slice(0, 4);
+    const matchedBooks = searchBooksSmart(books, universalQuery.trim(), categorySerialsMap).slice(0, 4);
 
     const matchedStudents = students.filter(s => 
       s.name.toLowerCase().includes(query) ||

@@ -5,21 +5,21 @@
 
 import Fuse from 'fuse.js';
 import { Book } from '../types';
+import { getDisplayShelfNumber } from './shelfUtils';
 
 export const HINGLISH_MAP: { [key: string]: string } = {
-  "itihas": "इतिहास", "itihaas": "इतिहास", "history": "इतिहास",
-  "vigyan": "विज्ञान", "vijnan": "विज्ञान", "science": "विज्ञान",
+  "itihas": "इतिहास", "itihaas": "इतिहास", "history": "इतिहास", "historical": "इतिहास",
+  "vigyan": "विज्ञान", "vijnan": "विज्ञान", "science": "विज्ञान", "scienc": "विज्ञान",
   "ganit": "गणित", "maths": "गणित", "math": "गणित", "mathematics": "गणित", "ganitha": "गणित",
-  "bhugol": "भूगोल", "geography": "भूगोल",
-  "rasayan": "रसायन", "chemistry": "रसायन",
-  "bhautiki": "भौतिकी", "physics": "भौतिकी",
-  "samajik": "सामाजिक", "social": "सामाजिक",
-  "hindi": "हिन्दी", "hindee": "हिन्दी",
+  "bhugol": "भूगोल", "geography": "भूगोल", "geograpy": "भूगोल", "geo": "भूगोल",
+  "rasayan": "रसायन", "chemistry": "रसायन", "rasayanik": "रसायन",
+  "bhautiki": "भौतिकी", "physics": "भौतिकी", "bhautik": "भौतिकी",
+  "samajik": "सामाजिक", "social": "सामाजिक", "civics": "नागरिक शास्त्र", "nagarik": "नागरिक",
+  "hindi": "हिन्दी", "hindee": "हिन्दी", "hind": "हिन्दी",
   "dinkar": "दिनकर", "ramdhari": "रामधारी",
   "rashmirathi": "रश्मिरथी",
   "godhuli": "गोधूलि",
-  "bseb": "बिहार", "patna": "पटना",
-  "bihar": "बिहार",
+  "bseb": "बिहार", "patna": "पटना", "bihar": "बिहार",
   "shri": "श्री", "pustak": "पुस्तक",
   "upanyas": "उपन्यास", "katha": "कथा",
   "vyakaran": "व्याकरण", "grammar": "व्याकरण",
@@ -29,38 +29,50 @@ export const HINGLISH_MAP: { [key: string]: string } = {
   "sanskrut": "संस्कृत", "sanskrit": "संस्कृत", "sanskrith": "संस्कृत",
   "english": "अंग्रेजी", "angreji": "अंग्रेजी", "angrezi": "अंग्रेजी",
   "urdu": "उर्दू",
-  "raajneeti": "राजनीति", "rajniti": "राजनीति", "polscience": "राजनीति", "nagarik": "नागरिक", "civics": "नागरिक शास्त्र",
-  "arthashastra": "अर्थशास्त्र", "economics": "अर्थशास्त्र",
+  "raajneeti": "राजनीति", "rajniti": "राजनीति", "polscience": "राजनीति", "politics": "राजनीति",
+  "arthashastra": "अर्थशास्त्र", "economics": "अर्थशास्त्र", "econ": "अर्थशास्त्र",
   "pariksha": "परीक्षा", "exam": "परीक्षा",
-  "kavita": "कविता", "poem": "कविता",
-  "kahani": "कहानी", "story": "कहानी",
-  "jivan": "जीवन", "biography": "जीवनी",
-  "sahitya": "साहित्य", "literature": "साहित्य"
+  "kavita": "कविता", "poem": "कविता", "poetry": "कविता",
+  "kahani": "कहानी", "story": "कहानी", "stories": "कहानी",
+  "jivan": "जीवनी", "jeevani": "जीवनी", "biography": "जीवनी",
+  "sahitya": "साहित्य", "literature": "साहित्य",
+  "natak": "नाटक", "drama": "नाटक", "play": "नाटक",
+  "nibandh": "निबंध", "essay": "निबंध",
+  "computer": "कंप्यूटर", "sanganak": "संगणक", "cyber": "कंप्यूटर"
 };
 
 // Rich mapping of search term synonyms for cross-domain discovery (e.g. fiction <-> literature/story/novel)
 export const SYNONYM_MAP: { [key: string]: string[] } = {
-  "fiction": ["fiction", "novel", "novels", "story", "stories", "katha", "upanyas", "literature", "sahitya", "800", "kahani", "tales", "prose", "fictions", "dramas", "play"],
-  "novel": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani"],
-  "novels": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani"],
-  "story": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales"],
-  "stories": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales"],
-  "literature": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "poem", "drama", "800", "essays", "prose"],
-  "sahitya": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "kavita", "800"],
+  "fiction": ["fiction", "novel", "novels", "story", "stories", "katha", "upanyas", "literature", "sahitya", "800", "kahani", "tales", "prose", "fictions", "dramas", "play", "फिक्शन", "उपन्यास", "कथा", "साहित्य"],
+  "novel": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani", "उपन्यास", "फिक्शन"],
+  "novels": ["novel", "novels", "upanyas", "fiction", "story", "katha", "literature", "sahitya", "800", "kahani", "उपन्यास"],
+  "story": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales", "कहानी", "कथा"],
+  "stories": ["story", "stories", "kahani", "katha", "fiction", "novel", "literature", "sahitya", "800", "tales", "कहानी", "कथा"],
+  "literature": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "poem", "drama", "800", "essays", "prose", "साहित्य", "कविता", "नाटक"],
+  "sahitya": ["literature", "sahitya", "fiction", "novel", "story", "poetry", "kavita", "800", "साहित्य"],
   "upanyas": ["upanyas", "novel", "fiction", "story", "katha", "800", "उपन्यास"],
   "katha": ["katha", "story", "stories", "fiction", "novel", "kahani", "800", "कथा"],
-  "science": ["science", "vigyan", "vijnan", "physics", "chemistry", "biology", "500", "600", "विज्ञान"],
+  "science": ["science", "vigyan", "vijnan", "physics", "chemistry", "biology", "500", "600", "विज्ञान", "भौतिकी", "रसायन", "जीव विज्ञान"],
   "vigyan": ["science", "vigyan", "physics", "chemistry", "biology", "500", "विज्ञान"],
   "history": ["history", "itihas", "itihaas", "historical", "900", "biography", "इतिहास"],
   "itihas": ["history", "itihas", "historical", "900", "इतिहास"],
+  "geography": ["geography", "bhugol", "geo", "geograpy", "900", "भूगोल"],
+  "bhugol": ["geography", "bhugol", "geo", "900", "भूगोल"],
   "math": ["math", "maths", "mathematics", "ganit", "geometry", "algebra", "500", "गणित"],
   "maths": ["math", "maths", "mathematics", "ganit", "geometry", "algebra", "500", "गणित"],
   "mathematics": ["math", "maths", "mathematics", "ganit", "500", "गणित"],
   "ganit": ["math", "maths", "mathematics", "ganit", "500", "गणित"],
-  "social": ["social", "samajik", "civics", "economics", "300", " सामाजिक"],
-  "hindi": ["hindi", "hindee", "हिन्दी", "sahitya", "400", "800"],
-  "english": ["english", "angreji", "angrezi", "अंग्रेजी", "400", "800"],
-  "sanskrit": ["sanskrit", "sanskrut", "संस्कृत", "400"]
+  "physics": ["physics", "bhautiki", "bhautik", "science", "500", "530", "भौतिकी"],
+  "chemistry": ["chemistry", "rasayan", "rasayanik", "science", "500", "540", "रसायन"],
+  "biology": ["biology", "jeev", "bio", "science", "500", "570", "जीव विज्ञान"],
+  "civics": ["civics", "nagarik", "polscience", "social", "300", "320", "नागरिक शास्त्र"],
+  "economics": ["economics", "arthashastra", "econ", "social", "300", "330", "अर्थशास्त्र"],
+  "politics": ["politics", "political", "rajniti", "raajneeti", "social", "300", "320", "राजनीति"],
+  "social": ["social", "samajik", "civics", "economics", "300", "सामाजिक"],
+  "hindi": ["hindi", "hindee", "हिन्दी", "हिंदी", "sahitya", "400", "800"],
+  "english": ["english", "angreji", "angrezi", "अंग्रेजी", "अंग्रेज़ी", "400", "800"],
+  "sanskrit": ["sanskrit", "sanskrut", "संस्कृत", "400"],
+  "computer": ["computer", "sanganak", "cyber", "computing", "000", "005", "कंप्यूटर", "संगणक"]
 };
 
 // Map search terms of DDC class numbers to subject terms
@@ -190,6 +202,7 @@ export function searchBooksSmart(
     const ddcCatName = getDdcCategoryName(bookDdc);
     const translit = getTransliterationKeywords(book);
     const catSerial = categorySerialsMap ? String(categorySerialsMap.get(book.bookId) || "") : "";
+    const displayShelf = getDisplayShelfNumber(book, categorySerialsMap, { prefix: "Shelf #" }).toLowerCase();
 
     const name = (book.bookName || "").toLowerCase();
     const nameCompact = name.replace(/[\s\-_]+/g, '');
@@ -203,9 +216,14 @@ export function searchBooksSmart(
     const bookNumber = (book.bookNumber || "").toLowerCase();
     const ddcNumber = (book.ddcNumber || "").toLowerCase();
     const remarks = (book.remarks || "").toLowerCase();
+    const shelfNumber = (book.shelfNumber || "").toLowerCase();
+    const isbn = (book.isbn || "").toLowerCase();
+    const language = (book.language || "").toLowerCase();
+    const subject = (book.subject || "").toLowerCase();
+    const classNum = String(book.classNumber || book.class || "").toLowerCase();
 
     // Combined blob for fast substring checks
-    const fullSearchBlob = `${name} ${author} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
+    const fullSearchBlob = `${name} ${author} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${shelfNumber} ${displayShelf} ${isbn} ${language} ${subject} ${classNum} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
 
     return {
       book,
@@ -221,6 +239,13 @@ export function searchBooksSmart(
       callNumber,
       bookNumber,
       ddcNumber,
+      remarks,
+      shelfNumber,
+      displayShelf,
+      isbn,
+      language,
+      subject,
+      classNum,
       ddcCatName: ddcCatName.toLowerCase(),
       _ddcKeywords: ddcKeywords,
       _transliteration: translit,
@@ -235,16 +260,21 @@ export function searchBooksSmart(
       { name: 'accessionNumber', weight: 4.5 },
       { name: 'bookId', weight: 4.0 },
       { name: '_shelfSerial', weight: 4.0 },
+      { name: 'displayShelf', weight: 3.8 },
+      { name: 'shelfNumber', weight: 3.8 },
       { name: 'name', weight: 3.5 },
       { name: 'ddcNumber', weight: 3.0 },
       { name: 'callNumber', weight: 3.0 },
+      { name: 'isbn', weight: 3.0 },
       { name: 'author', weight: 2.5 },
       { name: '_transliteration', weight: 2.5 },
       { name: '_ddcKeywords', weight: 2.2 },
       { name: 'category', weight: 2.0 },
+      { name: 'subject', weight: 2.0 },
       { name: 'ddcCatName', weight: 1.8 },
       { name: 'publisher', weight: 1.2 },
-      { name: 'description', weight: 0.8 }
+      { name: 'description', weight: 0.8 },
+      { name: 'remarks', weight: 0.8 }
     ],
     threshold: 0.5,
     ignoreLocation: true,
@@ -262,27 +292,44 @@ export function searchBooksSmart(
     fuseScoreMap.set(res.item.bookId, scoreVal);
   });
 
+  // Check if query is looking for a shelf e.g. "shelf 8", "shelf #8", "s-08", "s8", "shelf8"
+  const shelfQueryMatch = rawQuery.match(/^(?:shelf\s*#?|s\-?)\s*(\d+)$/i);
+  const shelfTargetNum = shelfQueryMatch ? shelfQueryMatch[1].replace(/^0+/, '') : null;
+
   // 4. Multi-level scoring and ranking
   const scoredList: { book: Book; score: number }[] = [];
 
   for (const item of enrichedBooks) {
     let score = 0;
 
-    // A. Direct Code/ID Matches (highest priority)
+    // A. Direct Code/ID/Shelf Matches (highest priority)
     if (
       item.accessionNumber === rawQuery ||
       item.bookId.toLowerCase() === rawQuery ||
       item.ddcNumber === rawQuery ||
       item.callNumber === rawQuery ||
-      item._shelfSerial === rawQuery
+      item.isbn === rawQuery ||
+      item._shelfSerial === rawQuery ||
+      item.shelfNumber === rawQuery ||
+      item.displayShelf === rawQuery
     ) {
       score += 1000;
     } else if (
       item.accessionNumber.includes(rawQuery) ||
       item.bookId.toLowerCase().includes(rawQuery) ||
-      item.callNumber.includes(rawQuery)
+      item.callNumber.includes(rawQuery) ||
+      item.isbn.includes(rawQuery)
     ) {
       score += 300;
+    }
+
+    // Smart Shelf Match
+    if (shelfTargetNum) {
+      const itemShelfNum = item.shelfNumber.replace(/\D/g, '').replace(/^0+/, '');
+      const itemSerialNum = item._shelfSerial.replace(/^0+/, '');
+      if (itemShelfNum === shelfTargetNum || itemSerialNum === shelfTargetNum) {
+        score += 850;
+      }
     }
 
     // B. Direct Name / Author match (with compact spacing tolerance)
@@ -301,11 +348,11 @@ export function searchBooksSmart(
       if (!term || term.length < 2) continue;
 
       if (item.name.includes(term)) score += 80;
-      if (item.category.includes(term) || item.ddcCatName.includes(term)) score += 70;
+      if (item.category.includes(term) || item.ddcCatName.includes(term) || item.subject.includes(term)) score += 70;
       if (item.author.includes(term)) score += 60;
       if (item._ddcKeywords.includes(term)) score += 50;
       if (item._transliteration.includes(term)) score += 40;
-      if (item.description.includes(term) || item.publisher.includes(term)) score += 20;
+      if (item.description.includes(term) || item.publisher.includes(term) || item.remarks.includes(term)) score += 20;
     }
 
     // D. Add Fuse Fuzzy Score
