@@ -215,12 +215,13 @@ export function searchBooksSmart(
     const callNumber = (book.callNumber || "").toLowerCase();
     const bookNumber = (book.bookNumber || "").toLowerCase();
     const ddcNumber = (book.ddcNumber || "").toLowerCase();
+    const anyBook = book as any;
     const remarks = (book.remarks || "").toLowerCase();
     const shelfNumber = (book.shelfNumber || "").toLowerCase();
-    const isbn = (book.isbn || "").toLowerCase();
-    const language = (book.language || "").toLowerCase();
-    const subject = (book.subject || "").toLowerCase();
-    const classNum = String(book.classNumber || book.class || "").toLowerCase();
+    const isbn = String(anyBook.isbn || "").toLowerCase();
+    const language = String(anyBook.language || "").toLowerCase();
+    const subject = String(anyBook.subject || "").toLowerCase();
+    const classNum = String(anyBook.classNumber || anyBook.class || "").toLowerCase();
 
     // Combined blob for fast substring checks
     const fullSearchBlob = `${name} ${author} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${shelfNumber} ${displayShelf} ${isbn} ${language} ${subject} ${classNum} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
