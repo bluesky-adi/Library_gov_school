@@ -10,7 +10,7 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import { connectDatabase, dbService } from './server_db.js';
+import { connectDatabase, dbService, normalizeStudentClass, normalizeStudentSection, normalizeStudentRoll, toStandardDate } from './server_db.js';
 import { Book, Student, BorrowRequest, BookIssueLog } from '../src/types.js';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -201,32 +201,6 @@ async function getLibrarianConfig(): Promise<any> {
 const JWT_SECRET = process.env.JWT_SECRET || "ramdiri_super_secret_jwt_key_2026";
 
 // Helpers for date calculations
-function toStandardDate(str: string): string {
-  if (!str) return "";
-  const parts = str.trim().split(/[-/.]/);
-  if (parts.length !== 3) return str;
-
-  let day = 0;
-  let month = 0;
-  let year = 0;
-
-  if (parts[0].length === 4) {
-    year = parseInt(parts[0]);
-    month = parseInt(parts[1]);
-    day = parseInt(parts[2]);
-  } else if (parts[2].length === 4) {
-    day = parseInt(parts[0]);
-    month = parseInt(parts[1]);
-    year = parseInt(parts[2]);
-  } else {
-    return str;
-  }
-
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return str;
-
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${year}-${pad(month)}-${pad(day)}`; // Align to ISO YYYY-MM-DD
-}
 
 function getFormattedTime(): string {
   const now = new Date();
@@ -369,16 +343,16 @@ app.post('/api/auth/login', async (req, res) => {
       }
     } else {
       // Student authentication - Strictly exact matches on Roll Number, Class, Section, and Date of Birth
-      const roll = parseInt(rollNumber);
-      if (!rollNumber || isNaN(roll)) {
+      const roll = normalizeStudentRoll(rollNumber);
+      if (!rollNumber || isNaN(roll) || roll <= 0) {
         return res.status(400).json({ 
           success: false, 
           error: "Authentication Failed: Please enter a valid positive Roll Number." 
         });
       }
 
-      const inputClass = classValue ? classValue.toString().trim() : '';
-      const inputSection = sectionValue ? sectionValue.toString().trim().toUpperCase() : '';
+      const inputClass = normalizeStudentClass(classValue);
+      const inputSection = normalizeStudentSection(sectionValue);
 
       if (!inputClass || !inputSection) {
         return res.status(400).json({
@@ -397,11 +371,11 @@ app.post('/api/auth/login', async (req, res) => {
       console.log(`[API ROUTE] Fetching students list for exact Student validation...`);
       const studentsList = await dbService.getStudents();
       
-      // 1. Exact match on Class, Section, and Roll Number
+      // 1. Exact match on Class, Section, and Roll Number with normalization
       const matches = studentsList.filter((s: Student) => {
-        const classMatch = s.class?.toString().trim().toLowerCase() === inputClass.toLowerCase();
-        const sectionMatch = s.section?.toString().trim().toUpperCase() === inputSection;
-        const rollMatch = Number(s.rollNumber) === roll;
+        const classMatch = normalizeStudentClass(s.class) === inputClass;
+        const sectionMatch = normalizeStudentSection(s.section) === inputSection;
+        const rollMatch = normalizeStudentRoll(s.rollNumber) === roll;
         return classMatch && sectionMatch && rollMatch;
       });
 
@@ -1186,7 +1160,11 @@ app.post('/api/issue-logs/bulk-issue', authenticateToken, requireLibrarian, asyn
 
     const books = await dbService.getBooks();
     const students = await dbService.getStudents();
-    const matchedStudent = students.find(s => s.rollNumber === parseInt(rollNumber) && s.class === String(studClass) && s.section === String(section));
+    const matchedStudent = students.find(s => 
+      normalizeStudentRoll(s.rollNumber) === normalizeStudentRoll(rollNumber) && 
+      normalizeStudentClass(s.class) === normalizeStudentClass(studClass) && 
+      normalizeStudentSection(s.section) === normalizeStudentSection(section)
+    );
 
     if (!matchedStudent) {
       return res.status(400).json({ error: "Student not found in school records." });

@@ -501,6 +501,76 @@ function writeLocalFile<T>(filePath: string, data: T[]): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+export function normalizeStudentClass(cls: any): string {
+  if (cls === null || cls === undefined) return "";
+  let str = String(cls).trim();
+  str = str.replace(/^(class|grade|std)\s+/i, "");
+  str = str.replace(/\s+(class|grade|std)$/i, "");
+  str = str.replace(/(\d+)(st|nd|rd|th)/i, "$1");
+  return str.trim();
+}
+
+export function normalizeStudentSection(sec: any): string {
+  if (sec === null || sec === undefined) return "";
+  return String(sec).trim().toUpperCase();
+}
+
+export function normalizeStudentRoll(roll: any): number {
+  if (roll === null || roll === undefined) return 0;
+  const num = parseInt(String(roll).replace(/\D/g, ''), 10);
+  return isNaN(num) ? 0 : num;
+}
+
+export function toStandardDate(str: any): string {
+  if (str === null || str === undefined) return "";
+  let s = String(str).trim();
+  if (!s) return "";
+
+  if (s.includes('T')) {
+    s = s.split('T')[0];
+  }
+
+  if (/^\d{4,5}$/.test(s)) {
+    const num = parseInt(s, 10);
+    if (num > 10000 && num < 60000) {
+      const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(dateObj.getTime())) {
+        const y = dateObj.getUTCFullYear();
+        const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+  }
+
+  const parts = s.split(/[\s\-_/.]+/).filter(Boolean);
+  if (parts.length < 3) return s;
+
+  let year = 0, month = 0, day = 0;
+
+  if (parts[0].length === 4) {
+    year = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10);
+    day = parseInt(parts[2], 10);
+  } else if (parts[2].length === 4) {
+    day = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10);
+    year = parseInt(parts[2], 10);
+  } else if (parts[2].length === 2) {
+    day = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10);
+    let yy = parseInt(parts[2], 10);
+    year = yy > 30 ? 1900 + yy : 2000 + yy;
+  } else {
+    return s;
+  }
+
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return s;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
 // DATABASE SERVICE EXPORTS
 export const dbService = {
   getMongoConnectionState(): boolean {
@@ -994,12 +1064,18 @@ export const dbService = {
     }
     let modified = false;
     const mapped = list.map(s => {
-      const c = s.class ? s.class.toString().trim().toUpperCase() : "10";
-      const sec = s.section ? s.section.toString().trim().toUpperCase() : "A";
-      const r = s.rollNumber || 1;
-      const finalId = s.studentId || `${c}-${sec}-${r}`;
-      if (!s.studentId) {
+      const c = normalizeStudentClass(s.class) || "10";
+      const sec = normalizeStudentSection(s.section) || "A";
+      const r = normalizeStudentRoll(s.rollNumber) || 1;
+      const stdDob = toStandardDate(s.dob);
+      const finalId = `${c}-${sec}-${r}`;
+
+      if (s.class !== c || s.section !== sec || s.rollNumber !== r || s.studentId !== finalId || (s.dob && s.dob !== stdDob)) {
+        s.class = c;
+        s.section = sec;
+        s.rollNumber = r;
         s.studentId = finalId;
+        if (s.dob) s.dob = stdDob;
         modified = true;
       }
       return s;
@@ -1012,6 +1088,11 @@ export const dbService = {
   },
 
   async saveStudent(student: Student, isEdit?: boolean, oldStudentId?: string): Promise<Student> {
+    student.class = normalizeStudentClass(student.class);
+    student.section = normalizeStudentSection(student.section);
+    student.rollNumber = normalizeStudentRoll(student.rollNumber);
+    student.dob = toStandardDate(student.dob);
+
     // Generate/Validate unique Student ID
     if ((!student.name && student.status !== "VACANT") || !student.rollNumber || !student.class || !student.section) {
       throw new Error("Validation Error: Student Name, Roll Number, Class, and Section are absolutely required.");
@@ -1019,11 +1100,10 @@ export const dbService = {
     if (student.rollNumber <= 0) {
       throw new Error("Validation Error: Roll Number must be a positive integer.");
     }
-    student.dob = student.dob || "";
     student.admissionNumber = student.admissionNumber || "";
     student.contactNumber = student.contactNumber || "";
 
-    const genId = `${student.class.trim().toUpperCase()}-${student.section.trim().toUpperCase()}-${student.rollNumber}`;
+    const genId = `${student.class}-${student.section}-${student.rollNumber}`;
     student.studentId = genId;
 
     // Remove immutable Mongoose internal fields (_id, __v) before updating Mongo document
@@ -1184,13 +1264,17 @@ export const dbService = {
     }
 
     for (const stud of students) {
+      stud.class = normalizeStudentClass(stud.class);
+      stud.section = normalizeStudentSection(stud.section);
+      stud.rollNumber = normalizeStudentRoll(stud.rollNumber);
+      stud.dob = toStandardDate(stud.dob);
+
       if ((!stud.name && stud.status !== "VACANT") || !stud.rollNumber || !stud.class || !stud.section) {
         errorCount++;
         errors.push(`Row missing required fields for student: ${stud.name || 'Unknown'}`);
         continue;
       }
-      stud.dob = stud.dob || "";
-      const genId = `${stud.class.trim().toUpperCase()}-${stud.section.trim().toUpperCase()}-${stud.rollNumber}`;
+      const genId = `${stud.class}-${stud.section}-${stud.rollNumber}`;
       stud.studentId = genId;
 
       try {

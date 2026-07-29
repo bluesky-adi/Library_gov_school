@@ -7,6 +7,24 @@ import Fuse from 'fuse.js';
 import { Book } from '../types';
 import { getDisplayShelfNumber } from './shelfUtils';
 
+/**
+ * Normalize Devanagari / Hindi text to solve spelling & diacritic variations
+ * (e.g., Anusvara vs Half-Nasal consonants like "प्रेमचंद" vs "प्रेमचन्द", "हिंदी" vs "हिन्दी", Nuktas, etc.)
+ */
+export function normalizeHindi(str: string | undefined | null): string {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .trim()
+    .replace(/[\u093C]/g, "") // Remove Nukta (़)
+    .replace(/\u0928\u094D/g, "\u0902") // न + ् -> Anusvara (ं)
+    .replace(/\u092E\u094D/g, "\u0902") // म + ् -> Anusvara (ं)
+    .replace(/\u0919\u094D/g, "\u0902") // ङ + ् -> Anusvara (ं)
+    .replace(/\u091E\u094D/g, "\u0902") // ञ + ् -> Anusvara (ं)
+    .replace(/\u0923\u094D/g, "\u0902") // ण + ् -> Anusvara (ं)
+    .replace(/[\u0901\u0902]/g, "\u0902"); // Chandra/Anusvara -> Anusvara (ं)
+}
+
 export const HINGLISH_MAP: { [key: string]: string } = {
   "itihas": "इतिहास", "itihaas": "इतिहास", "history": "इतिहास", "historical": "इतिहास",
   "vigyan": "विज्ञान", "vijnan": "विज्ञान", "science": "विज्ञान", "scienc": "विज्ञान",
@@ -15,8 +33,8 @@ export const HINGLISH_MAP: { [key: string]: string } = {
   "rasayan": "रसायन", "chemistry": "रसायन", "rasayanik": "रसायन",
   "bhautiki": "भौतिकी", "physics": "भौतिकी", "bhautik": "भौतिकी",
   "samajik": "सामाजिक", "social": "सामाजिक", "civics": "नागरिक शास्त्र", "nagarik": "नागरिक",
-  "hindi": "हिन्दी", "hindee": "हिन्दी", "hind": "हिन्दी",
-  "dinkar": "दिनकर", "ramdhari": "रामधारी",
+  "hindi": "हिन्दी हिंदी", "hindee": "हिन्दी हिंदी", "hind": "हिन्दी हिंदी",
+  "dinkar": "दिनकर रामधारी ramdhari", "ramdhari": "रामधारी दिनकर dinkar",
   "rashmirathi": "रश्मिरथी",
   "godhuli": "गोधूलि",
   "bseb": "बिहार", "patna": "पटना", "bihar": "बिहार",
@@ -24,10 +42,24 @@ export const HINGLISH_MAP: { [key: string]: string } = {
   "upanyas": "उपन्यास", "katha": "कथा",
   "vyakaran": "व्याकरण", "grammar": "व्याकरण",
   "ncert": "एनसीईआरटी",
-  "premchand": "प्रेमचंद", "munshi": "मुंशी",
+  "premchand": "प्रेमचंद प्रेमचन्द मुंशी prem chand munshi",
+  "prem": "प्रेम प्रेमचंद प्रेमचन्द premchand prem chand",
+  "munshi": "मुंशी premchand premchandra प्रेमचंद प्रेमचन्द",
+  "renu": "रेणु फणीश्वरनाथ phanishwar",
+  "nirala": "निराला सूर्यकांत suryakant",
+  "bachchan": "बच्चन हरिवंशराय harivansh",
+  "pant": "पंत सुमित्रानंदन sumitranandan",
+  "verma": "वर्मा महादेवी mahadevi",
+  "tagore": "टैगोर रवींद्रनाथ rabindranath",
+  "tulsidas": "तुलसीदास tulsi", "tulsi": "तुलसीदास tulsidas",
+  "kabir": "कबीर kabirdas",
+  "surdas": "सूरदास sur",
+  "prasad": "प्रसाद जयशंकर jaishankar", "jaishankar": "जयशंकर प्रसाद",
+  "yashpal": "यशपाल",
+  "parsai": "परसाई हरिशंकर harishankar",
   "pathya": "पाठ्य", "shiksha": "शिक्षा",
   "sanskrut": "संस्कृत", "sanskrit": "संस्कृत", "sanskrith": "संस्कृत",
-  "english": "अंग्रेजी", "angreji": "अंग्रेजी", "angrezi": "अंग्रेजी",
+  "english": "अंग्रेजी अंग्रेज़ी angreji angrezi", "angreji": "अंग्रेजी अंग्रेज़ी english", "angrezi": "अंग्रेजी अंग्रेज़ी english",
   "urdu": "उर्दू",
   "raajneeti": "राजनीति", "rajniti": "राजनीति", "polscience": "राजनीति", "politics": "राजनीति",
   "arthashastra": "अर्थशास्त्र", "economics": "अर्थशास्त्र", "econ": "अर्थशास्त्र",
@@ -160,38 +192,56 @@ export function searchBooksSmart(
   if (!query || !query.trim()) return books;
   
   const rawQuery = query.toLowerCase().trim();
-  const normalizedQuery = rawQuery.replace(/[\s\-_]+/g, ''); // Compact spacing e.g. "rashmi rathi" -> "rashmirathi"
+  const normalizedQuery = rawQuery.replace(/[\s\-_]+/g, ''); // Compact spacing e.g. "prem chand" -> "premchand"
+  const rawQueryHindi = normalizeHindi(rawQuery);
+  const normalizedQueryHindi = rawQueryHindi.replace(/[\s\-_]+/g, '');
   
-  // 1. Expand query tokens with Hinglish & Synonym dictionaries
+  // 1. Expand query tokens with Hinglish & Synonym dictionaries and Hindi normalization
   const rawTokens = rawQuery.split(/[\s,.\-/]+/).filter(t => t.length > 0);
   const searchTermsSet = new Set<string>();
   
   rawTokens.forEach(token => {
     searchTermsSet.add(token);
+    searchTermsSet.add(normalizeHindi(token));
     
     // Check Hinglish
     if (HINGLISH_MAP[token]) {
-      searchTermsSet.add(HINGLISH_MAP[token].toLowerCase());
+      const expanded = HINGLISH_MAP[token].toLowerCase().split(' ');
+      expanded.forEach(x => {
+        searchTermsSet.add(x);
+        searchTermsSet.add(normalizeHindi(x));
+      });
     }
-    for (const [eng, hin] of Object.entries(HINGLISH_MAP)) {
-      if (token === hin || hin.toLowerCase() === token) {
+    for (const [eng, hinStr] of Object.entries(HINGLISH_MAP)) {
+      const hinList = hinStr.toLowerCase().split(' ');
+      if (token === eng || hinList.includes(token) || hinList.includes(normalizeHindi(token))) {
         searchTermsSet.add(eng);
+        hinList.forEach(h => {
+          searchTermsSet.add(h);
+          searchTermsSet.add(normalizeHindi(h));
+        });
       }
     }
     
     // Check Synonyms
     if (SYNONYM_MAP[token]) {
-      SYNONYM_MAP[token].forEach(syn => searchTermsSet.add(syn.toLowerCase()));
+      SYNONYM_MAP[token].forEach(syn => {
+        searchTermsSet.add(syn.toLowerCase());
+        searchTermsSet.add(normalizeHindi(syn));
+      });
     }
     for (const [key, synList] of Object.entries(SYNONYM_MAP)) {
-      if (synList.includes(token)) {
+      if (synList.includes(token) || synList.includes(normalizeHindi(token))) {
         searchTermsSet.add(key.toLowerCase());
-        synList.forEach(s => searchTermsSet.add(s.toLowerCase()));
+        synList.forEach(s => {
+          searchTermsSet.add(s.toLowerCase());
+          searchTermsSet.add(normalizeHindi(s));
+        });
       }
     }
   });
 
-  const expandedTerms = Array.from(searchTermsSet);
+  const expandedTerms = Array.from(searchTermsSet).filter(t => t.length > 0);
   const expandedQueryStr = expandedTerms.join(' ');
 
   // 2. Prepare enriched searchable records
@@ -206,8 +256,14 @@ export function searchBooksSmart(
 
     const name = (book.bookName || "").toLowerCase();
     const nameCompact = name.replace(/[\s\-_]+/g, '');
+    const nameHindi = normalizeHindi(name);
+    const nameHindiCompact = nameHindi.replace(/[\s\-_]+/g, '');
+
     const author = (book.author || "").toLowerCase();
     const authorCompact = author.replace(/[\s\-_]+/g, '');
+    const authorHindi = normalizeHindi(author);
+    const authorHindiCompact = authorHindi.replace(/[\s\-_]+/g, '');
+
     const category = (book.category || "").toLowerCase();
     const publisher = (book.publisher || "").toLowerCase();
     const description = (book.description || "").toLowerCase();
@@ -224,15 +280,19 @@ export function searchBooksSmart(
     const classNum = String(anyBook.classNumber || anyBook.class || "").toLowerCase();
 
     // Combined blob for fast substring checks
-    const fullSearchBlob = `${name} ${author} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${shelfNumber} ${displayShelf} ${isbn} ${language} ${subject} ${classNum} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
+    const fullSearchBlob = `${name} ${nameHindi} ${author} ${authorHindi} ${category} ${publisher} ${description} ${accessionNumber} ${callNumber} ${bookNumber} ${ddcNumber} ${remarks} ${shelfNumber} ${displayShelf} ${isbn} ${language} ${subject} ${classNum} ${ddcCatName.toLowerCase()} ${ddcKeywords} ${translit} ${catSerial}`.toLowerCase();
 
     return {
       book,
       bookId: book.bookId,
       name,
       nameCompact,
+      nameHindi,
+      nameHindiCompact,
       author,
       authorCompact,
+      authorHindi,
+      authorHindiCompact,
       category,
       publisher,
       description,
@@ -263,11 +323,13 @@ export function searchBooksSmart(
       { name: '_shelfSerial', weight: 4.0 },
       { name: 'displayShelf', weight: 3.8 },
       { name: 'shelfNumber', weight: 3.8 },
+      { name: 'authorHindi', weight: 3.8 },
+      { name: 'author', weight: 3.5 },
+      { name: 'nameHindi', weight: 3.5 },
       { name: 'name', weight: 3.5 },
       { name: 'ddcNumber', weight: 3.0 },
       { name: 'callNumber', weight: 3.0 },
       { name: 'isbn', weight: 3.0 },
-      { name: 'author', weight: 2.5 },
       { name: '_transliteration', weight: 2.5 },
       { name: '_ddcKeywords', weight: 2.2 },
       { name: 'category', weight: 2.0 },
@@ -288,7 +350,6 @@ export function searchBooksSmart(
   
   const fuseScoreMap = new Map<string, number>();
   fuseResults.forEach(res => {
-    // Fuse score ranges from 0 (perfect match) to 1 (poor match)
     const scoreVal = (1 - (res.score || 0)) * 100;
     fuseScoreMap.set(res.item.bookId, scoreVal);
   });
@@ -333,24 +394,41 @@ export function searchBooksSmart(
       }
     }
 
-    // B. Direct Name / Author match (with compact spacing tolerance)
-    if (item.name === rawQuery || item.nameCompact === normalizedQuery) {
+    // B. Direct Author / Name match
+    if (
+      item.authorCompact.includes(normalizedQuery) || 
+      item.authorHindiCompact.includes(normalizedQueryHindi)
+    ) {
       score += 500;
-    } else if (item.name.includes(rawQuery) || item.nameCompact.includes(normalizedQuery)) {
-      score += 200;
+    } else if (
+      item.author.includes(rawQuery) || 
+      item.authorHindi.includes(rawQueryHindi)
+    ) {
+      score += 350;
     }
 
-    if (item.author.includes(rawQuery) || item.authorCompact.includes(normalizedQuery)) {
-      score += 150;
+    if (
+      item.name === rawQuery || 
+      item.nameCompact === normalizedQuery ||
+      item.nameHindiCompact === normalizedQueryHindi
+    ) {
+      score += 500;
+    } else if (
+      item.name.includes(rawQuery) || 
+      item.nameCompact.includes(normalizedQuery) ||
+      item.nameHindi.includes(rawQueryHindi)
+    ) {
+      score += 200;
     }
 
     // C. Term & Synonym token inclusions
     for (const term of expandedTerms) {
       if (!term || term.length < 2) continue;
+      const termHindi = normalizeHindi(term);
 
-      if (item.name.includes(term)) score += 80;
+      if (item.author.includes(term) || item.authorHindi.includes(termHindi) || item.authorCompact.includes(term)) score += 150;
+      if (item.name.includes(term) || item.nameHindi.includes(termHindi) || item.nameCompact.includes(term)) score += 100;
       if (item.category.includes(term) || item.ddcCatName.includes(term) || item.subject.includes(term)) score += 70;
-      if (item.author.includes(term)) score += 60;
       if (item._ddcKeywords.includes(term)) score += 50;
       if (item._transliteration.includes(term)) score += 40;
       if (item.description.includes(term) || item.publisher.includes(term) || item.remarks.includes(term)) score += 20;
