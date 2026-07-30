@@ -932,7 +932,10 @@ export default function App() {
         body: JSON.stringify(req)
       });
       if (resp.ok) {
-        await refreshData(true);
+        const created = await resp.json().catch(() => null);
+        const newReq = created || req;
+        setRequests(prev => [newReq, ...prev.filter(r => r.id !== newReq.id)]);
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -957,7 +960,14 @@ export default function App() {
         body: JSON.stringify({ dueDate })
       });
       if (resp.ok) {
-        await refreshData(true);
+        const body = await resp.json().catch(() => ({}));
+        const approvedLog: BookIssueLog | null = body.log || null;
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Approved' } : r));
+        if (approvedLog) {
+          setIssueLogs(prev => [approvedLog, ...prev.filter(l => l.id !== approvedLog.id)]);
+          setBooks(prev => prev.map(b => b.bookId === approvedLog.bookId ? { ...b, availableCopies: Math.max(0, b.availableCopies - 1) } : b));
+        }
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -980,7 +990,8 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Rejected' } : r));
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1003,7 +1014,8 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Hold' } : r));
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1027,7 +1039,11 @@ export default function App() {
         body: JSON.stringify(material)
       });
       if (resp.ok) {
-        await refreshData(true);
+        const saved = await resp.json().catch(() => null);
+        if (saved) {
+          setStudyMaterials(prev => [saved, ...prev.filter(m => m.id !== saved.id)]);
+        }
+        refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -1051,17 +1067,17 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Failed to delete material: ${err.error}`);
-        await refreshData(true);
+        refreshData(true);
         return false;
       }
     } catch (err) {
       console.error(err);
-      await refreshData(true);
+      refreshData(true);
       return false;
     }
   };
@@ -1077,7 +1093,8 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Cancelled' } : r));
+        refreshData(true);
         return true;
       } else {
         const err = await resp.json();
@@ -1102,17 +1119,17 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        refreshData(true);
         return true;
       } else {
         const err = await resp.json();
         alert(`Deletion failed: ${err.error}`);
-        await refreshData(true);
+        refreshData(true);
         return false;
       }
     } catch (err) {
       console.error("Delete request failed:", err);
-      await refreshData(true);
+      refreshData(true);
       return false;
     }
   };
@@ -1128,7 +1145,18 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        const body = await resp.json().catch(() => ({}));
+        const returnedLog: BookIssueLog | null = body.log || null;
+        setIssueLogs(prev => prev.map(l => l.id === logId ? {
+          ...l,
+          status: 'Returned',
+          returnDate: returnedLog?.returnDate || new Date().toISOString().split('T')[0],
+          returnTime: returnedLog?.returnTime || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+        } : l));
+        if (returnedLog?.bookId) {
+          setBooks(prev => prev.map(b => b.bookId === returnedLog.bookId ? { ...b, availableCopies: Math.min(b.totalCopies, b.availableCopies + 1) } : b));
+        }
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1160,7 +1188,14 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       if (resp.ok) {
-        await refreshData(true);
+        const body = await resp.json().catch(() => ({}));
+        const logsArr: BookIssueLog[] = body.logs || [];
+        if (logsArr.length > 0) {
+          setIssueLogs(prev => [...logsArr, ...prev]);
+          const issuedBookIds = logsArr.map(l => l.bookId);
+          setBooks(prev => prev.map(b => issuedBookIds.includes(b.bookId) ? { ...b, availableCopies: Math.max(0, b.availableCopies - 1) } : b));
+        }
+        refreshData(true);
         return { success: true };
       } else {
         const err = await resp.json();
@@ -1197,6 +1232,7 @@ export default function App() {
   const handleMarkNotificationRead = async (id: string): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, status: 'Read' } : n));
       const resp = await fetch(`/api/notifications/${id}/status`, {
         method: 'PUT',
         headers: {
@@ -1206,7 +1242,7 @@ export default function App() {
         body: JSON.stringify({ status: 'Read' })
       });
       if (resp.ok) {
-        await refreshData(true);
+        refreshData(true);
         return true;
       }
       return false;
@@ -1219,6 +1255,7 @@ export default function App() {
   const handleArchiveNotification = async (id: string): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setNotifications(prev => prev.filter(n => n.id !== id));
       const resp = await fetch(`/api/notifications/${id}/status`, {
         method: 'PUT',
         headers: {
@@ -1228,7 +1265,7 @@ export default function App() {
         body: JSON.stringify({ status: 'Archived' })
       });
       if (resp.ok) {
-        await refreshData(true);
+        refreshData(true);
         return true;
       }
       return false;
@@ -1241,6 +1278,7 @@ export default function App() {
   const handleMarkAllNotificationsRead = async (): Promise<boolean> => {
     const token = localStorage.getItem("ramdiri_library_token");
     try {
+      setNotifications(prev => prev.map(n => ({ ...n, status: 'Read' })));
       const resp = await fetch('/api/notifications/mark-all-read', {
         method: 'POST',
         headers: {
@@ -1248,7 +1286,7 @@ export default function App() {
         }
       });
       if (resp.ok) {
-        await refreshData(true);
+        refreshData(true);
         return true;
       }
       return false;

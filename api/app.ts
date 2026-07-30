@@ -1035,12 +1035,8 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
     const studSection = student?.section || borrowReq.section || "A";
     const studentIdVal = student?.studentId || borrowReq.studentId || `${studClass}-${studSection}-${borrowReq.rollNumber}`;
 
-    // Set request as Approved
-    await dbService.updateBorrowRequestStatus(requestId, 'Approved');
-
     // Reduce copies count
     book.availableCopies -= 1;
-    await dbService.saveBook(book);
 
     // Create Issue log
     const issueDateStr = new Date().toISOString().split('T')[0];
@@ -1067,12 +1063,14 @@ app.post('/api/requests/:id/approve', authenticateToken, requireLibrarian, async
       status: 'Issued'
     };
 
-    const savedLog = await dbService.saveIssueLog(issueLog);
-    await addAuditLog(req, 'Book Issued', `Issued book '${borrowReq.bookName}' (ID: ${borrowReq.bookId}) to student ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`);
-    
-    // Trigger real-time synchronized notifications
-    await createSystemNotification('Student', studentIdVal, 'Borrow Request Approved', `Your borrow request for "${borrowReq.bookName}" has been approved! Due date: ${dueDateStr}`, 'success');
-    
+    const [savedLog] = await Promise.all([
+      dbService.saveIssueLog(issueLog),
+      dbService.updateBorrowRequestStatus(requestId, 'Approved'),
+      dbService.saveBook(book),
+      addAuditLog(req, 'Book Issued', `Issued book '${borrowReq.bookName}' (ID: ${borrowReq.bookId}) to student ${borrowReq.studentName} (Roll: ${borrowReq.rollNumber})`),
+      createSystemNotification('Student', studentIdVal, 'Borrow Request Approved', `Your borrow request for "${borrowReq.bookName}" has been approved! Due date: ${dueDateStr}`, 'success')
+    ]);
+
     res.json({ success: true, log: savedLog });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1283,20 +1281,20 @@ app.post('/api/issue-logs/:id/return', authenticateToken, requireLibrarian, asyn
     log.status = 'Returned';
     log.returnDate = new Date().toISOString().split('T')[0];
     log.returnTime = getFormattedTime();
-    await dbService.saveIssueLog(log);
 
     // Replenish copies count
     const books = await dbService.getBooks();
     const book = books.find(b => b.bookId === log.bookId);
     if (book) {
       book.availableCopies = Math.min(book.totalCopies, book.availableCopies + 1);
-      await dbService.saveBook(book);
     }
 
-    await addAuditLog(req, 'Book Returned', `Returned book '${log.bookName}' (ID: ${log.bookId}) from student ${log.studentName} (Roll: ${log.rollNumber})`);
-    
-    // Trigger real-time synchronized notifications
-    await createSystemNotification('Student', log.studentId, 'Book Returned Successfully', `You have successfully returned "${log.bookName}" on ${log.returnDate}.`, 'success');
+    await Promise.all([
+      dbService.saveIssueLog(log),
+      book ? dbService.saveBook(book) : Promise.resolve(),
+      addAuditLog(req, 'Book Returned', `Returned book '${log.bookName}' (ID: ${log.bookId}) from student ${log.studentName} (Roll: ${log.rollNumber})`),
+      createSystemNotification('Student', log.studentId, 'Book Returned Successfully', `You have successfully returned "${log.bookName}" on ${log.returnDate}.`, 'success')
+    ]);
 
     res.json({ success: true, log });
   } catch (error: any) {
@@ -1368,20 +1366,12 @@ app.post('/api/study-materials', authenticateToken, requireLibrarian, async (req
     const saved = await dbService.saveStudyMaterial(material);
     await addAuditLog(req, 'Book Added', `Uploaded study material '${material.title}' (Visible to: ${material.visibleTo})`);
     
-    // Trigger real-time synchronized notifications
-    await createSystemNotification('Librarian', '', 'Digital Resource Uploaded', `Study Material "${saved.title}" successfully uploaded and categorized under Class ${saved.visibleTo}.`, 'upload');
-    
-    try {
-      const studentsList = await dbService.getStudents();
-      for (const std of studentsList) {
-        if (saved.visibleTo === 'All' || String(std.class) === String(saved.visibleTo)) {
-          const stdSId = std.studentId || `${std.class}-${std.section}-${std.rollNumber}`;
-          await createSystemNotification('Student', stdSId, 'New Digital Resource Available', `A new study material "${saved.title}" has been uploaded for Class ${saved.visibleTo}.`, 'upload');
-        }
-      }
-    } catch (err) {
-      console.error("Failed to notify students of study material upload:", err);
-    }
+    // Trigger real-time broadcast notification
+    const targetStudentId = saved.visibleTo === 'All' ? 'ALL' : `CLASS-${saved.visibleTo}`;
+    await Promise.all([
+      createSystemNotification('Librarian', '', 'Digital Resource Uploaded', `Study Material "${saved.title}" successfully uploaded and categorized under Class ${saved.visibleTo}.`, 'upload'),
+      createSystemNotification('Student', targetStudentId, 'New Digital Resource Available', `A new study material "${saved.title}" has been uploaded for Class ${saved.visibleTo}.`, 'upload')
+    ]);
 
     res.status(201).json(saved);
   } catch (error: any) {
@@ -1749,27 +1739,11 @@ app.post('/api/notifications/mark-all-read', authenticateToken, async (req, res)
       return res.status(401).json({ error: "Unauthorized access context." });
     }
 
-    const allNotifications = await dbService.getNotifications();
-    let updatedCount = 0;
+    const userSId = reqUser.role === 'Student'
+      ? (reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`)
+      : undefined;
 
-    if (reqUser.role === 'Student') {
-      const userSId = reqUser.studentId || `${reqUser.class.toString().trim().toUpperCase()}-${reqUser.section.toString().trim().toUpperCase()}-${reqUser.rollNumber}`;
-      for (const n of allNotifications) {
-        if (n.recipientRole === 'Student' && n.studentId && n.studentId.toUpperCase() === userSId.toUpperCase() && n.status === 'Unread') {
-          n.status = 'Read';
-          await dbService.saveNotification(n);
-          updatedCount++;
-        }
-      }
-    } else if (reqUser.role === 'Librarian') {
-      for (const n of allNotifications) {
-        if (n.recipientRole === 'Librarian' && n.status === 'Unread') {
-          n.status = 'Read';
-          await dbService.saveNotification(n);
-          updatedCount++;
-        }
-      }
-    }
+    const updatedCount = await dbService.markAllNotificationsRead(reqUser.role, userSId);
 
     res.json({ success: true, updatedCount });
   } catch (error: any) {

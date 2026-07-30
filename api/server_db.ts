@@ -1732,6 +1732,40 @@ export const dbService = {
     }
   },
 
+  async markAllNotificationsRead(recipientRole: string, studentId?: string): Promise<number> {
+    if (isConnectedToMongo) {
+      const query: any = { recipientRole, status: 'Unread' };
+      if (recipientRole === 'Student' && studentId) {
+        query.$or = [{ studentId: new RegExp(`^${studentId}$`, 'i') }, { studentId: 'ALL' }, { studentId: 'BROADCAST' }];
+      }
+      const res = await MongoNotification.updateMany(query, { $set: { status: 'Read' } });
+      notificationsCache = null;
+      return res.modifiedCount || 0;
+    } else {
+      const list = readLocalFile<any>(NOTIFICATIONS_FILE);
+      let count = 0;
+      list.forEach((n: any) => {
+        if (n.recipientRole === recipientRole && n.status === 'Unread') {
+          if (recipientRole === 'Student' && studentId) {
+            const sid = (n.studentId || '').toUpperCase();
+            if (sid === studentId.toUpperCase() || sid === 'ALL' || sid === 'BROADCAST') {
+              n.status = 'Read';
+              count++;
+            }
+          } else {
+            n.status = 'Read';
+            count++;
+          }
+        }
+      });
+      if (count > 0) {
+        writeLocalFile(NOTIFICATIONS_FILE, list);
+        notificationsCache = null;
+      }
+      return count;
+    }
+  },
+
   async deleteNotification(id: string): Promise<boolean> {
     if (isConnectedToMongo) {
       const res = await MongoNotification.deleteOne({ id });
