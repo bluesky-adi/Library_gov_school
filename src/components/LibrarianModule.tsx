@@ -63,6 +63,20 @@ import { jsPDF as jsPDFNamed } from 'jspdf';
 import jsPDFDefault from 'jspdf';
 const jsPDF = jsPDFNamed || jsPDFDefault || (jsPDFDefault as any).jsPDF;
 
+export const ODDY_ST24_PAPER_TEMPLATE = {
+  name: "Oddy ST-24 A4",
+  cols: 3,
+  rows: 8,
+  stickerWidth: 64,  // mm
+  stickerHeight: 34, // mm
+  leftMargin: 5,     // mm
+  topMargin: 12,    // mm
+  colGap: 4,        // mm
+  rowGap: 0,        // mm
+  offsetX: 0,       // mm configurable calibration offset X
+  offsetY: 0,       // mm configurable calibration offset Y
+};
+
 interface StickerElementProps {
   book: Book;
   accessionNo: string;
@@ -147,40 +161,40 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
 
   return (
     <div 
-      className="sticker-item p-2 flex flex-row justify-between items-center overflow-hidden font-mono text-left" 
+      className="sticker-item p-2.5 flex flex-row justify-between items-center overflow-hidden font-mono text-left" 
       style={{ 
         width: '64mm', 
-        height: '24mm', 
+        height: '34mm', 
         backgroundColor: ddcCol.hex, 
         color: ddcCol.textColorHex 
       }}
     >
-      <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden pr-1.5">
-        <div className="text-[6.5px] leading-none font-extrabold uppercase tracking-widest opacity-90">
+      <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden pr-2">
+        <div className="text-[7.5px] leading-none font-extrabold uppercase tracking-widest opacity-90">
           ACCESSION
         </div>
-        <div className="text-[8.5px] leading-tight font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
+        <div className="text-[10px] leading-tight font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
           {accessionNo}
         </div>
         
-        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-extrabold truncate">
-          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">CALL:</span>
+        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-extrabold truncate">
+          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">CALL:</span>
           <span className="truncate">{callNo}</span>
         </div>
 
-        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-extrabold truncate">
-          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">BOOK:</span>
+        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-extrabold truncate">
+          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">BOOK:</span>
           <span className="truncate">{displayBookNo}</span>
         </div>
 
-        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-black truncate">
-          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">SHELF:</span>
+        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-black truncate">
+          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">SHELF:</span>
           <span className="truncate">{displayShelf}</span>
         </div>
       </div>
 
-      {/* QR Code Box - High Contrast 16mm x 16mm */}
-      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '16mm', height: '16mm' }}>
+      {/* QR Code Box - High Contrast 22mm x 22mm */}
+      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '22mm', height: '22mm' }}>
         {qrUrl ? (
           <img 
             src={qrUrl} 
@@ -625,17 +639,20 @@ export default function LibrarianModule({
         format: 'a4'
       });
 
-      const stickerWidth = 64;
-      const stickerHeight = 24;
-      const cols = 3;
-      const rows = 8;
+      const {
+        cols,
+        rows,
+        stickerWidth,
+        stickerHeight,
+        leftMargin,
+        topMargin,
+        colGap,
+        rowGap,
+        offsetX,
+        offsetY
+      } = ODDY_ST24_PAPER_TEMPLATE;
+
       const stickersPerPage = cols * rows;
-
-      const leftMargin = 9;
-      const topMargin = 20.5;
-
-      const colGap = 0;
-      const rowGap = 0;
 
       const CHUNK_SIZE = 64; // Small batch size to guarantee browser stays fully responsive
 
@@ -688,8 +705,8 @@ export default function LibrarianModule({
           const col = stickerIndexOnPage % cols;
           const row = Math.floor(stickerIndexOnPage / cols);
 
-          const x = leftMargin + col * (stickerWidth + colGap);
-          const y = topMargin + row * (stickerHeight + rowGap);
+          const x = leftMargin + offsetX + col * (stickerWidth + colGap);
+          const y = topMargin + offsetY + row * (stickerHeight + rowGap);
 
           const book = chunk[j];
           if (!book) continue;
@@ -723,41 +740,41 @@ export default function LibrarianModule({
           doc.setTextColor(textR, textG, textB);
           
           // Right side QR container box
-          const qrBoxWidth = 17;
-          const qrBoxHeight = 17;
+          const qrBoxWidth = 22;
+          const qrBoxHeight = 22;
           const qrBoxX = x + stickerWidth - qrBoxWidth - 3.5;
           const qrBoxY = y + (stickerHeight - qrBoxHeight) / 2;
 
           // Drawing Accession Number
           doc.setFont('courier', 'bold');
-          doc.setFontSize(4.5);
-          doc.text("ACCESSION", x + 3.5, y + 4.5);
+          doc.setFontSize(5);
+          doc.text("ACCESSION", x + 3.5, y + 6.0);
           
-          doc.setFontSize(8);
-          doc.text(accessionNo, x + 3.5, y + 8.2);
+          doc.setFontSize(9);
+          doc.text(accessionNo, x + 3.5, y + 10.5);
 
           // Draw a divider line under Accession number using the same text color
           doc.setDrawColor(textR, textG, textB);
           doc.setLineWidth(0.12);
-          doc.line(x + 3.5, y + 9.5, qrBoxX - 2, y + 9.5);
+          doc.line(x + 3.5, y + 12.0, qrBoxX - 2.5, y + 12.0);
 
           // Drawing Call Number
-          doc.setFontSize(4.5);
-          doc.text("CALL NO:", x + 3.5, y + 13.0);
-          doc.setFontSize(7.5);
-          doc.text(callNo, x + 16.5, y + 13.0);
+          doc.setFontSize(5);
+          doc.text("CALL NO:", x + 3.5, y + 16.5);
+          doc.setFontSize(8.5);
+          doc.text(callNo, x + 16.5, y + 16.5);
 
           // Drawing Book Number
-          doc.setFontSize(4.5);
-          doc.text("BOOK NO:", x + 3.5, y + 16.8);
-          doc.setFontSize(7.5);
-          doc.text(bookNo, x + 16.5, y + 16.8);
+          doc.setFontSize(5);
+          doc.text("BOOK NO:", x + 3.5, y + 21.5);
+          doc.setFontSize(8.5);
+          doc.text(bookNo, x + 16.5, y + 21.5);
 
           // Drawing Shelf
-          doc.setFontSize(4.5);
-          doc.text("SHELF:", x + 3.5, y + 20.6);
-          doc.setFontSize(7.5);
-          doc.text(String(shelfLocation || "Shelf #1"), x + 16.5, y + 20.6);
+          doc.setFontSize(5);
+          doc.text("SHELF:", x + 3.5, y + 26.5);
+          doc.setFontSize(8.5);
+          doc.text(String(shelfLocation || "Shelf #1"), x + 16.5, y + 26.5);
 
           // Add QR Code if it exists
           if (accessionNo) {
@@ -767,7 +784,7 @@ export default function LibrarianModule({
                 doc.setFillColor(255, 255, 255);
                 doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
 
-                const qrSize = 15;
+                const qrSize = 20;
                 const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
                 const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
                 doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize, undefined, 'FAST');
@@ -5903,22 +5920,22 @@ export default function LibrarianModule({
 
             {/* Print Parameters Details Banner */}
             <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 dark:border-indigo-950 text-slate-700 dark:text-slate-350 space-y-1.5 select-none leading-relaxed text-xs">
-              <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Avery Standard Alignment):</span>
+              <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Oddy ST-24 Sheet Template Alignment):</span>
               <p className="text-[11px]">
-                Each generated print layout centers a grid of <strong>3 columns × 8 rows = 24 stickers</strong> per page with fine guide boundaries.
+                Each generated print layout centers a grid of <strong>3 columns × 8 rows = 24 stickers</strong> per page with precise physical boundaries.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sticker Size</span>
-                  64 mm × 24 mm
+                  64 mm × 34 mm
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">A4 Sheet Columns</span>
-                  3 Columns (64mm × 3 = 192mm)
+                  3 Cols (64mm × 3 + 4mm gap)
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
-                  <span className="text-slate-400 block text-[9px]">Sheet Side Margins</span>
-                  9 mm (Left & Right margins)
+                  <span className="text-slate-400 block text-[9px]">Sheet Margins</span>
+                  5 mm Left/Right, 12 mm Top/Bottom
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Target QR link</span>
