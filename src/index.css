@@ -160,11 +160,11 @@
   .sticker-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 64mm) !important;
-    grid-template-rows: repeat(7, 24mm) !important;
+    grid-template-rows: repeat(8, 24mm) !important;
     row-gap: 0px !important;
     column-gap: 0px !important;
     width: 192mm !important;
-    height: 168mm !important;
+    height: 192mm !important;
     box-sizing: border-box !important;
     margin: 0 !important;
     padding: 0 !important;

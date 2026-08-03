@@ -628,7 +628,7 @@ export default function LibrarianModule({
       const stickerWidth = 64;
       const stickerHeight = 24;
       const cols = 3;
-      const rows = 7;
+      const rows = 8;
       const stickersPerPage = cols * rows;
 
       const leftMargin = 9;
@@ -5905,7 +5905,7 @@ export default function LibrarianModule({
             <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 dark:border-indigo-950 text-slate-700 dark:text-slate-350 space-y-1.5 select-none leading-relaxed text-xs">
               <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Avery Standard Alignment):</span>
               <p className="text-[11px]">
-                Each generated print layout centers a grid of <strong>3 columns × 7 rows = 21 stickers</strong> per page with fine guide boundaries.
+                Each generated print layout centers a grid of <strong>3 columns × 8 rows = 24 stickers</strong> per page with fine guide boundaries.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
@@ -5972,7 +5972,7 @@ export default function LibrarianModule({
                 Sticker Print Layout Loaded
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed dark:text-slate-400">
-                Generated <strong className="text-indigo-600 dark:text-indigo-400">{booksToPrint.length} sticker labels</strong> aligned perfectly for A4 sticker sheets (3 columns x 7 rows).
+                Generated <strong className="text-indigo-600 dark:text-indigo-400">{booksToPrint.length} sticker labels</strong> aligned perfectly for A4 sticker sheets (3 columns x 8 rows).
               </p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-left border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-655 dark:text-slate-350 leading-relaxed font-mono">
@@ -6023,8 +6023,8 @@ export default function LibrarianModule({
         <div className="print-only-layout hidden">
           {(() => {
             const pages: Book[][] = [];
-            for (let i = 0; i < booksToPrint.length; i += 21) {
-              pages.push(booksToPrint.slice(i, i + 21));
+            for (let i = 0; i < booksToPrint.length; i += 24) {
+              pages.push(booksToPrint.slice(i, i + 24));
             }
             return pages.map((pageBooks, pageIdx) => (
               <div key={pageIdx} className="sticker-page">
