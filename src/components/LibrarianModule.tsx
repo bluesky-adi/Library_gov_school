@@ -101,41 +101,35 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
   if (isPreview) {
     return (
       <div 
-        className="sticker-preview-item rounded-xl shadow-md p-3 flex flex-col justify-between items-center select-none font-mono transition-all hover:scale-105"
+        className="sticker-preview-item rounded-xl shadow-md p-3 flex flex-row justify-between items-center select-none font-mono transition-all hover:scale-[1.02]"
         style={{ backgroundColor: ddcCol.hex, color: ddcCol.textColorHex }}
       >
-        <div className="w-full flex flex-col items-center text-center space-y-1 overflow-hidden">
-          <div className="text-[10px] leading-tight font-black uppercase tracking-wider opacity-90">
+        <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden text-left pr-2">
+          <div className="text-[9px] leading-tight font-black uppercase tracking-wider opacity-90">
             Accession No
           </div>
-          <div className="text-sm font-black tracking-tight truncate max-w-full pb-1 border-b border-current w-full">
+          <div className="text-xs font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
             {accessionNo}
           </div>
           
-          <div className="pt-2 text-[9px] font-bold uppercase tracking-wider opacity-75">
-            Call Number
-          </div>
-          <div className="text-[11px] font-black truncate max-w-full">
-            {callNo}
+          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
+            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Call:</span>
+            <span className="truncate">{callNo}</span>
           </div>
 
-          <div className="pt-1.5 text-[9px] font-bold uppercase tracking-wider opacity-75">
-            Book Number
-          </div>
-          <div className="text-[11px] font-black truncate max-w-full">
-            {displayBookNo}
+          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
+            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Book:</span>
+            <span className="truncate">{displayBookNo}</span>
           </div>
 
-          <div className="pt-1.5 text-[9px] font-bold uppercase tracking-wider opacity-75">
-            Shelf Number
-          </div>
-          <div className="text-[11px] font-black truncate max-w-full">
-            {displayShelf}
+          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
+            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Shelf:</span>
+            <span className="truncate">{displayShelf}</span>
           </div>
         </div>
 
         {/* QR Code container - high contrast */}
-        <div className="w-16 h-16 shrink-0 bg-white p-1 rounded-lg flex items-center justify-center shadow-inner mt-3">
+        <div className="w-16 h-16 shrink-0 bg-white p-1 rounded-lg flex items-center justify-center shadow-inner">
           {qrUrl ? (
             <img 
               src={qrUrl} 
@@ -153,46 +147,40 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
 
   return (
     <div 
-      className="sticker-item p-2 flex flex-col justify-between items-center overflow-hidden font-mono text-center" 
+      className="sticker-item p-2 flex flex-row justify-between items-center overflow-hidden font-mono text-left" 
       style={{ 
-        width: '24mm', 
-        height: '64mm', 
+        width: '64mm', 
+        height: '24mm', 
         backgroundColor: ddcCol.hex, 
         color: ddcCol.textColorHex 
       }}
     >
-      <div className="w-full flex flex-col items-center space-y-0.5 overflow-hidden">
-        <div className="text-[7px] leading-none font-extrabold uppercase tracking-widest opacity-90">
+      <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden pr-1.5">
+        <div className="text-[6.5px] leading-none font-extrabold uppercase tracking-widest opacity-90">
           ACCESSION
         </div>
-        <div className="text-[9px] leading-tight font-black tracking-tight truncate max-w-full border-b border-current w-full pb-0.5">
+        <div className="text-[8.5px] leading-tight font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
           {accessionNo}
         </div>
         
-        <div className="pt-1 text-[6.5px] leading-none font-bold uppercase tracking-wider opacity-75">
-          CALL NO
-        </div>
-        <div className="text-[8.5px] leading-tight font-extrabold truncate max-w-full">
-          {callNo}
+        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-extrabold truncate">
+          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">CALL:</span>
+          <span className="truncate">{callNo}</span>
         </div>
 
-        <div className="pt-1 text-[6.5px] leading-none font-bold uppercase tracking-wider opacity-75">
-          BOOK NO
-        </div>
-        <div className="text-[8.5px] leading-tight font-extrabold truncate max-w-full">
-          {displayBookNo}
+        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-extrabold truncate">
+          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">BOOK:</span>
+          <span className="truncate">{displayBookNo}</span>
         </div>
 
-        <div className="pt-1 text-[6.5px] leading-none font-bold uppercase tracking-wider opacity-75">
-          SHELF
-        </div>
-        <div className="text-[8.5px] leading-tight font-black truncate max-w-full">
-          {displayShelf}
+        <div className="flex items-center gap-1 text-[7.5px] leading-tight font-black truncate">
+          <span className="text-[6px] font-bold uppercase opacity-75 shrink-0">SHELF:</span>
+          <span className="truncate">{displayShelf}</span>
         </div>
       </div>
 
-      {/* QR Code Box - High Contrast 13mm x 13mm */}
-      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '13mm', height: '13mm' }}>
+      {/* QR Code Box - High Contrast 16mm x 16mm */}
+      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '16mm', height: '16mm' }}>
         {qrUrl ? (
           <img 
             src={qrUrl} 
@@ -637,10 +625,10 @@ export default function LibrarianModule({
         format: 'a4'
       });
 
-      const stickerWidth = 24;
-      const stickerHeight = 64;
-      const cols = 8;
-      const rows = 4;
+      const stickerWidth = 64;
+      const stickerHeight = 24;
+      const cols = 3;
+      const rows = 7;
       const stickersPerPage = cols * rows;
 
       const leftMargin = 9;
@@ -734,56 +722,52 @@ export default function LibrarianModule({
           const textB = parseInt(ddcCol.textColorHex.substring(5, 7), 16) || 0;
           doc.setTextColor(textR, textG, textB);
           
-          const centerX = x + (stickerWidth / 2);
+          // Right side QR container box
+          const qrBoxWidth = 17;
+          const qrBoxHeight = 17;
+          const qrBoxX = x + stickerWidth - qrBoxWidth - 3.5;
+          const qrBoxY = y + (stickerHeight - qrBoxHeight) / 2;
 
           // Drawing Accession Number
           doc.setFont('courier', 'bold');
           doc.setFontSize(4.5);
-          doc.text("ACCESSION", centerX, y + 4.5, { align: 'center' });
+          doc.text("ACCESSION", x + 3.5, y + 4.5);
           
-          doc.setFontSize(7.5);
-          doc.text(accessionNo, centerX, y + 7.5, { align: 'center' });
+          doc.setFontSize(8);
+          doc.text(accessionNo, x + 3.5, y + 8.2);
 
           // Draw a divider line under Accession number using the same text color
           doc.setDrawColor(textR, textG, textB);
           doc.setLineWidth(0.12);
-          doc.line(x + 3, y + 8.8, x + stickerWidth - 3, y + 8.8);
+          doc.line(x + 3.5, y + 9.5, qrBoxX - 2, y + 9.5);
 
           // Drawing Call Number
-          doc.setFont('courier', 'bold');
           doc.setFontSize(4.5);
-          doc.text("CALL NO", centerX, y + 12.0, { align: 'center' });
+          doc.text("CALL NO:", x + 3.5, y + 13.0);
           doc.setFontSize(7.5);
-          doc.text(callNo, centerX, y + 15.0, { align: 'center' });
+          doc.text(callNo, x + 16.5, y + 13.0);
 
           // Drawing Book Number
           doc.setFontSize(4.5);
-          doc.text("BOOK NO", centerX, y + 19.5, { align: 'center' });
+          doc.text("BOOK NO:", x + 3.5, y + 16.8);
           doc.setFontSize(7.5);
-          doc.text(bookNo, centerX, y + 22.5, { align: 'center' });
+          doc.text(bookNo, x + 16.5, y + 16.8);
 
           // Drawing Shelf
-          doc.setTextColor(textR, textG, textB);
           doc.setFontSize(4.5);
-          doc.text("SHELF", centerX, y + 27.0, { align: 'center' });
+          doc.text("SHELF:", x + 3.5, y + 20.6);
           doc.setFontSize(7.5);
-          doc.text(String(shelfLocation || "Shelf #1"), centerX, y + 30.0, { align: 'center' });
+          doc.text(String(shelfLocation || "Shelf #1"), x + 16.5, y + 20.6);
 
           // Add QR Code if it exists
           if (accessionNo) {
             const qrDataUrl = qrMap.get(book.bookId);
             if (qrDataUrl) {
               try {
-                // Position QR centered at the bottom of the sticker on a high-contrast container
-                const qrBoxWidth = 15;
-                const qrBoxHeight = 15;
-                const qrBoxX = x + (stickerWidth - qrBoxWidth) / 2;
-                const qrBoxY = y + stickerHeight - qrBoxHeight - 3;
-
                 doc.setFillColor(255, 255, 255);
                 doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
 
-                const qrSize = 13.5;
+                const qrSize = 15;
                 const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
                 const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
                 doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize, undefined, 'FAST');
@@ -5921,16 +5905,16 @@ export default function LibrarianModule({
             <div className="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 dark:border-indigo-950 text-slate-700 dark:text-slate-350 space-y-1.5 select-none leading-relaxed text-xs">
               <span className="font-extrabold text-indigo-750 dark:text-indigo-400 block text-[10px] uppercase tracking-wider">A4 PHYSICAL DIMENSIONS SPECIFICATIONS (Avery Standard Alignment):</span>
               <p className="text-[11px]">
-                Each generated print layout centers a grid of <strong>8 columns × 4 rows = 32 stickers</strong> per page with fine guide boundaries.
+                Each generated print layout centers a grid of <strong>3 columns × 7 rows = 21 stickers</strong> per page with fine guide boundaries.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sticker Size</span>
-                  24 mm × 64 mm
+                  64 mm × 24 mm
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">A4 Sheet Columns</span>
-                  8 Columns (24mm × 8 = 192mm)
+                  3 Columns (64mm × 3 = 192mm)
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sheet Side Margins</span>
@@ -5988,7 +5972,7 @@ export default function LibrarianModule({
                 Sticker Print Layout Loaded
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed dark:text-slate-400">
-                Generated <strong className="text-indigo-600 dark:text-indigo-400">{booksToPrint.length} sticker labels</strong> aligned perfectly for A4 sticker sheets (8 columns x 4 rows).
+                Generated <strong className="text-indigo-600 dark:text-indigo-400">{booksToPrint.length} sticker labels</strong> aligned perfectly for A4 sticker sheets (3 columns x 7 rows).
               </p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-left border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-655 dark:text-slate-350 leading-relaxed font-mono">
@@ -6039,8 +6023,8 @@ export default function LibrarianModule({
         <div className="print-only-layout hidden">
           {(() => {
             const pages: Book[][] = [];
-            for (let i = 0; i < booksToPrint.length; i += 32) {
-              pages.push(booksToPrint.slice(i, i + 32));
+            for (let i = 0; i < booksToPrint.length; i += 21) {
+              pages.push(booksToPrint.slice(i, i + 21));
             }
             return pages.map((pageBooks, pageIdx) => (
               <div key={pageIdx} className="sticker-page">
