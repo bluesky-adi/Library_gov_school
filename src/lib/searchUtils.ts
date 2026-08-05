@@ -346,13 +346,30 @@ export function searchBooksSmart(
   };
 
   const fuse = new Fuse(enrichedBooks, fuseOptions);
-  const fuseResults = fuse.search(expandedQueryStr);
   
+  // Search Fuse using rawQuery (and individual rawTokens for typos)
   const fuseScoreMap = new Map<string, number>();
-  fuseResults.forEach(res => {
+  
+  const rawFuseResults = fuse.search(rawQuery);
+  rawFuseResults.forEach(res => {
     const scoreVal = (1 - (res.score || 0)) * 100;
     fuseScoreMap.set(res.item.bookId, scoreVal);
   });
+
+  if (rawTokens.length > 1) {
+    rawTokens.forEach(tok => {
+      if (tok.length >= 2) {
+        const tokResults = fuse.search(tok);
+        tokResults.forEach(res => {
+          const scoreVal = (1 - (res.score || 0)) * 60;
+          const currentScore = fuseScoreMap.get(res.item.bookId) || 0;
+          if (scoreVal > currentScore) {
+            fuseScoreMap.set(res.item.bookId, scoreVal);
+          }
+        });
+      }
+    });
+  }
 
   // Check if query is looking for a shelf e.g. "shelf 8", "shelf #8", "s-08", "s8", "shelf8"
   const shelfQueryMatch = rawQuery.match(/^(?:shelf\s*#?|s\-?)\s*(\d+)$/i);
@@ -422,21 +439,54 @@ export function searchBooksSmart(
     }
 
     // C. Term & Synonym token inclusions
+    let matchedTokenCount = 0;
     for (const term of expandedTerms) {
-      if (!term || term.length < 2) continue;
+      if (!term || term.length < 1) continue;
       const termHindi = normalizeHindi(term);
+      let termMatched = false;
 
-      if (item.author.includes(term) || item.authorHindi.includes(termHindi) || item.authorCompact.includes(term)) score += 150;
-      if (item.name.includes(term) || item.nameHindi.includes(termHindi) || item.nameCompact.includes(term)) score += 100;
-      if (item.category.includes(term) || item.ddcCatName.includes(term) || item.subject.includes(term)) score += 70;
-      if (item._ddcKeywords.includes(term)) score += 50;
-      if (item._transliteration.includes(term)) score += 40;
-      if (item.description.includes(term) || item.publisher.includes(term) || item.remarks.includes(term)) score += 20;
+      if (item.author.includes(term) || item.authorHindi.includes(termHindi) || item.authorCompact.includes(term)) {
+        score += 150;
+        termMatched = true;
+      }
+      if (item.name.includes(term) || item.nameHindi.includes(termHindi) || item.nameCompact.includes(term)) {
+        score += 100;
+        termMatched = true;
+      }
+      if (item.category.includes(term) || item.ddcCatName.includes(term) || item.subject.includes(term)) {
+        score += 70;
+        termMatched = true;
+      }
+      if (item._ddcKeywords.includes(term)) {
+        score += 50;
+        termMatched = true;
+      }
+      if (item._transliteration.includes(term)) {
+        score += 40;
+        termMatched = true;
+      }
+      if (item.description.includes(term) || item.publisher.includes(term) || item.remarks.includes(term) || item.language.includes(term)) {
+        score += 20;
+        termMatched = true;
+      }
+      if (!termMatched && (item.fullSearchBlob.includes(term) || item.fullSearchBlob.includes(termHindi))) {
+        score += 25;
+        termMatched = true;
+      }
+
+      if (termMatched) {
+        matchedTokenCount++;
+      }
+    }
+
+    // Multi-token all-match bonus
+    if (rawTokens.length > 1 && matchedTokenCount >= rawTokens.length) {
+      score += 250;
     }
 
     // D. Add Fuse Fuzzy Score
     const fuzzyScore = fuseScoreMap.get(item.bookId) || 0;
-    if (fuzzyScore > 20) {
+    if (fuzzyScore > 15) {
       score += fuzzyScore;
     }
 

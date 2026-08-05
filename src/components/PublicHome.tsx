@@ -575,28 +575,28 @@ export default function PublicHome({
   const filteredFeaturedBooks = React.useMemo(() => {
     let result = [...books];
 
-    // 1. DDC Category Filter
+    // 1. Universal Search Filter FIRST on complete cached dataset
+    if (homeSearchQuery && homeSearchQuery.trim()) {
+      result = searchBooksSmart(books, homeSearchQuery.trim(), categorySerialsMap);
+    }
+
+    // 2. DDC Category Filter
     if (selectedCategory !== 'All') {
       result = result.filter(b => b.category === selectedCategory);
     }
 
-    // 2. Availability Filter
+    // 3. Availability Filter
     if (availabilityFilter === 'available') {
       result = result.filter(b => b.availableCopies > 0);
     } else if (availabilityFilter === 'outofstock') {
       result = result.filter(b => b.availableCopies === 0);
     }
 
-    // 3. Book Language Filter
+    // 4. Book Language Filter
     if (bookLanguageFilter === 'hindi') {
       result = result.filter(b => /[\u0900-\u097F]/.test(b.bookName || b.author || ""));
     } else if (bookLanguageFilter === 'english') {
       result = result.filter(b => !/[\u0900-\u097F]/.test(b.bookName || b.author || ""));
-    }
-
-    // 4. Search Filter (incorporating Hinglish, spelling corrections, DDC class)
-    if (homeSearchQuery) {
-      result = searchBooksSmart(result, homeSearchQuery, categorySerialsMap);
     }
 
     // 5. Sorting
@@ -612,8 +612,8 @@ export default function PublicHome({
       });
     } else if (sortByFilter === 'copies-desc') {
       result.sort((a, b) => (b.availableCopies || 0) - (a.availableCopies || 0));
-    } else {
-      // Default: numeric shelf serial sorting to avoid string sequence anomalies
+    } else if (!homeSearchQuery || !homeSearchQuery.trim()) {
+      // Default: numeric shelf serial sorting (only applied when NOT searching so search relevance score is preserved)
       result.sort((a, b) => {
         const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
         const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
@@ -623,7 +623,7 @@ export default function PublicHome({
     }
 
     return result;
-  }, [books, selectedCategory, availabilityFilter, bookLanguageFilter, homeSearchQuery, sortByFilter]);
+  }, [books, selectedCategory, availabilityFilter, bookLanguageFilter, homeSearchQuery, sortByFilter, categorySerialsMap]);
 
   const featuredBooks = filteredFeaturedBooks;
 

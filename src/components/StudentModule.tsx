@@ -305,22 +305,32 @@ export default function StudentModule({
   // Search and Filter books catalogue with smart multi-lingual transliteration matches
   const filteredBooks = useMemo(() => {
     let result = [...books];
+
+    // 1. Universal Search Filter FIRST on complete cached dataset
+    if (searchTerm && searchTerm.trim()) {
+      result = searchBooksSmart(books, searchTerm.trim(), categorySerialsMap);
+    }
+
+    // 2. DDC Category Filter
     if (selectedCategory !== 'All') {
       result = result.filter(b => b.category === selectedCategory);
     }
+
+    // 3. Availability Filter
     if (availabilityFilter === 'available') {
       result = result.filter(b => b.availableCopies > 0);
     } else if (availabilityFilter === 'outofstock') {
       result = result.filter(b => b.availableCopies === 0);
     }
+
+    // 4. Book Language Filter
     if (bookLanguageFilter === 'hindi') {
       result = result.filter(b => /[\u0900-\u097F]/.test(b.bookName || b.author || ""));
     } else if (bookLanguageFilter === 'english') {
       result = result.filter(b => !/[\u0900-\u097F]/.test(b.bookName || b.author || ""));
     }
-    if (searchTerm) {
-      result = searchBooksSmart(result, searchTerm, categorySerialsMap);
-    }
+
+    // 5. Sorting
     if (sortByFilter === 'title-asc') {
       result.sort((a, b) => (a.bookName || "").localeCompare(b.bookName || "", undefined, { sensitivity: 'base' }));
     } else if (sortByFilter === 'title-desc') {
@@ -333,7 +343,8 @@ export default function StudentModule({
       });
     } else if (sortByFilter === 'copies-desc') {
       result.sort((a, b) => (b.availableCopies || 0) - (a.availableCopies || 0));
-    } else {
+    } else if (!searchTerm || !searchTerm.trim()) {
+      // Default: numeric shelf serial sorting (only applied when NOT searching so search relevance score is preserved)
       result.sort((a, b) => {
         const idA = parseInt(a.bookId.replace(/\D/g, ''), 10) || 0;
         const idB = parseInt(b.bookId.replace(/\D/g, ''), 10) || 0;
@@ -342,7 +353,7 @@ export default function StudentModule({
       });
     }
     return result;
-  }, [books, searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter]);
+  }, [books, searchTerm, selectedCategory, availabilityFilter, bookLanguageFilter, sortByFilter, categorySerialsMap]);
 
   // Infinite scroll book count state
   const [visibleBooksCount, setVisibleBooksCount] = useState<number>(24);

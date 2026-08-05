@@ -225,12 +225,12 @@ function StickerPreviewSection({ books, categorySerialsMap, stickerPrintedIds, o
 
   const filtered = useMemo(() => {
     let list = books;
-    if (filterMode === 'unprinted') {
-      list = list.filter(b => !stickerPrintedIds.has(b.bookId));
-    }
     const q = searchQuery.trim();
     if (q) {
-      list = searchBooksSmart(list, q, categorySerialsMap);
+      list = searchBooksSmart(books, q, categorySerialsMap);
+    }
+    if (filterMode === 'unprinted') {
+      list = list.filter(b => !stickerPrintedIds.has(b.bookId));
     }
     return list;
   }, [books, filterMode, searchQuery, stickerPrintedIds, categorySerialsMap]);
@@ -1835,18 +1835,21 @@ export default function LibrarianModule({
   // Active Loans status Issued List
   const activeLoans = useMemo(() => {
     let list = issueLogs.filter(log => log.status === 'Issued');
-    if (loanSearch.trim()) {
-      const searchLower = loanSearch.toLowerCase().trim();
+    if (loanSearch && loanSearch.trim()) {
+      const q = loanSearch.trim();
+      const searchLower = q.toLowerCase();
+      const matchedBookIds = new Set(searchBooksSmart(books, q, categorySerialsMap).map(b => b.bookId));
       list = list.filter(loan => 
         (loan.studentName || "").toLowerCase().includes(searchLower) ||
         String(loan.rollNumber || "").toLowerCase().includes(searchLower) ||
         (loan.bookId || "").toLowerCase().includes(searchLower) ||
         (loan.bookName || "").toLowerCase().includes(searchLower) ||
-        (loan.id || "").toLowerCase().includes(searchLower)
+        (loan.id || "").toLowerCase().includes(searchLower) ||
+        matchedBookIds.has(loan.bookId)
       );
     }
     return list;
-  }, [issueLogs, loanSearch]);
+  }, [issueLogs, loanSearch, books, categorySerialsMap]);
 
   // General Overdue Logs list
   const overdueLogs = useMemo(() => {
@@ -1864,10 +1867,11 @@ export default function LibrarianModule({
       list = list.filter(r => String(r.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
     }
 
-    if (circSearchQuery.trim()) {
-      const q = circSearchQuery.toLowerCase().trim();
+    if (circSearchQuery && circSearchQuery.trim()) {
+      const q = circSearchQuery.trim();
+      const qLower = q.toLowerCase();
+      const matchedBookIds = new Set(searchBooksSmart(books, q, categorySerialsMap).map(b => b.bookId));
       list = list.filter(r => {
-        const bk = books.find(b => b.bookId === r.bookId);
         const nameStr = (r.studentName || "").toLowerCase();
         const rollStr = String(r.rollNumber || "").toLowerCase();
         const classStr = (r.class || "").toLowerCase();
@@ -1875,20 +1879,14 @@ export default function LibrarianModule({
         const titleStr = (r.bookName || "").toLowerCase();
         const idStr = (r.id || "").toLowerCase();
 
-        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
-        const bookMatch = titleStr.includes(q) || (r.bookId || "").toLowerCase().includes(q) || (bk && (
-          (bk.bookNumber || "").toLowerCase().includes(q) ||
-          (bk.accessionNumber || "").toLowerCase().includes(q) ||
-          (bk.callNumber || "").toLowerCase().includes(q) ||
-          (bk.author || "").toLowerCase().includes(q) ||
-          (bk.category || "").toLowerCase().includes(q)
-        ));
+        const studentMatch = nameStr.includes(qLower) || rollStr.includes(qLower) || classStr.includes(qLower) || sectionStr.includes(qLower);
+        const bookMatch = titleStr.includes(qLower) || (r.bookId || "").toLowerCase().includes(qLower) || matchedBookIds.has(r.bookId);
 
-        return studentMatch || bookMatch || idStr.includes(q);
+        return studentMatch || bookMatch || idStr.includes(qLower);
       });
     }
     return list;
-  }, [requests, books, circFilterClass, circFilterSection, circSearchQuery]);
+  }, [requests, books, circFilterClass, circFilterSection, circSearchQuery, categorySerialsMap]);
 
   const filteredActiveLoansList = useMemo(() => {
     let list = issueLogs.filter(log => log.status === 'Issued');
@@ -1900,10 +1898,11 @@ export default function LibrarianModule({
       list = list.filter(log => String(log.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
     }
 
-    if (circSearchQuery.trim()) {
-      const q = circSearchQuery.toLowerCase().trim();
+    if (circSearchQuery && circSearchQuery.trim()) {
+      const q = circSearchQuery.trim();
+      const qLower = q.toLowerCase();
+      const matchedBookIds = new Set(searchBooksSmart(books, q, categorySerialsMap).map(b => b.bookId));
       list = list.filter(log => {
-        const bk = books.find(b => b.bookId === log.bookId);
         const nameStr = (log.studentName || "").toLowerCase();
         const rollStr = String(log.rollNumber || "").toLowerCase();
         const classStr = (log.class || "").toLowerCase();
@@ -1911,20 +1910,14 @@ export default function LibrarianModule({
         const titleStr = (log.bookName || "").toLowerCase();
         const idStr = (log.id || "").toLowerCase();
 
-        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
-        const bookMatch = titleStr.includes(q) || (log.bookId || "").toLowerCase().includes(q) || (bk && (
-          (bk.bookNumber || "").toLowerCase().includes(q) ||
-          (bk.accessionNumber || "").toLowerCase().includes(q) ||
-          (bk.callNumber || "").toLowerCase().includes(q) ||
-          (bk.author || "").toLowerCase().includes(q) ||
-          (bk.category || "").toLowerCase().includes(q)
-        ));
+        const studentMatch = nameStr.includes(qLower) || rollStr.includes(qLower) || classStr.includes(qLower) || sectionStr.includes(qLower);
+        const bookMatch = titleStr.includes(qLower) || (log.bookId || "").toLowerCase().includes(qLower) || matchedBookIds.has(log.bookId);
 
-        return studentMatch || bookMatch || idStr.includes(q);
+        return studentMatch || bookMatch || idStr.includes(qLower);
       });
     }
     return list;
-  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery]);
+  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery, categorySerialsMap]);
 
   const filteredOverdueLoansList = useMemo(() => {
     return filteredActiveLoansList.filter(log => isOverdue(log.dueDate));
@@ -1940,10 +1933,11 @@ export default function LibrarianModule({
       list = list.filter(log => String(log.section || '').trim().toUpperCase() === circFilterSection.trim().toUpperCase());
     }
 
-    if (circSearchQuery.trim()) {
-      const q = circSearchQuery.toLowerCase().trim();
+    if (circSearchQuery && circSearchQuery.trim()) {
+      const q = circSearchQuery.trim();
+      const qLower = q.toLowerCase();
+      const matchedBookIds = new Set(searchBooksSmart(books, q, categorySerialsMap).map(b => b.bookId));
       list = list.filter(log => {
-        const bk = books.find(b => b.bookId === log.bookId);
         const nameStr = (log.studentName || "").toLowerCase();
         const rollStr = String(log.rollNumber || "").toLowerCase();
         const classStr = (log.class || "").toLowerCase();
@@ -1951,20 +1945,14 @@ export default function LibrarianModule({
         const titleStr = (log.bookName || "").toLowerCase();
         const idStr = (log.id || "").toLowerCase();
 
-        const studentMatch = nameStr.includes(q) || rollStr.includes(q) || classStr.includes(q) || sectionStr.includes(q);
-        const bookMatch = titleStr.includes(q) || (log.bookId || "").toLowerCase().includes(q) || (bk && (
-          (bk.bookNumber || "").toLowerCase().includes(q) ||
-          (bk.accessionNumber || "").toLowerCase().includes(q) ||
-          (bk.callNumber || "").toLowerCase().includes(q) ||
-          (bk.author || "").toLowerCase().includes(q) ||
-          (bk.category || "").toLowerCase().includes(q)
-        ));
+        const studentMatch = nameStr.includes(qLower) || rollStr.includes(qLower) || classStr.includes(qLower) || sectionStr.includes(qLower);
+        const bookMatch = titleStr.includes(qLower) || (log.bookId || "").toLowerCase().includes(qLower) || matchedBookIds.has(log.bookId);
 
-        return studentMatch || bookMatch || idStr.includes(q);
+        return studentMatch || bookMatch || idStr.includes(qLower);
       });
     }
     return list;
-  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery]);
+  }, [issueLogs, books, circFilterClass, circFilterSection, circSearchQuery, categorySerialsMap]);
 
   const filteredBooks = useMemo(() => {
     let list = books;
@@ -2171,9 +2159,9 @@ export default function LibrarianModule({
 
   // Instant fuzzy filtering for walk-in circulation selection desk
   const filteredWalkinBooks = useMemo(() => {
-    if (!walkinBookSearchQuery.trim()) return [];
-    const availableBooksOnly = books.filter(b => b.availableCopies > 0);
-    return searchBooksSmart(availableBooksOnly, walkinBookSearchQuery, categorySerialsMap);
+    if (!walkinBookSearchQuery || !walkinBookSearchQuery.trim()) return [];
+    const searchRes = searchBooksSmart(books, walkinBookSearchQuery.trim(), categorySerialsMap);
+    return searchRes.filter(b => b.availableCopies > 0);
   }, [books, walkinBookSearchQuery, categorySerialsMap]);
 
   // Handle direct manual checkout submitting
@@ -5770,7 +5758,7 @@ export default function LibrarianModule({
                 Automated Sticker & Barcode Engine
               </h2>
               <p className="text-xs text-slate-500 max-w-2xl leading-normal">
-                Generate and print precision-aligned sticker labels (64mm × 24mm) matching standard A4 printable sheets. Each sticker automatically embeds a secure, permanent QR code pointing to the live book details page.
+                Generate and print precision-aligned sticker labels (64mm × 34mm) matching standard A4 printable sheets. Each sticker automatically embeds a secure, permanent QR code pointing to the live book details page.
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
