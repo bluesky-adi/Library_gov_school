@@ -161,8 +161,8 @@
     display: grid !important;
     grid-template-columns: repeat(3, 64mm) !important;
     grid-template-rows: repeat(8, 34mm) !important;
-    row-gap: 0px !important;
-    column-gap: 4mm !important;
+    row-gap: 1mm !important;
+    column-gap: 1mm !important;
     width: 200mm !important;
     height: 272mm !important;
     box-sizing: border-box !important;

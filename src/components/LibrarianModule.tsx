@@ -71,8 +71,8 @@ export const ODDY_ST24_PAPER_TEMPLATE = {
   stickerHeight: 34, // mm
   leftMargin: 5,     // mm
   topMargin: 12,    // mm
-  colGap: 4,        // mm
-  rowGap: 0,        // mm
+  colGap: 1,        // mm
+  rowGap: 1,        // mm
   offsetX: 0,       // mm configurable calibration offset X
   offsetY: 0,       // mm configurable calibration offset Y
 };
@@ -120,7 +120,7 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
       >
         <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden text-left pr-2">
           <div className="text-[9px] leading-tight font-black uppercase tracking-wider opacity-90">
-            Accession No
+            ACC
           </div>
           <div className="text-xs font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
             {accessionNo}
@@ -171,7 +171,7 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
     >
       <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden pr-2">
         <div className="text-[7.5px] leading-none font-extrabold uppercase tracking-widest opacity-90">
-          ACCESSION
+          ACC
         </div>
         <div className="text-[10px] leading-tight font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
           {accessionNo}
@@ -763,7 +763,7 @@ export default function LibrarianModule({
           // Drawing Accession Number
           doc.setFont('courier', 'bold');
           doc.setFontSize(5);
-          doc.text("ACCESSION", x + 3.5, y + 6.0);
+          doc.text("ACC", x + 3.5, y + 6.0);
           
           doc.setFontSize(9);
           doc.text(accessionNo, x + 3.5, y + 10.5);
@@ -1419,9 +1419,27 @@ export default function LibrarianModule({
   const fetchDbStatus = () => {
     setDbLoading(true);
     fetch('/api/database/status')
-      .then(res => res.json())
+      .then(async res => {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error("Invalid JSON response");
+        }
+      })
       .then(data => setDbStatus(data))
-      .catch(err => console.error("Error fetching database status info:", err))
+      .catch(err => {
+        console.warn("Could not fetch database status info:", err?.message || err);
+        setDbStatus({
+          connected: false,
+          mode: 'development',
+          uriPresent: false,
+          maskedUri: 'disconnected'
+        });
+      })
       .finally(() => setDbLoading(false));
   };
 

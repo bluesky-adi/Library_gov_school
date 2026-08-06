@@ -299,16 +299,28 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 app.get('/api/database/status', (req, res) => {
-  const isConnected = dbService.getMongoConnectionState();
-  const uri = process.env.MONGODB_URI || "";
-  const maskedUri = uri ? uri.replace(/:([^@]+)@/, ":******@") : "none";
-  res.json({
-    connected: isConnected,
-    mode: process.env.NODE_ENV || "development",
-    uriPresent: !!uri && uri.trim() !== "" && !uri.includes("placeholder"),
-    uriSub: uri ? uri.slice(0, 20) + "..." : null,
-    maskedUri: maskedUri
-  });
+  try {
+    const isConnected = dbService.getMongoConnectionState();
+    const uri = process.env.MONGODB_URI || "";
+    const maskedUri = uri ? uri.replace(/:([^@]+)@/, ":******@") : "none";
+    res.setHeader('Content-Type', 'application/json');
+    res.json({
+      connected: isConnected,
+      mode: process.env.NODE_ENV || "development",
+      uriPresent: !!uri && uri.trim() !== "" && !uri.includes("placeholder"),
+      uriSub: uri ? uri.slice(0, 20) + "..." : null,
+      maskedUri: maskedUri
+    });
+  } catch (err: any) {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json({
+      connected: false,
+      mode: process.env.NODE_ENV || "development",
+      uriPresent: false,
+      maskedUri: "none",
+      error: err?.message || "Unknown status error"
+    });
+  }
 });
 
 // ---- AUTH ENGINES ----

@@ -335,7 +335,11 @@ export default function PublicHome({
   useEffect(() => {
     setIsLibrarianLoading(true);
     fetch('/api/librarian/profile')
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) return null;
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return null; }
+      })
       .then(data => {
         if (data && data.success) {
           setLibrarianProfile({
@@ -356,7 +360,11 @@ export default function PublicHome({
   useEffect(() => {
     setIsGalleryLoading(true);
     fetch('/api/gallery')
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) return null;
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return null; }
+      })
       .then(data => {
         if (data && data.success) {
           setGalleryImages(data.images || []);
