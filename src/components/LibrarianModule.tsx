@@ -476,6 +476,21 @@ export default function LibrarianModule({
   // --- STICKER GENERATOR STATE ---
   const [isPrintModeActive, setIsPrintModeActive] = useState<boolean>(false);
   const [booksToPrint, setBooksToPrint] = useState<Book[]>([]);
+  const [calOffsetX, setCalOffsetX] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ramdiri_sticker_cal_x');
+      if (saved !== null) return parseFloat(saved) || 0;
+    } catch (e) {}
+    return 0;
+  });
+  const [calOffsetY, setCalOffsetY] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('ramdiri_sticker_cal_y');
+      if (saved !== null) return parseFloat(saved) || 0;
+    } catch (e) {}
+    return 0;
+  });
+  const [calSavedMsg, setCalSavedMsg] = useState<boolean>(false);
   const [stickerPrintedIds, setStickerPrintedIds] = useState<Set<string>>(() => {
     try {
       const data = localStorage.getItem('ramdiri_stickers_printed');
@@ -705,8 +720,8 @@ export default function LibrarianModule({
           const col = stickerIndexOnPage % cols;
           const row = Math.floor(stickerIndexOnPage / cols);
 
-          const x = leftMargin + offsetX + col * (stickerWidth + colGap);
-          const y = topMargin + offsetY + row * (stickerHeight + rowGap);
+          const x = leftMargin + offsetX + (calOffsetX || 0) + col * (stickerWidth + colGap);
+          const y = topMargin + offsetY + (calOffsetY || 0) + row * (stickerHeight + rowGap);
 
           const book = chunk[j];
           if (!book) continue;
@@ -5928,6 +5943,71 @@ export default function LibrarianModule({
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Target QR link</span>
                   /book/[ACCESSION_NUMBER]
+                </div>
+              </div>
+
+              {/* Printer Hardware Fine-Tuning Calibration Box */}
+              <div className="mt-3 pt-3 border-t border-indigo-100/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/60 dark:bg-slate-950/40 p-3 rounded-lg">
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-extrabold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    Printer Hardware Fine-Tuning Calibration
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    If your school's physical printer feeds paper with a slight offset, adjust micro-calibrations here.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                    <span className="text-slate-500 font-bold">X (mm):</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={calOffsetX}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setCalOffsetX(val);
+                        localStorage.setItem('ramdiri_sticker_cal_x', String(val));
+                        setCalSavedMsg(true);
+                        setTimeout(() => setCalSavedMsg(false), 2000);
+                      }}
+                      className="w-16 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                    <span className="text-slate-500 font-bold">Y (mm):</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={calOffsetY}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setCalOffsetY(val);
+                        localStorage.setItem('ramdiri_sticker_cal_y', String(val));
+                        setCalSavedMsg(true);
+                        setTimeout(() => setCalSavedMsg(false), 2000);
+                      }}
+                      className="w-16 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  {(calOffsetX !== 0 || calOffsetY !== 0) && (
+                    <button
+                      onClick={() => {
+                        setCalOffsetX(0);
+                        setCalOffsetY(0);
+                        localStorage.removeItem('ramdiri_sticker_cal_x');
+                        localStorage.removeItem('ramdiri_sticker_cal_y');
+                        setCalSavedMsg(true);
+                        setTimeout(() => setCalSavedMsg(false), 2000);
+                      }}
+                      className="text-[9px] font-extrabold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline cursor-pointer"
+                    >
+                      Reset (0mm)
+                    </button>
+                  )}
+                  {calSavedMsg && (
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-fade-in">Saved ✓</span>
+                  )}
                 </div>
               </div>
             </div>
