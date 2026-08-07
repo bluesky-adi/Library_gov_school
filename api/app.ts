@@ -2035,4 +2035,17 @@ if (isVercel) {
   });
 }
 
+// Global fallback error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Unhandled API Express Error:", err?.message || err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.status(err?.status || err?.statusCode || 500).json({
+    success: false,
+    error: err?.message || 'An unexpected server error occurred.'
+  });
+});
+
 export default app;

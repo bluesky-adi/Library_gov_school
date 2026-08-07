@@ -118,27 +118,22 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
         className="sticker-preview-item rounded-xl shadow-md p-3 flex flex-row justify-between items-center select-none font-mono transition-all hover:scale-[1.02]"
         style={{ backgroundColor: ddcCol.hex, color: ddcCol.textColorHex }}
       >
-        <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden text-left pr-2">
-          <div className="text-[9px] leading-tight font-black uppercase tracking-wider opacity-90">
-            ACC
+        <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden text-left pr-2 text-[10px] font-mono font-bold">
+          <div className="flex items-center gap-2">
+            <span className="opacity-80 shrink-0 font-semibold">ACC NO -</span>
+            <span className="font-black truncate">{accessionNo}</span>
           </div>
-          <div className="text-xs font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
-            {accessionNo}
+          <div className="flex items-center gap-2">
+            <span className="opacity-80 shrink-0 font-semibold">CALL NO -</span>
+            <span className="font-extrabold truncate">{callNo}</span>
           </div>
-          
-          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
-            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Call:</span>
-            <span className="truncate">{callNo}</span>
+          <div className="flex items-center gap-2">
+            <span className="opacity-80 shrink-0 font-semibold">BOOK NO -</span>
+            <span className="font-extrabold truncate">{displayBookNo}</span>
           </div>
-
-          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
-            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Book:</span>
-            <span className="truncate">{displayBookNo}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[10px] font-extrabold truncate">
-            <span className="text-[8px] font-bold uppercase opacity-75 shrink-0">Shelf:</span>
-            <span className="truncate">{displayShelf}</span>
+          <div className="flex items-center gap-2">
+            <span className="opacity-80 shrink-0 font-semibold">SHELF -</span>
+            <span className="font-extrabold truncate">{displayShelf}</span>
           </div>
         </div>
 
@@ -169,27 +164,22 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
         color: ddcCol.textColorHex 
       }}
     >
-      <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden pr-2">
-        <div className="text-[7.5px] leading-none font-extrabold uppercase tracking-widest opacity-90">
-          ACC
+      <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden pr-2 text-[8.5px] font-mono font-bold">
+        <div className="flex items-center gap-1.5">
+          <span className="opacity-80 shrink-0">ACC NO -</span>
+          <span className="font-black truncate">{accessionNo}</span>
         </div>
-        <div className="text-[10px] leading-tight font-black tracking-tight truncate border-b border-current pb-0.5 mb-0.5">
-          {accessionNo}
+        <div className="flex items-center gap-1.5">
+          <span className="opacity-80 shrink-0">CALL NO -</span>
+          <span className="font-extrabold truncate">{callNo}</span>
         </div>
-        
-        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-extrabold truncate">
-          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">CALL:</span>
-          <span className="truncate">{callNo}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="opacity-80 shrink-0">BOOK NO -</span>
+          <span className="font-extrabold truncate">{displayBookNo}</span>
         </div>
-
-        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-extrabold truncate">
-          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">BOOK:</span>
-          <span className="truncate">{displayBookNo}</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-[8.5px] leading-tight font-black truncate">
-          <span className="text-[7px] font-bold uppercase opacity-75 shrink-0">SHELF:</span>
-          <span className="truncate">{displayShelf}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="opacity-80 shrink-0">SHELF -</span>
+          <span className="font-extrabold truncate">{displayShelf}</span>
         </div>
       </div>
 
@@ -720,7 +710,10 @@ export default function LibrarianModule({
           const col = stickerIndexOnPage % cols;
           const row = Math.floor(stickerIndexOnPage / cols);
 
-          const x = leftMargin + offsetX + (calOffsetX || 0) + col * (stickerWidth + colGap);
+          const gridWidth = cols * stickerWidth + (cols - 1) * colGap;
+          const centeredLeftMargin = (210 - gridWidth) / 2;
+
+          const x = centeredLeftMargin + offsetX + (calOffsetX || 0) + col * (stickerWidth + colGap);
           const y = topMargin + offsetY + (calOffsetY || 0) + row * (stickerHeight + rowGap);
 
           const book = chunk[j];
@@ -760,36 +753,29 @@ export default function LibrarianModule({
           const qrBoxX = x + stickerWidth - qrBoxWidth - 3.5;
           const qrBoxY = y + (stickerHeight - qrBoxHeight) / 2;
 
-          // Drawing Accession Number
           doc.setFont('courier', 'bold');
-          doc.setFontSize(5);
-          doc.text("ACC", x + 3.5, y + 6.0);
-          
-          doc.setFontSize(9);
-          doc.text(accessionNo, x + 3.5, y + 10.5);
+          doc.setFontSize(7);
 
-          // Draw a divider line under Accession number using the same text color
-          doc.setDrawColor(textR, textG, textB);
-          doc.setLineWidth(0.12);
-          doc.line(x + 3.5, y + 12.0, qrBoxX - 2.5, y + 12.0);
+          const startY = y + 9.5;
+          const lineSpacing = 5.2;
+          const labelX = x + 3.5;
+          const valueX = x + 21.0;
 
-          // Drawing Call Number
-          doc.setFontSize(5);
-          doc.text("CALL NO:", x + 3.5, y + 16.5);
-          doc.setFontSize(8.5);
-          doc.text(callNo, x + 16.5, y + 16.5);
+          // Row 1: ACC NO -
+          doc.text("ACC NO -", labelX, startY);
+          doc.text(String(accessionNo), valueX, startY);
 
-          // Drawing Book Number
-          doc.setFontSize(5);
-          doc.text("BOOK NO:", x + 3.5, y + 21.5);
-          doc.setFontSize(8.5);
-          doc.text(bookNo, x + 16.5, y + 21.5);
+          // Row 2: CALL NO -
+          doc.text("CALL NO -", labelX, startY + lineSpacing);
+          doc.text(String(callNo), valueX, startY + lineSpacing);
 
-          // Drawing Shelf
-          doc.setFontSize(5);
-          doc.text("SHELF:", x + 3.5, y + 26.5);
-          doc.setFontSize(8.5);
-          doc.text(String(shelfLocation || "Shelf #1"), x + 16.5, y + 26.5);
+          // Row 3: BOOK NO -
+          doc.text("BOOK NO -", labelX, startY + lineSpacing * 2);
+          doc.text(String(bookNo), valueX, startY + lineSpacing * 2);
+
+          // Row 4: SHELF -
+          doc.text("SHELF -", labelX, startY + lineSpacing * 3);
+          doc.text(String(shelfLocation || "Shelf #1"), valueX, startY + lineSpacing * 3);
 
           // Add QR Code if it exists
           if (accessionNo) {
