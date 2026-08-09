@@ -672,7 +672,7 @@ export default function PublicHome({
       logoutBtn: "Log Out Account",
       guestLabel: "Guest Scholar",
       aboutTitle: "About PM SHRI Ramdiri School Library",
-      aboutContent: "PM SHRI Ramdiri +2 High School, located in the historical district of Begusarai, Bihar, is a senior secondary high school. The Digital Library Portal is an independent modernization initiative spearheaded by the school librarian to simplify textbooks tracking, NCERT reference materials distribution, and book transactions for students.",
+      aboutContent: "PM SHRI Ramdiri +2 High School, located in the historical district of Begusarai, Bihar, is a senior secondary school serving students across the region. This digital library initiative was developed in close collaboration with the school librarian based on real day-to-day library requirements, ensuring that textbooks, NCERT guides, and literature remain accessible and well-organized for every student.",
       locationText: "Ramdiri Village, Begusarai District, Bihar - 851129",
       contactPhone: "+91-6243-245102 (BSEB Begusarai Office)",
       statTotalBooks: "Total Books",
@@ -710,7 +710,7 @@ export default function PublicHome({
       logoutBtn: "लॉगआउट करें",
       guestLabel: "अतिथि पाठक",
       aboutTitle: "पीएम श्री रामदीरी उच्च विद्यालय पुस्तकालय के बारे में",
-      aboutContent: "पीएम श्री रामदीरी +2 उच्च विद्यालय, बेगूसराय, बिहार में स्थित एक माध्यमिक एवं उच्चतर माध्यमिक विद्यालय है। यह डिजिटल पुस्तकालय पोर्टल विद्यालय के पुस्तकालयाध्यक्ष द्वारा पुस्तकालय सेवाओं को आधुनिक बनाने के लिए शुरू की गई एक स्वतंत्र पहल है, जिसका उद्देश्य छात्रों के लिए पुस्तकों और एनसीईआरटी पाठ्यसामग्री की उपलब्धता को सुगम बनाना है।",
+      aboutContent: "पीएम श्री रामदीरी +2 उच्च विद्यालय, बेगूसराय, बिहार में स्थित एक प्रतिष्ठित उच्चतर माध्यमिक विद्यालय है। यह डिजिटल पुस्तकालय पहल विद्यालय के पुस्तकालयाध्यक्ष के सहयोग से वास्तविक दैनिक आवश्यकताओं को ध्यान में रखकर विकसित की गई है, ताकि प्रत्येक छात्र के लिए पुस्तकें और संदर्भ सामग्री सुलभ व व्यवस्थित रहे।",
       locationText: "ग्राम - रामदीरी, बेगूसराय जिला, बिहार - 851129",
       contactPhone: "+91-6243-245102 (बेगूसराय शिक्षा कार्यालय)",
       statTotalBooks: "कुल पुस्तकें",
@@ -2070,40 +2070,59 @@ export default function PublicHome({
         <div className="space-y-6 animate-fade-in" id="public-vision-story-block">
           {/* Bento-style Impact Metrics Section */}
           <div className="space-y-3">
-            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider font-mono">
-              ★ SYSTEM DIGITAL TRANSFORMATION IMPACT METRICS ★
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h3 className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider font-mono flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                {currentLang === 'EN' ? "Library by the Numbers" : "आंकड़ों में हमारा पुस्तकालय"}
+              </h3>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans italic">
+                {currentLang === 'EN' 
+                  ? "✓ All statistics displayed on this page are generated from live production database records and update automatically."
+                  : "✓ इस पृष्ठ पर प्रदर्शित सभी आंकड़े लाइव उत्पादन डेटाबेस रिकॉर्ड से उत्पन्न होते हैं और स्वतः अपडेट होते हैं।"}
+              </span>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
                 <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
                   {liveStats.booksCount || 0}
                 </div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📚 Books Digitized</div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-400 font-sans">
+                  {currentLang === 'EN' ? "📚 Books Cataloged" : "📚 कैटलॉग पुस्तकें"}
+                </div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
                 <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
                   {liveStats.studentsCount || 0}
                 </div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">👨‍🎓 Enrolled Students</div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-400 font-sans">
+                  {currentLang === 'EN' ? "👨‍🎓 Enrolled Scholars" : "👨‍🎓 पंजीकृत विद्यार्थी"}
+                </div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
                 <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
                   {liveStats.digitalMaterialsCount || 0}
                 </div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📖 Digital Resources</div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-400 font-sans">
+                  {currentLang === 'EN' ? "📖 Digital Resources" : "📖 डिजिटल पाठ्यसामग्री"}
+                </div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center shadow-xs space-y-1">
                 <div className="text-2xl sm:text-3xl font-black text-indigo-600 font-mono">
                   {liveStats.activeIssuedCount || 0}
                 </div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">📑 Active Loans</div>
+                <div className="text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-400 font-sans">
+                  {currentLang === 'EN' ? "📑 Active Loans" : "📑 सक्रिय पुस्तक ऋण"}
+                </div>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center col-span-2 sm:col-span-1 shadow-xs space-y-1">
-                <div className="text-2xl sm:text-3xl font-black text-pink-600 font-mono">
-                  {liveStats.totalFeedbackCount === 0 ? "0.0/5" : `${liveStats.avgRating}/5`}
+                <div className="text-2xl sm:text-3xl font-black text-amber-500 font-mono">
+                  {liveStats.totalFeedbackCount === 0 ? "0.0" : `${liveStats.avgRating}`} <span className="text-xs text-slate-400 font-normal">/ 5</span>
                 </div>
-                <div className="text-[10px] uppercase font-extrabold text-slate-400 font-sans">
-                  {liveStats.totalFeedbackCount === 0 ? "★ No Reviews" : "⭐ Avg Rating"}
+                <div className="text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-400 font-sans">
+                  {liveStats.totalFeedbackCount === 0 
+                    ? (currentLang === 'EN' ? "★ Student Rating" : "★ छात्र रेटिंग") 
+                    : (currentLang === 'EN' ? `⭐ Rating (${liveStats.totalFeedbackCount})` : `⭐ रेटिंग (${liveStats.totalFeedbackCount})`)}
                 </div>
               </div>
             </div>
@@ -2115,31 +2134,37 @@ export default function PublicHome({
               {/* Why Digital Library & Problems Solved */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl space-y-3.5">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                  <BookOpen className="w-5 h-5 text-indigo-600" />
                   <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                    Why Digital Library? The Core Transformation
+                    {currentLang === 'EN' ? "Why Digital Library? Serving Curiosity & Order" : "डिजिटल पुस्तकालय क्यों? पठन संस्कृति एवं सहज व्यवस्था"}
                   </h4>
                 </div>
-                <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-sans">
-                  Traditional school library registers lead to lost textbooks, paper decay, and immense friction for students trying to find relevant material. By modernizing our library infrastructure into an offline-first high-speed catalog, we make sure that school property is transparently tracked while eliminating hours of paperwork.
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
+                  {currentLang === 'EN' 
+                    ? "Libraries are places where curiosity begins. As our collection of textbooks, literature, and reference handbooks grows, finding books, maintaining records, and tracking borrowings manually becomes increasingly difficult. This initiative was created to simplify everyday library work while making books easier for students to discover and borrow. The goal is not to replace the physical library, but to help it serve our students better."
+                    : "पुस्तकालय वह स्थान है जहाँ जिज्ञासा जन्म लेती है। जैसे-जैसे हमारी पुस्तकों और संदर्भ सामग्री का संग्रह बढ़ रहा है, कागजी रजिस्टरों में पुस्तकों को खोजना और रिकॉर्ड रखना कठिन हो जाता है। यह पहल प्रतिदिन के पुस्तकालय कार्यों को सरल बनाने और छात्रों के लिए पुस्तकें खोजना आसान बनाने के लिए शुरू की गई है। इसका उद्देश्य पुस्तकालय को बदलना नहीं, बल्कि छात्रों की बेहतर सेवा करना है।"}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="bg-slate-50 dark:bg-slate-950/40 p-3 border border-slate-150 dark:border-slate-800 rounded-lg space-y-1">
-                    <span className="text-[10px] font-bold text-red-655 uppercase">The Old System Problems</span>
-                    <ul className="text-[11px] text-slate-550 dark:text-slate-450 list-disc list-inside space-y-0.5 leading-relaxed">
-                      <li>Slow manual book lookup in registers</li>
-                      <li>No real-time textbook tracking</li>
-                      <li>Lost/unreturned school textbooks</li>
-                      <li>Zero student visibility outside hours</li>
+                  <div className="bg-slate-50 dark:bg-slate-950/40 p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
+                    <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
+                      {currentLang === 'EN' ? "Traditional Paper Challenges" : "पारंपरिक कागजी व्यवस्था की चुनौतियाँ"}
+                    </span>
+                    <ul className="text-[11px] text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1 leading-relaxed">
+                      <li>{currentLang === 'EN' ? "Slow manual lookups through paper registers" : "कागजी रजिस्टरों के पन्ने पलटकर पुस्तकें खोजना"}</li>
+                      <li>{currentLang === 'EN' ? "Difficulty tracking availability during peak loan hours" : "पीक आवर्स में उपलब्ध प्रतियों का पता न चलना"}</li>
+                      <li>{currentLang === 'EN' ? "Risk of misplaced records or lost textbooks" : "कागजी रिकॉर्ड में प्रविष्टियाँ छूट जाने का जोखिम"}</li>
+                      <li>{currentLang === 'EN' ? "Zero student visibility into library records after hours" : "विद्यालय समय के बाद पुस्तकालय की जानकारी न मिलना"}</li>
                     </ul>
                   </div>
-                  <div className="bg-emerald-50/50 dark:bg-emerald-950/10 p-3 border border-emerald-150 dark:border-emerald-900/60 rounded-lg space-y-1">
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase">The Modern Digital Solution</span>
-                    <ul className="text-[11px] text-slate-600 dark:text-slate-400 list-disc list-inside space-y-0.5 leading-relaxed">
-                      <li>0.4s instant smart index searching</li>
-                      <li>Live student checkout balances</li>
-                      <li>Due date tracking and alerts</li>
-                      <li>24/7 access to digital resources</li>
+                  <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5 border border-emerald-200 dark:border-emerald-900/60 rounded-xl space-y-1.5">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+                      {currentLang === 'EN' ? "Organized Digital Workflow" : "सुव्यवस्थित डिजिटल व्यवस्था"}
+                    </span>
+                    <ul className="text-[11px] text-slate-700 dark:text-slate-300 list-disc list-inside space-y-1 leading-relaxed">
+                      <li>{currentLang === 'EN' ? "Instant search by Title, Author, Shelf, or Accession" : "शीर्षक, लेखक, शेल्फ या एक्सेस नंबर द्वारा त्वरित खोज"}</li>
+                      <li>{currentLang === 'EN' ? "Clear visibility of active loans and due dates" : "सक्रिय ऋणों और नियत तिथियों का स्पष्ट अवलोकन"}</li>
+                      <li>{currentLang === 'EN' ? "QR codes and ST-24 shelf stickers for quick issue" : "त्वरित प्रविष्टि हेतु क्यूआर कोड और शेल्फ स्टीकर"}</li>
+                      <li>{currentLang === 'EN' ? "24/7 access to downloadable syllabus materials" : "डिजिटल पाठ्यसामग्री तक 24 घंटे सीधी पहुँच"}</li>
                     </ul>
                   </div>
                 </div>
@@ -2148,19 +2173,23 @@ export default function PublicHome({
               {/* Impact on Stakeholders */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl space-y-2">
-                  <h5 className="font-bold text-xs uppercase text-indigo-650 dark:text-indigo-400">
-                    👨‍🎓 Impact on Students
+                  <h5 className="font-bold text-xs uppercase text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                    👨‍🎓 {currentLang === 'EN' ? "Impact on Students" : "छात्रों के लिए सुविधा"}
                   </h5>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Students can immediately check book availability, download digital syllabus materials, request titles from home, and keep strict track of active borrows to avoid penalty lockdowns.
+                    {currentLang === 'EN' 
+                      ? "Students can check book availability before visiting the library, request desired titles digitally, access class syllabus reference PDFs outside school hours, and track their borrowing history."
+                      : "छात्र पुस्तकालय आने से पहले पुस्तक की उपलब्धता देख सकते हैं, डिजिटल रूप से पुस्तक का अनुरोध कर सकते हैं, विद्यालय के बाद सिलेबस पीडीएफ डाउनलोड कर सकते हैं और अपनी उधार ली गई पुस्तकों की जानकारी रख सकते हैं।"}
                   </p>
                 </div>
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl space-y-2">
-                  <h5 className="font-bold text-xs uppercase text-indigo-650 dark:text-indigo-400">
-                    👩‍🏫 Impact on Librarian
+                  <h5 className="font-bold text-xs uppercase text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                    👩‍🏫 {currentLang === 'EN' ? "Impact on Librarian" : "पुस्तकालयाध्यक्ष के लिए आसानी"}
                   </h5>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Saves over one hour of paperwork every single day. Bulk imports whole class lists using Excel, prints clean PDF receipt slips, and processes returns/issue tickets with single-click automation.
+                    {currentLang === 'EN' 
+                      ? "Routine tasks such as searching records, tracking issues, viewing borrowing history, managing digital resources, and handling student requests are now organized through a single platform. This reduces repetitive manual work while keeping library records easier to maintain."
+                      : "रजिस्टर खोजना, पुस्तकें जारी करना, वापसी दर्ज करना और छात्र अनुरोधों को स्वीकृत करना अब एक ही स्थान पर व्यवस्थित है। इससे दोहराव वाला कागजी काम कम होता है और रिकॉर्ड सुव्यवस्थित रहते हैं।"}
                   </p>
                 </div>
               </div>
@@ -2168,34 +2197,34 @@ export default function PublicHome({
 
             {/* Right Column: Innovation Timeline */}
             <div className="md:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl space-y-4">
-              <h4 className="font-bold text-xs uppercase text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
-                🚀 Innovation Roadmap
+              <h4 className="font-bold text-xs uppercase text-slate-500 dark:text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800 font-mono">
+                🚀 {currentLang === 'EN' ? "Library Roadmap & Journey" : "पुस्तकालय विकास यात्रा"}
               </h4>
               <div className="relative border-l-2 border-indigo-100 dark:border-slate-800 ml-2.5 pl-4 space-y-4 text-xs">
                 <div className="relative">
                   <span className="absolute -left-[21px] top-0 w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                  <div className="font-bold text-slate-500">Manual Registers</div>
-                  <p className="text-[10px] text-slate-400">Paper logbooks and manual lookup entries</p>
+                  <div className="font-bold text-slate-500">{currentLang === 'EN' ? "Paper Registers" : "कागजी रजिस्टर युग"}</div>
+                  <p className="text-[10px] text-slate-400">{currentLang === 'EN' ? "Manual entry registers & physical logbooks" : "मैन्युअल प्रविष्टि और हस्तलिखित सूचियाँ"}</p>
                 </div>
                 <div className="relative">
                   <span className="absolute -left-[21px] top-0 w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-                  <div className="font-bold text-slate-900 dark:text-white">Digital Catalog</div>
-                  <p className="text-[10px] text-slate-500">2,800+ library books fully indexed on server</p>
+                  <div className="font-bold text-slate-900 dark:text-white">{currentLang === 'EN' ? "Digital Catalog" : "डिजिटल कैटलॉग"}</div>
+                  <p className="text-[10px] text-slate-500">{currentLang === 'EN' ? "Complete library collection indexed online" : "सभी पुस्तकें डिजिटल डेटाबेस में दर्ज"}</p>
                 </div>
                 <div className="relative">
                   <span className="absolute -left-[21px] top-0 w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-                  <div className="font-bold text-slate-900 dark:text-white">Student Portal</div>
-                  <p className="text-[10px] text-slate-500">Safe student logins, request history & review panels</p>
+                  <div className="font-bold text-slate-900 dark:text-white">{currentLang === 'EN' ? "Student Scholar Portal" : "छात्र पोर्टल एवं अनुरोध"}</div>
+                  <p className="text-[10px] text-slate-500">{currentLang === 'EN' ? "Online logins, book requests & student reviews" : "सुरक्षित छात्र लॉगिन, पुस्तक अनुरोध व समीक्षा"}</p>
                 </div>
                 <div className="relative">
                   <span className="absolute -left-[21px] top-0 w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-                  <div className="font-bold text-slate-900 dark:text-white">Digital Resources</div>
-                  <p className="text-[10px] text-slate-500">Classwise syllabus syllabus download files</p>
+                  <div className="font-bold text-slate-900 dark:text-white">{currentLang === 'EN' ? "Curriculum Resources" : "पाठ्यक्रम डिजिटल संसाधन"}</div>
+                  <p className="text-[10px] text-slate-500">{currentLang === 'EN' ? "Downloadable class syllabus & study materials" : "कक्षावार सिलेबस व अध्ययन सामग्री डाउनलोड"}</p>
                 </div>
                 <div className="relative">
                   <span className="absolute -left-[21px] top-0 w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                  <div className="font-bold text-amber-650 dark:text-amber-400">Future Vision: AI Integration</div>
-                  <p className="text-[10px] text-slate-400">Predictive search and natural language cataloging answers</p>
+                  <div className="font-bold text-amber-700 dark:text-amber-400">{currentLang === 'EN' ? "Future Exploration" : "भावी योजनाएँ"}</div>
+                  <p className="text-[10px] text-slate-500">{currentLang === 'EN' ? "Enhanced search experience & multi-school scalability" : "सुधरी खोज प्रणाली व अंतर-विद्यालय विस्तार"}</p>
                 </div>
               </div>
             </div>
