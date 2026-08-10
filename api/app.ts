@@ -117,19 +117,26 @@ const CONFIG_PATH = isVercel
   ? path.join('/tmp', 'librarian_v2_credentials.json')
   : path.join(process.cwd(), 'librarian_v2_credentials.json');
 
-// Initialize secure credentials
+// Initialize secure credentials from environment or runtime defaults
+const defaultAdminUser = process.env.INITIAL_LIBRARIAN_USERNAME || "admin";
+const defaultAdminPass = process.env.INITIAL_LIBRARIAN_PASSWORD || "AdminSecurePass2026!";
+
+function getInitialConfig() {
+  return {
+    username: defaultAdminUser,
+    name: "Chief Librarian",
+    passwordHash: bcrypt.hashSync(defaultAdminPass, 10),
+    designation: "Head Librarian",
+    biography: "Authorized library administrator profile.",
+    profilePhoto: ""
+  };
+}
+
 let memoryLibrarianConfig: any = null;
 
 try {
   if (!fs.existsSync(CONFIG_PATH)) {
-    const initialConfig = {
-      username: "ramdiri_admin_roy",
-      name: "Not configured",
-      passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
-      designation: "Not configured",
-      biography: "No biography configured.",
-      profilePhoto: ""
-    };
+    const initialConfig = getInitialConfig();
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(initialConfig, null, 2));
     memoryLibrarianConfig = initialConfig;
   }
@@ -138,14 +145,7 @@ try {
 }
 
 async function getLibrarianConfig(): Promise<any> {
-  const fallback = {
-    username: "ramdiri_admin_roy",
-    name: "Not configured",
-    passwordHash: bcrypt.hashSync("LibrarianSecureBegusarai2026!", 10),
-    designation: "Not configured",
-    biography: "No biography configured.",
-    profilePhoto: ""
-  };
+  const fallback = memoryLibrarianConfig || getInitialConfig();
 
   const hasMongoUri = !!process.env.MONGODB_URI && 
                        process.env.MONGODB_URI.trim() !== "" && 
@@ -186,7 +186,7 @@ async function getLibrarianConfig(): Promise<any> {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
       if (!config.name) {
-        config.name = "Not configured";
+        config.name = "Chief Librarian";
       }
       memoryLibrarianConfig = config;
       return config;
@@ -198,7 +198,7 @@ async function getLibrarianConfig(): Promise<any> {
   return fallback;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "ramdiri_super_secret_jwt_key_2026";
+const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_key_change_in_production_2026";
 
 // Helpers for date calculations
 
@@ -326,7 +326,7 @@ app.get('/api/database/status', (req, res) => {
 // ---- AUTH ENGINES ----
 app.post('/api/auth/login', async (req, res) => {
   const { username, password, rollNumber, dob, role, classValue, sectionValue } = req.body;
-  console.log(`[API ROUTE] POST /api/auth/login started for role: ${role}. Params:`, { role, username, rollNumber, dob, classValue, sectionValue });
+  console.log(`[API ROUTE] POST /api/auth/login started for role: ${role}`);
 
   try {
     if (role === 'Librarian') {

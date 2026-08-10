@@ -1369,9 +1369,9 @@ export default function LibrarianModule({
       if (tok) {
         try {
           const payload = JSON.parse(atob(tok.split('.')[1]));
-          setNewUsername(payload.username || "ramdiri_admin_roy");
+          setNewUsername(payload.username || "admin");
         } catch (e) {
-          setNewUsername("ramdiri_admin_roy");
+          setNewUsername("admin");
         }
       }
       

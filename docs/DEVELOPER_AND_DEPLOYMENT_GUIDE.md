@@ -28,8 +28,10 @@
    PORT=3000
    NODE_ENV=development
    MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/ramdiri_library
-   JWT_SECRET=super-secret-key-for-ramdiri-library-2026
-   GEMINI_API_KEY=your-gemini-api-key-if-applicable
+   JWT_SECRET=<your_secure_random_jwt_secret>
+   INITIAL_LIBRARIAN_USERNAME=<configured_admin_username>
+   INITIAL_LIBRARIAN_PASSWORD=<configured_admin_password>
+   GEMINI_API_KEY=<your_gemini_api_key>
    ```
 4. Start development server:
    ```bash

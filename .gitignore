@@ -3,6 +3,23 @@ build/
 dist/
 coverage/
 .DS_Store
+Thumbs.db
 *.log
+logs/
 .env*
 !.env.example
+
+# Credentials & Security
+librarian_v2_credentials.json
+credentials*.json
+serviceAccount.json
+*.pem
+*.key
+*.p12
+*.crt
+
+# Temporary & Output Files
+*.tmp
+cache/
+*.pdf.tmp
+

@@ -382,9 +382,9 @@ export async function connectDatabase() {
   }
   
   // Safe secure diagnostic print
-  console.log("------------------ VERCEL RUNTIME DIAGNOSTICS ------------------");
-  console.log(`[DIAGNOSTIC] MONGODB_URI: ${uri ? `DEFINED (Length: ${uri.length}, Prefix: ${uri.substring(0, 10)}...)` : 'NOT DEFINED'}`);
-  console.log(`[DIAGNOSTIC] JWT_SECRET: ${process.env.JWT_SECRET ? `DEFINED (Length: ${process.env.JWT_SECRET.length})` : 'NOT DEFINED (Using default key fallback)'}`);
+  console.log("------------------ SERVER RUNTIME DIAGNOSTICS ------------------");
+  console.log(`[DIAGNOSTIC] MONGODB_URI: ${uri ? 'CONFIGURED' : 'NOT DEFINED'}`);
+  console.log(`[DIAGNOSTIC] JWT_SECRET: ${process.env.JWT_SECRET ? 'CONFIGURED' : 'NOT DEFINED (Using default key fallback)'}`);
   console.log(`[DIAGNOSTIC] Node Env: ${process.env.NODE_ENV}`);
   console.log(`[DIAGNOSTIC] Vercel Env: ${process.env.VERCEL === '1' ? 'TRUE' : 'FALSE'}`);
   console.log("----------------------------------------------------------------");
