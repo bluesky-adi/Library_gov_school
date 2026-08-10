@@ -65,16 +65,18 @@ const jsPDF = jsPDFNamed || jsPDFDefault || (jsPDFDefault as any).jsPDF;
 
 export const ODDY_ST24_PAPER_TEMPLATE = {
   name: "Oddy ST-24 A4",
+  pageWidth: 210,    // mm
+  pageHeight: 297,   // mm
+  leftMargin: 6,     // mm
+  rightMargin: 6,    // mm
+  topMargin: 14,     // mm
+  bottomMargin: 13,  // mm
   cols: 3,
   rows: 8,
   stickerWidth: 64,  // mm
-  stickerHeight: 34, // mm
-  leftMargin: 5,     // mm
-  topMargin: 12,    // mm
-  colGap: 1,        // mm
-  rowGap: 1,        // mm
-  offsetX: 0,       // mm configurable calibration offset X
-  offsetY: 0,       // mm configurable calibration offset Y
+  stickerHeight: 24, // mm
+  colGap: 3,        // mm
+  rowGap: 0,        // mm
 };
 
 interface StickerElementProps {
@@ -156,35 +158,35 @@ function StickerElement({ book, accessionNo, callNo, bookNo, shelfLocation, cate
 
   return (
     <div 
-      className="sticker-item p-2.5 flex flex-row justify-between items-center overflow-hidden font-mono text-left" 
+      className="sticker-item p-2 flex flex-row justify-between items-center overflow-hidden font-mono text-left" 
       style={{ 
         width: '64mm', 
-        height: '34mm', 
+        height: '24mm', 
         backgroundColor: ddcCol.hex, 
         color: ddcCol.textColorHex 
       }}
     >
-      <div className="flex-1 flex flex-col justify-center space-y-1 overflow-hidden pr-2 text-[8.5px] font-mono font-bold">
-        <div className="flex items-center gap-1.5">
+      <div className="flex-1 flex flex-col justify-center space-y-0.5 overflow-hidden pr-1.5 text-[8px] font-mono font-bold leading-tight">
+        <div className="flex items-center gap-1">
           <span className="opacity-80 shrink-0">ACC NO -</span>
           <span className="font-black truncate">{accessionNo}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <span className="opacity-80 shrink-0">CALL NO -</span>
           <span className="font-extrabold truncate">{callNo}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <span className="opacity-80 shrink-0">BOOK NO -</span>
           <span className="font-extrabold truncate">{displayBookNo}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <span className="opacity-80 shrink-0">SHELF -</span>
           <span className="font-extrabold truncate">{displayShelf}</span>
         </div>
       </div>
 
-      {/* QR Code Box - High Contrast 22mm x 22mm */}
-      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '22mm', height: '22mm' }}>
+      {/* QR Code Box - High Contrast 20mm x 20mm */}
+      <div className="shrink-0 bg-white p-0.5 rounded-sm flex items-center justify-center" style={{ width: '20mm', height: '20mm' }}>
         {qrUrl ? (
           <img 
             src={qrUrl} 
@@ -652,9 +654,7 @@ export default function LibrarianModule({
         leftMargin,
         topMargin,
         colGap,
-        rowGap,
-        offsetX,
-        offsetY
+        rowGap
       } = ODDY_ST24_PAPER_TEMPLATE;
 
       const stickersPerPage = cols * rows;
@@ -710,11 +710,8 @@ export default function LibrarianModule({
           const col = stickerIndexOnPage % cols;
           const row = Math.floor(stickerIndexOnPage / cols);
 
-          const gridWidth = cols * stickerWidth + (cols - 1) * colGap;
-          const centeredLeftMargin = (210 - gridWidth) / 2;
-
-          const x = centeredLeftMargin + offsetX + (calOffsetX || 0) + col * (stickerWidth + colGap);
-          const y = topMargin + offsetY + (calOffsetY || 0) + row * (stickerHeight + rowGap);
+          const x = leftMargin + col * (stickerWidth + colGap) + (calOffsetX || 0);
+          const y = topMargin + row * (stickerHeight + rowGap) + (calOffsetY || 0);
 
           const book = chunk[j];
           if (!book) continue;
@@ -748,18 +745,18 @@ export default function LibrarianModule({
           doc.setTextColor(textR, textG, textB);
           
           // Right side QR container box
-          const qrBoxWidth = 22;
-          const qrBoxHeight = 22;
-          const qrBoxX = x + stickerWidth - qrBoxWidth - 3.5;
+          const qrBoxWidth = 20;
+          const qrBoxHeight = 20;
+          const qrBoxX = x + stickerWidth - qrBoxWidth - 2.0;
           const qrBoxY = y + (stickerHeight - qrBoxHeight) / 2;
 
           doc.setFont('courier', 'bold');
-          doc.setFontSize(7);
+          doc.setFontSize(6.5);
 
-          const startY = y + 9.5;
-          const lineSpacing = 5.2;
-          const labelX = x + 3.5;
-          const valueX = x + 21.0;
+          const startY = y + 5.5;
+          const lineSpacing = 4.2;
+          const labelX = x + 2.5;
+          const valueX = x + 18.0;
 
           // Row 1: ACC NO -
           doc.text("ACC NO -", labelX, startY);
@@ -785,7 +782,7 @@ export default function LibrarianModule({
                 doc.setFillColor(255, 255, 255);
                 doc.rect(qrBoxX, qrBoxY, qrBoxWidth, qrBoxHeight, 'F');
 
-                const qrSize = 20;
+                const qrSize = 18;
                 const qrX = qrBoxX + (qrBoxWidth - qrSize) / 2;
                 const qrY = qrBoxY + (qrBoxHeight - qrSize) / 2;
                 doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize, undefined, 'FAST');
@@ -5777,7 +5774,7 @@ export default function LibrarianModule({
                 Automated Sticker & Barcode Engine
               </h2>
               <p className="text-xs text-slate-500 max-w-2xl leading-normal">
-                Generate and print precision-aligned sticker labels (64mm × 34mm) matching standard A4 printable sheets. Each sticker automatically embeds a secure, permanent QR code pointing to the live book details page.
+                Generate and print precision-aligned sticker labels (64mm × 24mm) matching standard A4 printable sheets. Each sticker automatically embeds a secure, permanent QR code pointing to the live book details page.
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -5934,15 +5931,15 @@ export default function LibrarianModule({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 font-mono text-[10px] font-bold">
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sticker Size</span>
-                  64 mm × 34 mm
+                  64 mm × 24 mm
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">A4 Sheet Columns</span>
-                  3 Cols (64mm × 3 + 4mm gap)
+                  3 Cols (64mm × 3 + 3mm gap)
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Sheet Margins</span>
-                  5 mm Left/Right, 12 mm Top/Bottom
+                  6 mm Left/Right, 14 mm Top / 13 mm Bottom
                 </div>
                 <div className="bg-white/80 dark:bg-slate-950/50 p-2 rounded border border-indigo-100 dark:border-slate-850">
                   <span className="text-slate-400 block text-[9px]">Target QR link</span>
