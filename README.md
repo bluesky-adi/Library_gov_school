@@ -1,78 +1,193 @@
-# Ramdiri Library Portal (v1.1.0)
-### Digital Library Management System
-**PM SHRI Ramdiri +2 High School, Begusarai, Bihar, India**
+# Ramdiri Library Portal
+
+A digital library management system built for PM SHRI Ramdiri +2 High School, Begusarai, Bihar.
+
+The system digitizes the library's catalogue, lending workflow, student requests, book identification, and supporting resources while remaining practical for day-to-day use by students and a non-technical librarian.
+
+**Status:** Production  
+**Deployment:** July 2026
 
 ---
 
-## 📚 Overview
+## Overview
 
-The **Ramdiri Library Portal** is a production-grade, full-stack Digital Library Management System built with React, TypeScript, Express.js, and MongoDB. Engineered for educational institutions, it provides instant multilingual book cataloging (English, Devanagari Hindi, Roman Hindi), QR code sticker printing on standard **Oddy ST-24** label sheets, fast walk-in counter loan processing, online student reservations, and downloadable digital curriculum resources.
+The Ramdiri Library Portal was built to replace a largely paper-based library workflow with a searchable and operational digital system.
 
----
+Before digitization, catalogue records, issue and return records, and student borrowing information were maintained through handwritten registers. This made it difficult to determine availability quickly, increased repetitive work for the librarian, and made routine record-keeping harder to maintain as the collection grew.
 
-## 📖 Complete Documentation Suite
+The portal provides students with direct access to the catalogue and availability information, while giving the librarian a central workspace for managing books, students, circulation, requests, reports, and library resources.
 
-All system documentation is stored inside the [`/docs`](./docs) directory:
-
-1. 🏗️ **[System Architecture (`docs/SYSTEM_ARCHITECTURE.md`)](./docs/SYSTEM_ARCHITECTURE.md)**
-   - System overview, architecture diagrams, client/server modules, database engine, search pipeline, and security design.
-2. 🗄️ **[Database Schema & REST API Reference (`docs/DATABASE_AND_API.md`)](./docs/DATABASE_AND_API.md)**
-   - Complete schema specs for `books`, `students`, `issuelogs`, `requests`, `studymaterials`, `feedback`, and REST API endpoints.
-3. 🛠️ **[Developer, Deployment & Operational Guide (`docs/DEVELOPER_AND_DEPLOYMENT_GUIDE.md`)](./docs/DEVELOPER_AND_DEPLOYMENT_GUIDE.md)**
-   - Setup instructions, folder structure, build pipelines, Cloud Run container deployment, environment variables, and backup procedures.
-4. 📘 **[Librarian User Manual (`docs/LIBRARIAN_USER_MANUAL.md`)](./docs/LIBRARIAN_USER_MANUAL.md)**
-   - Step-by-step instructions for librarians: book cataloging, bulk CSV import, Oddy ST-24 QR sticker printing, walk-in counter loans, and student management.
-5. 📊 **[Case Study & Social Impact Report (`docs/CASE_STUDY_AND_IMPACT.md`)](./docs/CASE_STUDY_AND_IMPACT.md)**
-   - Problem statement, digital transformation story, before vs. after comparison, measured performance metrics, and engineering challenges solved.
-6. 🛡️ **[Security & Configuration Guide (`docs/SECURITY_AND_CONFIGURATION.md`)](./docs/SECURITY_AND_CONFIGURATION.md)**
-   - Security model, environment variable specifications, secret management, and administrative credential rotation workflows.
+The system is designed around the actual workflow of the school rather than a generic library-management template.
 
 ---
 
-## ⚡ Quick Start
+## Preview
 
-### 1. Install Dependencies
-```bash
-npm install
-```
+<p align="center">
+  <img src="./assets/screenshots/librarian-dashboard.png" width="900" alt="Ramdiri Library Portal librarian dashboard">
+</p>
 
-### 2. Configure Environment
-Copy `.env.example` to `.env` and set your configuration variables:
-```env
-PORT=3000
-NODE_ENV=development
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/ramdiri_library
-JWT_SECRET=<your_secure_random_jwt_secret>
-INITIAL_LIBRARIAN_USERNAME=<configured_admin_username>
-INITIAL_LIBRARIAN_PASSWORD=<configured_admin_password>
-```
+<p align="center">
+  <img src="./assets/screenshots/book-details.png" width="430" alt="Ramdiri Library Portal book details">
+  <img src="./assets/screenshots/library-home.png" width="430" alt="Ramdiri Library Portal home page">
+</p>
 
-### 3. Run Development Server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### 4. Build & Verify Production Code
-```bash
-npm run lint
-npm run build
-npm run start
-```
+<p align="center">
+  <img src="./assets/screenshots/feedback.png" width="700" alt="Ramdiri Library Portal feedback interface">
+</p>
 
 ---
 
-## ✨ Key Features & Specifications
+## What the system handles
 
-- **Oddy ST-24 Sticker PDF Engine:**
-  - Standard A4 Sheet (210 mm × 297 mm)
-  - 3 Columns × 8 Rows (24 Stickers / Page)
-  - Sticker Dimensions: 64 mm × 34 mm (1 mm horizontal/vertical gaps)
-  - Precision Labeling: `ACC NO -`, `CALL NO -`, `BOOK NO -`, `SHELF -` with embedded QR code.
-- **Universal Multilingual Search Engine (`searchUtils.ts`):**
-  - Instant Devanagari Hindi, English, and phonetic Roman Hindi query matching.
-  - Multi-field scoring across title, author, publisher, DDC code, call number, shelf, and accession numbers.
-- **Robust Security & Resilience:**
-  - Role-based token authentication (Librarian, Student).
-  - Global Express fallback error handling catching unhandled exceptions cleanly.
-  - In-memory and disk persistence fallback ensuring 100% uptime even during database network hiccups.
+### Catalogue and Search
+
+The catalogue supports detailed book records and search across fields such as:
+
+- Title
+- Author
+- Publisher
+- Category
+- DDC classification
+- Call number
+- Shelf
+- Accession number
+- Book number
+
+Search was designed for the way students actually enter queries rather than assuming exact spelling or exact language.
+
+The search layer supports:
+
+- English
+- Devanagari Hindi
+- Romanized Hindi
+- Fuzzy matching
+- Multi-field relevance scoring
+
+This allows students to find books even when queries contain spelling variations, transliterated Hindi, or incomplete information.
+
+---
+
+### Book Circulation
+
+The portal covers the main lending cycle:
+
+- Book availability
+- Student requests
+- Librarian approval
+- Issue processing
+- Return processing
+- Active loan tracking
+- Return-status tracking
+
+The student and librarian workflows are separated according to their respective responsibilities.
+
+---
+
+### Librarian Workspace
+
+The librarian dashboard provides a central operational workspace for:
+
+- Book catalogue management
+- Student records
+- Requests and returns
+- Printable reports
+- QR sticker generation
+- Digital resources
+- Feedback and moderation
+- Security controls
+- System status
+
+Bulk spreadsheet import is also supported so that an existing school catalogue can be moved into the digital system without entering thousands of records manually.
+
+The importer supports the school's existing spreadsheet structure as well as a compatible custom format, with validation performed before records are committed.
+
+---
+
+### QR-Based Book Identification
+
+Each book can be associated with a QR code containing its library identification information.
+
+The system generates print-ready sticker sheets for the library's physical books using the school's Oddy ST-24 label format.
+
+The sticker workflow was tested against physical printed output rather than relying only on browser or PDF previews. Alignment, margins, QR placement, and metadata positioning required multiple rounds of adjustment to match the actual printer and label sheets used by the school.
+
+This allows a normal smartphone camera to be used for book identification without requiring dedicated barcode-scanning hardware.
+
+---
+
+### Digital Resources
+
+The portal also provides access to digital academic resources alongside the physical catalogue.
+
+This keeps supporting study material connected to the same system instead of requiring students to search for it separately.
+
+---
+
+### Feedback and Community Input
+
+The system includes a public feedback workflow with moderation support.
+
+Feedback can be reviewed and managed through the librarian interface, allowing the school to collect suggestions and user experience information without giving unrestricted control over published content.
+
+---
+
+## Engineering Decisions
+
+Several parts of the system were shaped by constraints discovered during real usage.
+
+### Multilingual and fuzzy search
+
+A basic exact-match search was not sufficient for the target users. Students may search using English, Hindi, Romanized Hindi, incomplete titles, spelling variations, or partial metadata.
+
+The search system was therefore designed around fuzzy and multilingual matching instead of relying only on exact string comparison.
+
+### QR codes instead of dedicated scanners
+
+QR codes can be read using an ordinary smartphone camera, which avoids requiring additional scanning hardware.
+
+The trade-off was that the print-generation workflow needed more careful calibration because the codes and metadata have to remain correctly positioned on physical sticker sheets.
+
+### Bulk Excel import
+
+Manual catalogue entry is impractical when migrating a large existing collection.
+
+The import pipeline validates and maps spreadsheet records before committing them to the catalogue, reducing repetitive data entry and providing feedback when source records contain incomplete information.
+
+### Synchronization
+
+Production usage exposed synchronization issues that were not obvious during initial development.
+
+For example, a librarian issuing a book needed that change to be reflected promptly when a student searched for the same book from another device.
+
+The synchronization layer was revised to distinguish user-triggered updates from background refreshes and to coordinate catalogue, student, circulation, and request data updates.
+
+### Performance
+
+Search and page-load performance required active attention as the catalogue grew and the system was used over variable internet connections.
+
+The system was designed to remain practical on modest devices and connections rather than assuming high-end hardware or consistently fast connectivity.
+
+---
+
+## Architecture
+
+The application follows a multi-tier web architecture:
+
+```text
+Student / Librarian / Visitor
+            |
+            v
+     React Frontend
+            |
+            v
+      Express Backend
+            |
+     +------+------+
+     |             |
+Authentication   Business Logic
+     |             |
+     +------+------+
+            |
+            v
+       MongoDB Atlas
